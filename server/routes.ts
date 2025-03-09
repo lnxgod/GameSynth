@@ -10,18 +10,6 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Store API logs in memory
-const apiLogs: Array<{ timestamp: string; message: string }> = [];
-
-function logApi(message: string) {
-  const timestamp = new Date().toLocaleTimeString();
-  apiLogs.push({ timestamp, message });
-  // Keep only the last 100 logs
-  if (apiLogs.length > 100) {
-    apiLogs.shift();
-  }
-}
-
 const SYSTEM_PROMPT = [
   "You are a game development assistant specialized in creating HTML5 Canvas games.",
   "When providing code:",
@@ -44,13 +32,25 @@ const SYSTEM_PROMPT = [
   "  ctx.clearRect(0, 0, canvas.width, canvas.height);",
   "  // Update game state",
   "  // Draw game objects",
-  "  requestAnimationFrame(gameLoop);",
+  "  animationFrameId = requestAnimationFrame(gameLoop);",
   "}",
   "",
   "// Start the game",
   "gameLoop();",
   "+++CODESTOP+++"
 ].join("\n");
+
+// Store API logs in memory
+const apiLogs: Array<{ timestamp: string; message: string }> = [];
+
+function logApi(message: string) {
+  const timestamp = new Date().toLocaleTimeString();
+  apiLogs.push({ timestamp, message });
+  // Keep only the last 100 logs
+  if (apiLogs.length > 100) {
+    apiLogs.shift();
+  }
+}
 
 export async function registerRoutes(app: Express) {
   app.get("/api/logs", (req, res) => {
@@ -63,7 +63,6 @@ export async function registerRoutes(app: Express) {
       logApi(`Chat request received: ${prompt.slice(0, 50)}...`);
 
       const response = await openai.chat.completions.create({
-        // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
         model: "gpt-4o",
         messages: [
           {
@@ -78,14 +77,20 @@ export async function registerRoutes(app: Express) {
 
       const content = response.choices[0].message.content || "";
 
-      // Extract code between markers and remove any backticks
+      // Extract code between markers and clean it
       const codeMatch = content.match(/\+\+\+CODESTART\+\+\+([\s\S]*?)\+\+\+CODESTOP\+\+\+/);
       let code: string | null = null;
 
       if (codeMatch) {
-        code = codeMatch[1].trim();
-        // Remove backticks if they exist at the start/end
-        code = code.replace(/^```[\w]*\n?/, "").replace(/```$/, "");
+        code = codeMatch[1].trim()
+          // Remove any markdown code block markers
+          .replace(/^```[\w]*\n?/g, '')
+          .replace(/```$/g, '')
+          // Remove any HTML comments
+          .replace(/<!--[\s\S]*?-->/g, '')
+          // Remove any HTML tags
+          .replace(/<[^>]*>/g, '')
+          .trim();
       }
 
       const chat = await storage.createChat({

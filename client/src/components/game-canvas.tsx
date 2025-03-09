@@ -28,21 +28,31 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     onDebugLog?.("Initializing game canvas...");
+    onDebugLog?.("Processing game code...");
+
+    // Validate code before execution
+    if (code.includes("<") || code.includes(">")) {
+      const error = "Invalid game code: Contains HTML tags";
+      onDebugLog?.(error);
+      toast({
+        title: "Game Error",
+        description: error,
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       // Create a safe execution environment with common game variables
       const gameFunction = new Function("canvas", "ctx", "debug", `
         // Set up the game loop
         let animationFrameId;
-        const requestAnimationFrame = window.requestAnimationFrame;
-        const cancelAnimationFrame = window.cancelAnimationFrame;
 
-        // Execute the game code
         try {
+          // Initialize game
           ${code}
         } catch (error) {
-          debug("Game code execution error: " + error.message);
-          console.error("Game code execution error:", error);
+          debug("Game initialization error: " + error.message);
           throw error;
         }
       `);
