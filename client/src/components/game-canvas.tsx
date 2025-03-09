@@ -30,26 +30,14 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     onDebugLog?.("Initializing game canvas...");
     onDebugLog?.("Processing game code...");
 
-    // Validate code before execution
-    if (code.includes("<") || code.includes(">")) {
-      const error = "Invalid game code: Contains HTML tags";
-      onDebugLog?.(error);
-      toast({
-        title: "Game Error",
-        description: error,
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       // Create a safe execution environment with common game variables
       const gameFunction = new Function("canvas", "ctx", "debug", `
-        // Set up the game loop
+        // Set up the game loop variables
         let animationFrameId;
 
+        // Game initialization
         try {
-          // Initialize game
           ${code}
         } catch (error) {
           debug("Game initialization error: " + error.message);
