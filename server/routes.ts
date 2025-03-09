@@ -17,7 +17,27 @@ const SYSTEM_PROMPT = [
   "2. Do not include backticks in your response",
   "3. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API",
   "4. Include clear comments explaining the game mechanics",
-  "5. Return fully working, self-contained game code"
+  "5. Return fully working, self-contained game code that handles its own game loop",
+  "6. Use requestAnimationFrame for animation",
+  "7. Initialize all variables and handle cleanup properly",
+  "8. Include error handling in the game code",
+  "Example structure:",
+  "+++CODESTART+++",
+  "// Game variables",
+  "let x = canvas.width/2;",
+  "let y = canvas.height/2;",
+  "",
+  "// Game loop",
+  "function gameLoop() {",
+  "  ctx.clearRect(0, 0, canvas.width, canvas.height);",
+  "  // Update game state",
+  "  // Draw game objects",
+  "  requestAnimationFrame(gameLoop);",
+  "}",
+  "",
+  "// Start the game",
+  "gameLoop();",
+  "+++CODESTOP+++"
 ].join("\n");
 
 export async function registerRoutes(app: Express) {
