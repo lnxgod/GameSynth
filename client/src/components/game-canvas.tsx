@@ -14,7 +14,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !code) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -22,6 +22,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     // Clear previous animation frame
     if (frameRef.current) {
       cancelAnimationFrame(frameRef.current);
+      frameRef.current = undefined;
     }
 
     // Clear the canvas
@@ -30,27 +31,47 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     onDebugLog?.("Initializing game canvas...");
 
     try {
-      // Create a safe execution context with proper variable scoping
-      const gameFunction = new Function('canvas', 'ctx', 'requestAnimationFrame', 'cancelAnimationFrame', `
-        return (function() {
-          // Game-specific variables will be declared here
-          let animationFrameId = null;
+      // Prepare the animation frame handler
+      const handleAnimationFrame = (callback: FrameRequestCallback) => {
+        if (frameRef.current) {
+          cancelAnimationFrame(frameRef.current);
+        }
+        frameRef.current = requestAnimationFrame(callback);
+        return frameRef.current;
+      };
 
-          // The actual game code
+      // Create a safe execution context for the game code
+      const gameCode = `
+        "use strict";
+        // Game variables will be declared here
+        let animationFrameId;
+
+        try {
           ${code}
-        })();
-      `);
+        } catch (error) {
+          throw new Error("Game initialization failed: " + error.message);
+        }
+      `;
 
-      // Execute the game code with proper context
+      const gameFunction = new Function(
+        "canvas",
+        "ctx",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        gameCode
+      );
+
+      // Execute the game code with controlled context
       gameFunction(
         canvas,
         ctx,
-        (callback: FrameRequestCallback) => {
-          const id = requestAnimationFrame(callback);
-          frameRef.current = id;
-          return id;
-        },
-        cancelAnimationFrame
+        handleAnimationFrame,
+        () => {
+          if (frameRef.current) {
+            cancelAnimationFrame(frameRef.current);
+            frameRef.current = undefined;
+          }
+        }
       );
 
       onDebugLog?.("Game code executed successfully");
@@ -62,14 +83,21 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         description: "There was an error running the game. Check the debug logs for details.",
         variant: "destructive",
       });
+
+      // Ensure cleanup on error
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = undefined;
+      }
     }
 
+    // Cleanup function
     return () => {
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
+        frameRef.current = undefined;
         onDebugLog?.("Game animation stopped");
       }
-      // Clear the canvas on cleanup
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
   }, [code, toast, onDebugLog]);
