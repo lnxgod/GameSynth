@@ -24,7 +24,12 @@ export class MemStorage implements IStorage {
 
   async createChat(chat: InsertChat): Promise<Chat> {
     const id = this.chatId++;
-    const newChat = { ...chat, id, timestamp: new Date() };
+    const newChat: Chat = {
+      ...chat,
+      id,
+      timestamp: new Date(),
+      code: chat.code || null
+    };
     this.chats.set(id, newChat);
     return newChat;
   }
@@ -39,7 +44,11 @@ export class MemStorage implements IStorage {
 
   async createGame(game: InsertGame): Promise<Game> {
     const id = this.gameId++;
-    const newGame = { ...game, id };
+    const newGame: Game = {
+      ...game,
+      id,
+      chatId: game.chatId || null
+    };
     this.games.set(id, newGame);
     return newGame;
   }

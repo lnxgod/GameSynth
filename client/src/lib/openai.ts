@@ -1,7 +1,15 @@
 import { apiRequest } from "./queryClient";
 
-export async function sendChatMessage(prompt: string) {
-  const res = await apiRequest("POST", "/api/chat", { prompt });
+export async function sendChatMessage(
+  prompt: string,
+  temperature?: number,
+  maxTokens?: number
+) {
+  const res = await apiRequest("POST", "/api/chat", {
+    prompt,
+    temperature,
+    maxTokens
+  });
   return res.json();
 }
 
