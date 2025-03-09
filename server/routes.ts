@@ -10,6 +10,18 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Store API logs in memory
+const apiLogs: Array<{ timestamp: string; message: string }> = [];
+
+function logApi(message: string) {
+  const timestamp = new Date().toLocaleTimeString();
+  apiLogs.push({ timestamp, message });
+  // Keep only the last 100 logs
+  if (apiLogs.length > 100) {
+    apiLogs.shift();
+  }
+}
+
 const SYSTEM_PROMPT = [
   "You are a game development assistant specialized in creating HTML5 Canvas games.",
   "When providing code:",
@@ -41,9 +53,14 @@ const SYSTEM_PROMPT = [
 ].join("\n");
 
 export async function registerRoutes(app: Express) {
+  app.get("/api/logs", (req, res) => {
+    res.json(apiLogs);
+  });
+
   app.post("/api/chat", async (req, res) => {
     try {
       const { prompt, temperature = 0.7, maxTokens = 2048 } = req.body;
+      logApi(`Chat request received: ${prompt.slice(0, 50)}...`);
 
       const response = await openai.chat.completions.create({
         // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
@@ -77,6 +94,8 @@ export async function registerRoutes(app: Express) {
         code
       });
 
+      logApi(`Chat response generated with ${code ? 'code' : 'no code'}`);
+
       res.json({
         ...chat,
         settings: {
@@ -85,6 +104,7 @@ export async function registerRoutes(app: Express) {
         }
       });
     } catch (error: any) {
+      logApi(`Error in chat: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   });
@@ -92,8 +112,10 @@ export async function registerRoutes(app: Express) {
   app.get("/api/chats", async (req, res) => {
     try {
       const chats = await storage.getAllChats();
+      logApi(`Retrieved ${chats.length} chats`);
       res.json(chats);
     } catch (error: any) {
+      logApi(`Error getting chats: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   });
@@ -102,8 +124,10 @@ export async function registerRoutes(app: Express) {
     try {
       const game = insertGameSchema.parse(req.body);
       const created = await storage.createGame(game);
+      logApi(`New game created: ${game.name}`);
       res.json(created);
     } catch (error: any) {
+      logApi(`Error creating game: ${error.message}`);
       res.status(400).json({ error: error.message });
     }
   });
@@ -111,8 +135,10 @@ export async function registerRoutes(app: Express) {
   app.get("/api/games", async (req, res) => {
     try {
       const games = await storage.getAllGames();
+      logApi(`Retrieved ${games.length} games`);
       res.json(games);
     } catch (error: any) {
+      logApi(`Error getting games: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   });

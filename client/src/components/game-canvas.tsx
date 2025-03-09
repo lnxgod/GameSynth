@@ -4,9 +4,10 @@ import { useToast } from "@/hooks/use-toast";
 
 interface GameCanvasProps {
   code: string;
+  onDebugLog?: (log: string) => void;
 }
 
-export function GameCanvas({ code }: GameCanvasProps) {
+export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
   const { toast } = useToast();
@@ -26,9 +27,11 @@ export function GameCanvas({ code }: GameCanvasProps) {
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    onDebugLog?.("Initializing game canvas...");
+
     try {
       // Create a safe execution environment with common game variables
-      const gameFunction = new Function("canvas", "ctx", `
+      const gameFunction = new Function("canvas", "ctx", "debug", `
         // Set up the game loop
         let animationFrameId;
         const requestAnimationFrame = window.requestAnimationFrame;
@@ -38,18 +41,21 @@ export function GameCanvas({ code }: GameCanvasProps) {
         try {
           ${code}
         } catch (error) {
+          debug("Game code execution error: " + error.message);
           console.error("Game code execution error:", error);
           throw error;
         }
       `);
 
       // Execute the game code
-      gameFunction(canvas, ctx);
+      gameFunction(canvas, ctx, onDebugLog);
+      onDebugLog?.("Game code executed successfully");
     } catch (error) {
       console.error("Error executing game code:", error);
+      onDebugLog?.(`Error executing game code: ${error}`);
       toast({
         title: "Game Error",
-        description: "There was an error running the game. Check the console for details.",
+        description: "There was an error running the game. Check the debug logs for details.",
         variant: "destructive",
       });
     }
@@ -57,13 +63,14 @@ export function GameCanvas({ code }: GameCanvasProps) {
     return () => {
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
+        onDebugLog?.("Game animation stopped");
       }
       // Clear the canvas on cleanup
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
     };
-  }, [code, toast]);
+  }, [code, toast, onDebugLog]);
 
   return (
     <Card className="p-4">
