@@ -7,6 +7,40 @@ interface GameCanvasProps {
   onDebugLog?: (log: string) => void;
 }
 
+const TEST_GAME = `
+// Game variables
+let x = canvas.width/2;
+let y = canvas.height/2;
+let dx = 2;
+let dy = -2;
+let radius = 20;
+
+// Game loop
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw ball
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = "#0000FF";
+  ctx.fill();
+  ctx.closePath();
+
+  // Move ball
+  x += dx;
+  y += dy;
+
+  // Bounce off walls
+  if(x + dx > canvas.width - radius || x + dx < radius) dx = -dx;
+  if(y + dy > canvas.height - radius || y + dy < radius) dy = -dy;
+
+  animationFrameId = requestAnimationFrame(gameLoop);
+}
+
+// Start the game
+gameLoop();
+`;
+
 export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
@@ -14,7 +48,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !code) return;
+    if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -28,26 +62,53 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     onDebugLog?.("Initializing game canvas...");
-    onDebugLog?.("Processing game code...");
+
+    // Test the execution environment with a simple bouncing ball if no code is provided
+    const gameCode = code || TEST_GAME;
+    onDebugLog?.(`Processing game code... (length: ${gameCode.length} characters)`);
 
     try {
-      // Create a safe execution environment with common game variables
-      const gameCode = `
-        try {
-          let animationFrameId;
+      // Create a safe execution environment with game variables and proper error handling
+      const wrappedCode = `
+        let animationFrameId = null;
+        let x, y, dx, dy, radius;  // Common game variables
 
-          ${code}
-        } catch (error) {
-          debug("Game initialization error: " + error.message);
-          throw error;
+        function wrapError(fn) {
+          try {
+            fn();
+          } catch (error) {
+            debug("Game error: " + error.message);
+            throw error;
+          }
         }
+
+        wrapError(() => {
+          ${gameCode}
+        });
       `;
 
-      // Execute the game code with properly scoped variables
-      const gameFunction = new Function("canvas", "ctx", "debug", gameCode);
+      const gameFunction = new Function(
+        "canvas", 
+        "ctx", 
+        "debug", 
+        "requestAnimationFrame", 
+        "cancelAnimationFrame",
+        wrappedCode
+      );
 
-      // Execute the game code
-      gameFunction(canvas, ctx, onDebugLog);
+      // Execute the game code with all necessary context
+      gameFunction(
+        canvas, 
+        ctx, 
+        onDebugLog,
+        (callback: FrameRequestCallback) => {
+          const id = requestAnimationFrame(callback);
+          frameRef.current = id;
+          return id;
+        },
+        cancelAnimationFrame.bind(window)
+      );
+
       onDebugLog?.("Game code executed successfully");
     } catch (error) {
       console.error("Error executing game code:", error);
