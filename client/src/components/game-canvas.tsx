@@ -32,18 +32,19 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
     try {
       // Create a safe execution environment with common game variables
-      const gameFunction = new Function("canvas", "ctx", "debug", `
-        // Set up the game loop variables
-        let animationFrameId;
-
-        // Game initialization
+      const gameCode = `
         try {
+          let animationFrameId;
+
           ${code}
         } catch (error) {
           debug("Game initialization error: " + error.message);
           throw error;
         }
-      `);
+      `;
+
+      // Execute the game code with properly scoped variables
+      const gameFunction = new Function("canvas", "ctx", "debug", gameCode);
 
       // Execute the game code
       gameFunction(canvas, ctx, onDebugLog);
