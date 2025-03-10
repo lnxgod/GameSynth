@@ -23,8 +23,8 @@ const SYSTEM_PROMPT = [
 ].join("\n");
 
 // Store API logs in memory with full request/response data
-const apiLogs: Array<{ 
-  timestamp: string; 
+const apiLogs: Array<{
+  timestamp: string;
   message: string;
   request?: any;
   response?: any;
@@ -32,8 +32,8 @@ const apiLogs: Array<{
 
 function logApi(message: string, request?: any, response?: any) {
   const timestamp = new Date().toLocaleTimeString();
-  apiLogs.push({ 
-    timestamp, 
+  apiLogs.push({
+    timestamp,
     message,
     request: request ? JSON.stringify(request, null, 2) : undefined,
     response: response ? JSON.stringify(response, null, 2) : undefined
@@ -46,6 +46,8 @@ function logApi(message: string, request?: any, response?: any) {
 
 function extractGameCode(content: string): string | null {
   try {
+    console.log('Starting code extraction...');
+
     // Find the code block
     const startMarker = '+++CODESTART+++';
     const endMarker = '+++CODESTOP+++';
@@ -53,8 +55,14 @@ function extractGameCode(content: string): string | null {
     const startIndex = content.indexOf(startMarker);
     const endIndex = content.indexOf(endMarker);
 
-    if (startIndex === -1 || endIndex === -1) {
-      console.log('No code markers found in response');
+    if (startIndex === -1) {
+      console.log('ERROR: No CODESTART marker found in response');
+      return null;
+    }
+
+    if (endIndex === -1) {
+      console.log('ERROR: No CODESTOP marker found in response');
+      console.log('Raw content:', content);
       return null;
     }
 
@@ -64,16 +72,23 @@ function extractGameCode(content: string): string | null {
       .trim();
 
     if (!code) {
-      console.log('Empty code block found');
+      console.log('ERROR: Empty code block found');
       return null;
     }
 
     // Basic validation - try to parse it as a function
-    new Function('canvas', 'ctx', code);
+    try {
+      new Function('canvas', 'ctx', code);
+    } catch (error) {
+      console.log('ERROR: Code validation failed -', error.message);
+      console.log('Invalid code:', code);
+      return null;
+    }
 
+    console.log('Successfully extracted and validated code');
     return code;
   } catch (error) {
-    console.error('Code extraction/validation failed:', error);
+    console.error('Code extraction failed:', error);
     return null;
   }
 }
@@ -85,7 +100,7 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, temperature = 0.7, maxTokens = 15000 } = req.body;
+      const { prompt, temperature = 0.7, maxTokens = 128000 } = req.body;
       logApi("Chat request received", { prompt, temperature, maxTokens });
 
       const response = await openai.chat.completions.create({
