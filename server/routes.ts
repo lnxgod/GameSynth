@@ -10,14 +10,19 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Design assistant system prompt
+// Update the DESIGN_ASSISTANT_PROMPT in server/routes.ts
 const DESIGN_ASSISTANT_PROMPT = `You are a game design assistant helping users create HTML5 Canvas games. 
-Ask questions to understand their requirements. Focus on:
-1. Game genre and style
-2. Core gameplay mechanics
-3. Visual style and theme
-4. Difficulty level
-5. Special features or elements`;
+When receiving game requirements, analyze them and:
+1. Determine if there's enough information to create a working game
+2. If not, ask specific questions about missing or unclear details
+3. Consider whether the requirements would result in a playable, engaging game
+4. Suggest improvements or additions if needed
+5. Format your response as JSON with the following structure:
+   {
+     "needsMoreInfo": boolean,
+     "message": "Your detailed analysis and/or questions",
+     "suggestions": ["Any suggestions for improvement"]
+   }`;
 
 const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
 When providing code:
@@ -118,7 +123,7 @@ export async function registerRoutes(app: Express) {
     res.json(apiLogs);
   });
 
-  // New endpoint for game design assistance
+  // Update the chat endpoint to handle the thinking step
   app.post("/api/design/chat", async (req, res) => {
     try {
       const { message, sessionId } = req.body;
@@ -143,20 +148,41 @@ export async function registerRoutes(app: Express) {
           },
           ...history
         ],
+        response_format: { type: "json_object" },
         temperature: 0.7
       });
 
       const assistantMessage = response.choices[0].message.content || "";
 
-      // Add assistant response to history
-      history.push({ role: 'assistant', content: assistantMessage });
+      try {
+        const analysis = JSON.parse(assistantMessage);
+        // Add the analysis to the history in a readable format
+        history.push({
+          role: 'assistant',
+          content: analysis.message
+        });
 
-      logApi("Design chat response", { message }, { response: assistantMessage });
+        logApi("Design chat response", { message }, { analysis });
 
-      res.json({ 
-        message: assistantMessage,
-        history: history 
-      });
+        res.json({ 
+          needsMoreInfo: analysis.needsMoreInfo,
+          message: analysis.message,
+          suggestions: analysis.suggestions,
+          history: history 
+        });
+      } catch (error) {
+        // Fallback if JSON parsing fails
+        history.push({
+          role: 'assistant',
+          content: assistantMessage
+        });
+
+        res.json({ 
+          needsMoreInfo: true,
+          message: "Failed to analyze requirements properly",
+          history: history 
+        });
+      }
     } catch (error: any) {
       logApi("Error in design chat", req.body, { error: error.message });
       res.status(500).json({ error: error.message });

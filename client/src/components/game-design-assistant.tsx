@@ -68,19 +68,40 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const { toast } = useToast();
 
-  const generateMutation = useMutation({
+  const thinkMutation = useMutation({
     mutationFn: async () => {
-      // First, send the requirements to get assistant feedback
       const prompt = generateFinalPrompt();
-
-      const chatRes = await apiRequest('POST', '/api/design/chat', {
+      const res = await apiRequest('POST', '/api/design/chat', {
         message: prompt,
         sessionId
       });
-      const chatData = await chatRes.json();
-      setMessages(chatData.history);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setMessages(data.history);
+      if (data.needsMoreInfo) {
+        toast({
+          title: "More Information Needed",
+          description: data.message,
+        });
+      } else {
+        toast({
+          title: "Ready to Generate",
+          description: "Requirements are sufficient to create your game!",
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
 
-      // Then generate the code
+  const generateMutation = useMutation({
+    mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId
       });
@@ -130,7 +151,9 @@ Please create an HTML5 Canvas game with these specifications. The game should be
       ...prev,
       [currentQuestion.id]: value
     }));
+  };
 
+  const handleNext = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
@@ -154,6 +177,15 @@ Please create an HTML5 Canvas game with these specifications. The game should be
         <div className="space-y-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Game Design Assistant</h2>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Current Prompt</h3>
+            <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+              <pre className="whitespace-pre-wrap font-mono text-sm">
+                {generateFinalPrompt()}
+              </pre>
+            </ScrollArea>
           </div>
 
           {!showFinalPrompt ? (
@@ -184,7 +216,7 @@ Please create an HTML5 Canvas game with these specifications. The game should be
                   Back
                 </Button>
                 <Button
-                  onClick={() => handleAnswer(requirements[currentQuestion.id as keyof GameRequirements])}
+                  onClick={handleNext}
                   disabled={!requirements[currentQuestion.id as keyof GameRequirements].trim()}
                 >
                   {currentQuestionIndex === questions.length - 1 ? "Review" : "Next"}
@@ -193,16 +225,28 @@ Please create an HTML5 Canvas game with these specifications. The game should be
             </div>
           ) : (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Final Game Design</h3>
-              <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-                <pre className="whitespace-pre-wrap font-mono text-sm">
-                  {generateFinalPrompt()}
-                </pre>
-              </ScrollArea>
+              <h3 className="text-lg font-semibold">Final Review</h3>
 
-              <div className="flex justify-between mt-4">
+              <div className="flex justify-between mt-4 space-x-4">
                 <Button variant="outline" onClick={handleBack}>
                   Edit Answers
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => thinkMutation.mutate()}
+                  disabled={thinkMutation.isPending}
+                >
+                  {thinkMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Thinking...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      Think About It
+                    </>
+                  )}
                 </Button>
                 <Button
                   onClick={() => generateMutation.mutate()}
@@ -216,7 +260,7 @@ Please create an HTML5 Canvas game with these specifications. The game should be
                   ) : (
                     <>
                       <Wand2 className="mr-2 h-4 w-4" />
-                      Generate Game
+                      Force Generate
                     </>
                   )}
                 </Button>
