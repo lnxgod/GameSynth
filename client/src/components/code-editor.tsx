@@ -12,7 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 interface CodeEditorProps {
   code: string;
   onCodeChange: (code: string) => void;
-  addDebugLog?: (message: string) => void; // Added optional debug logging function
+  addDebugLog?: (message: string) => void;
 }
 
 export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps) {

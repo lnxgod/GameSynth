@@ -215,7 +215,7 @@ export async function registerRoutes(app: Express) {
       });
 
       logApi("Final design generated", { finalDesign });
-      res.json({ 
+      res.json({
         ...finalDesign,
         history
       });
@@ -370,7 +370,7 @@ export async function registerRoutes(app: Express) {
             role: "system",
             content: `You are a game development assistant specialized in HTML5 Canvas games.
 When asked to modify code:
-1. Always provide the COMPLETE updated code, never partial updates
+1. ALWAYS provide the COMPLETE updated code, never partial updates
 2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
 3. Explain the changes you're making in clear, simple terms
 4. Maintain game functionality and style consistency
