@@ -21,12 +21,11 @@ interface ChatInterfaceProps {
 const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
 When providing code:
 1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
-2. Do not include backticks in your response
-3. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
-4. Include clear comments explaining the game mechanics
-5. Return fully working, self-contained game code that handles its own game loop
-6. Use requestAnimationFrame for animation
-7. Handle cleanup properly when the game stops`;
+2. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
+3. Include clear comments explaining the game mechanics
+4. Return fully working, self-contained game code that handles its own game loop
+5. Use requestAnimationFrame for animation
+6. Handle cleanup properly when the game stops`;
 
 export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
   const [prompt, setPrompt] = useState("");
@@ -124,8 +123,8 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
             onChange={(e) => setPrompt(e.target.value)}
             className="min-h-[100px]"
           />
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             className="w-full"
             disabled={mutation.isPending}
           >

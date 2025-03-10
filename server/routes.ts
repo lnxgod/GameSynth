@@ -45,36 +45,37 @@ function logApi(message: string, request?: any, response?: any) {
 }
 
 function extractGameCode(content: string): string | null {
-  // First, find the code block
-  const codeMatch = content.match(/\+\+\+CODESTART\+\+\+([\s\S]*?)\+\+\+CODESTOP\+\+\+/);
-  if (!codeMatch) return null;
-
-  let code = codeMatch[1];
-
-  // Remove any markdown code block markers
-  code = code.replace(/```(javascript|js)?\n/g, '');
-  code = code.replace(/```$/g, '');
-
-  // Remove any HTML comments
-  code = code.replace(/<!--[\s\S]*?-->/g, '');
-
-  // Remove any HTML tags
-  code = code.replace(/<[^>]*>/g, '');
-
-  // Basic validation
-  if (code.includes('+++CODESTART+++') || code.includes('+++CODESTOP+++')) {
-    return null;
-  }
-
-  // Ensure we have valid JavaScript by checking for basic syntax
   try {
+    // Find the code block
+    const startMarker = '+++CODESTART+++';
+    const endMarker = '+++CODESTOP+++';
+
+    const startIndex = content.indexOf(startMarker);
+    const endIndex = content.indexOf(endMarker);
+
+    if (startIndex === -1 || endIndex === -1) {
+      console.log('No code markers found in response');
+      return null;
+    }
+
+    // Extract the code between markers
+    const code = content
+      .substring(startIndex + startMarker.length, endIndex)
+      .trim();
+
+    if (!code) {
+      console.log('Empty code block found');
+      return null;
+    }
+
+    // Basic validation - try to parse it as a function
     new Function('canvas', 'ctx', code);
-  } catch (e) {
-    console.error('Code validation failed:', e);
+
+    return code;
+  } catch (error) {
+    console.error('Code extraction/validation failed:', error);
     return null;
   }
-
-  return code.trim();
 }
 
 export async function registerRoutes(app: Express) {
@@ -101,7 +102,10 @@ export async function registerRoutes(app: Express) {
       });
 
       const content = response.choices[0].message.content || "";
+      console.log('Raw response content:', content);
+
       const code = extractGameCode(content);
+      console.log('Extracted code:', code);
 
       const chat = await storage.createChat({
         prompt,
