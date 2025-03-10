@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save, Download, Trash2, RotateCcw } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Save, Download, Trash2, RotateCcw, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface CodeEditorProps {
   code: string;
@@ -14,6 +18,9 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
   const [localCode, setLocalCode] = useState(code);
   const [savedGames, setSavedGames] = useState<{ name: string; code: string }[]>([]);
   const [saveName, setSaveName] = useState("");
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<Array<{ role: 'assistant' | 'user', content: string }>>([]);
   const { toast } = useToast();
 
   // Load saved games from localStorage on mount
@@ -47,7 +54,7 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
     const newSavedGames = [...savedGames, { name: saveName, code: localCode }];
     setSavedGames(newSavedGames);
     localStorage.setItem("savedGames", JSON.stringify(newSavedGames));
-    
+
     toast({
       title: "Success",
       description: `Game "${saveName}" saved successfully`,
@@ -82,53 +89,143 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
     });
   };
 
+  const chatMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const res = await apiRequest("POST", "/api/code/chat", {
+        code: localCode,
+        message
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
+      if (data.updatedCode) {
+        setLocalCode(data.updatedCode);
+        onCodeChange(data.updatedCode);
+        toast({
+          title: "Code Updated",
+          description: "The code has been modified based on your request",
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleChatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+
+    setChatHistory(prev => [...prev, { role: 'user', content: chatMessage }]);
+    chatMutation.mutate(chatMessage);
+    setChatMessage("");
+  };
+
   return (
-    <Card className="p-4">
-      <div className="space-y-4">
-        <div className="flex gap-2 items-center">
-          <Input
-            placeholder="Enter game name to save"
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            className="flex-1"
-          />
-          <Button onClick={handleSave} className="whitespace-nowrap">
-            <Save className="mr-2 h-4 w-4" />
-            Save Game
-          </Button>
-          <Button onClick={handleReset} variant="outline">
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reset
-          </Button>
-          <Button onClick={handleClearSaved} variant="destructive">
-            <Trash2 className="mr-2 h-4 w-4" />
-            Clear Saved
-          </Button>
-        </div>
-
-        {savedGames.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {savedGames.map((game, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                onClick={() => handleLoad(game.code)}
-                className="whitespace-nowrap"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Load "{game.name}"
-              </Button>
-            ))}
+    <div className="space-y-4">
+      <Card className="p-4">
+        <div className="space-y-4">
+          <div className="flex gap-2 items-center">
+            <Input
+              placeholder="Enter game name to save"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              className="flex-1"
+            />
+            <Button onClick={handleSave} className="whitespace-nowrap">
+              <Save className="mr-2 h-4 w-4" />
+              Save Game
+            </Button>
+            <Button onClick={handleReset} variant="outline">
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reset
+            </Button>
+            <Button onClick={handleClearSaved} variant="destructive">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear Saved
+            </Button>
+            <Button onClick={() => setShowChat(!showChat)} variant="outline">
+              <MessageSquare className="mr-2 h-4 w-4" />
+              {showChat ? "Hide Chat" : "Show Chat"}
+            </Button>
           </div>
-        )}
 
-        <textarea
-          value={localCode}
-          onChange={handleCodeChange}
-          className="w-full h-[600px] font-mono text-sm p-4 bg-background border rounded-md"
-          spellCheck="false"
-        />
-      </div>
-    </Card>
+          {savedGames.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {savedGames.map((game, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  onClick={() => handleLoad(game.code)}
+                  className="whitespace-nowrap"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Load "{game.name}"
+                </Button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <textarea
+              value={localCode}
+              onChange={handleCodeChange}
+              className="w-full h-[600px] font-mono text-sm p-4 bg-background border rounded-md"
+              spellCheck="false"
+            />
+
+            {showChat && (
+              <Card className="w-96 p-4">
+                <div className="space-y-4">
+                  <ScrollArea className="h-[500px] w-full rounded-md border p-4">
+                    <div className="space-y-4">
+                      {chatHistory.map((msg, index) => (
+                        <div
+                          key={index}
+                          className={`flex ${
+                            msg.role === 'assistant' ? 'justify-start' : 'justify-end'
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg p-3 ${
+                              msg.role === 'assistant'
+                                ? 'bg-muted'
+                                : 'bg-primary text-primary-foreground'
+                            }`}
+                          >
+                            {msg.content}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+
+                  <form onSubmit={handleChatSubmit} className="space-y-2">
+                    <Textarea
+                      placeholder="Ask about modifying or debugging your code..."
+                      value={chatMessage}
+                      onChange={(e) => setChatMessage(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={chatMutation.isPending}
+                    >
+                      {chatMutation.isPending ? "Processing..." : "Send"}
+                    </Button>
+                  </form>
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }

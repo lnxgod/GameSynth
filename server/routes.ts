@@ -357,6 +357,51 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  app.post("/api/code/chat", async (req, res) => {
+    try {
+      const { code, message } = req.body;
+
+      logApi("Code chat request received", { message });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a game development assistant specialized in HTML5 Canvas games.
+When asked to modify code:
+1. Analyze the current code and the requested changes
+2. If providing modified code, wrap it between +++CODESTART+++ and +++CODESTOP+++ markers
+3. Explain the changes you're making in clear, simple terms
+4. Ensure any modified code maintains the game's core functionality
+5. Keep the code structure and style consistent
+6. Handle any necessary cleanup or initialization code`
+          },
+          {
+            role: "user",
+            content: `Here is my current game code:\n\n${code}\n\nUser request: ${message}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 16000
+      });
+
+      const content = response.choices[0].message.content || "";
+      const updatedCode = extractGameCode(content);
+
+      const result = {
+        message: content,
+        updatedCode
+      };
+
+      logApi("Code chat response", { message }, result);
+      res.json(result);
+    } catch (error: any) {
+      logApi("Error in code chat", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
