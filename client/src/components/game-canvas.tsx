@@ -31,6 +31,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     context.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
     onDebugLog?.("Initializing game canvas...");
+    onDebugLog?.("Preparing game code execution environment...");
 
     try {
       // Prepare a controlled animation frame handler with safety check
@@ -51,29 +52,50 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         return frameRef.current;
       };
 
-      // Execute the game code in a controlled environment
-      // Note: Using _canvas and _ctx to avoid naming conflicts
-      const executeGame = new Function("_canvas", "_ctx", "animate", "stop", `
-        // Make canvas and ctx available to game code
-        const canvas = _canvas;
-        const ctx = _ctx;
-        let animationFrameId;
-
-        ${code}
-      `);
-
-      // Run the game with proper bindings
-      executeGame(
-        canvasElement,
-        context,
-        handleFrame,
-        () => {
-          if (frameRef.current) {
-            cancelAnimationFrame(frameRef.current);
-            frameRef.current = undefined;
+      // Create the game execution wrapper
+      const wrappedCode = `
+        return (function(canvasObj, contextObj) {
+          // Debug the execution environment
+          if (!canvasObj || !contextObj) {
+            throw new Error('Canvas context initialization failed');
           }
-        }
-      );
+
+          // Game state management
+          let __gameState = {
+            frameId: null,
+            isRunning: false
+          };
+
+          // Inject canvas and context without declaring new variables
+          Object.defineProperties(window, {
+            canvas: {
+              value: canvasObj,
+              writable: false
+            },
+            ctx: {
+              value: contextObj,
+              writable: false
+            }
+          });
+
+          try {
+            ${code}
+          } catch (error) {
+            throw new Error('Game code execution failed: ' + error.message);
+          }
+
+          return __gameState;
+        })`;
+
+      onDebugLog?.("Executing game code with following setup:");
+      onDebugLog?.("Canvas dimensions: " + canvasElement.width + "x" + canvasElement.height);
+
+      // Create and execute the game function
+      const gameFunction = new Function(wrappedCode);
+      const gameInstance = gameFunction();
+
+      // Execute the game with proper context
+      gameInstance(canvasElement, context);
 
       onDebugLog?.("Game started successfully");
     } catch (error) {

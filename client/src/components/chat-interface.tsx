@@ -12,15 +12,26 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ChatInterfaceProps {
   onCodeReceived: (code: string) => void;
 }
 
+const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
+When providing code:
+1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
+2. Do not include backticks in your response
+3. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
+4. Include clear comments explaining the game mechanics
+5. Return fully working, self-contained game code that handles its own game loop
+6. Use requestAnimationFrame for animation
+7. Handle cleanup properly when the game stops`;
+
 export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
   const [prompt, setPrompt] = useState("");
   const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(2048);
+  const [maxTokens, setMaxTokens] = useState(15000);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { toast } = useToast();
 
@@ -64,35 +75,45 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Temperature: {temperature}
-                  </label>
-                  <Slider
-                    value={[temperature]}
-                    onValueChange={([value]) => setTemperature(value)}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Higher values make the output more creative but less predictable
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Max Tokens: {maxTokens}
-                  </label>
-                  <Slider
-                    value={[maxTokens]}
-                    onValueChange={([value]) => setMaxTokens(value)}
-                    min={500}
-                    max={4000}
-                    step={100}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum length of the generated response
-                  </p>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">System Prompt</label>
+                    <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+                      <pre className="text-xs whitespace-pre-wrap font-mono">
+                        {SYSTEM_PROMPT}
+                      </pre>
+                    </ScrollArea>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Temperature: {temperature}
+                    </label>
+                    <Slider
+                      value={[temperature]}
+                      onValueChange={([value]) => setTemperature(value)}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Higher values make the output more creative but less predictable
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Max Tokens: {maxTokens}
+                    </label>
+                    <Slider
+                      value={[maxTokens]}
+                      onValueChange={([value]) => setMaxTokens(value)}
+                      min={1000}
+                      max={15000}
+                      step={1000}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum length of the generated response
+                    </p>
+                  </div>
                 </div>
               </CollapsibleContent>
             </Collapsible>
