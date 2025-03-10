@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChatInterface } from "@/components/chat-interface";
 import { GameCanvas } from "@/components/game-canvas";
-import { CodeDisplay } from "@/components/code-display";
+import { CodeEditor } from "@/components/code-editor";
 import { DebugLogs } from "@/components/debug-logs";
 import { ApiLogs } from "@/components/api-logs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,11 @@ export default function Home() {
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
+  };
+
+  const handleCodeChange = (newCode: string) => {
+    setGameCode(newCode);
+    addDebugLog("Code updated in editor");
   };
 
   return (
@@ -26,7 +31,7 @@ export default function Home() {
         <Tabs defaultValue="preview" className="w-full">
           <TabsList className="w-full">
             <TabsTrigger value="preview" className="flex-1">Game Preview</TabsTrigger>
-            <TabsTrigger value="code" className="flex-1">Code</TabsTrigger>
+            <TabsTrigger value="code" className="flex-1">Code Editor</TabsTrigger>
             <TabsTrigger value="debug" className="flex-1">Debug Logs</TabsTrigger>
             <TabsTrigger value="api" className="flex-1">API Logs</TabsTrigger>
           </TabsList>
@@ -36,7 +41,7 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="code" className="mt-4">
-            <CodeDisplay code={gameCode} />
+            <CodeEditor code={gameCode} onCodeChange={handleCodeChange} />
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4">
