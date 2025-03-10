@@ -67,9 +67,18 @@ function extractGameCode(content: string): string | null {
     }
 
     // Extract the code between markers
-    const code = content
+    let code = content
       .substring(startIndex + startMarker.length, endIndex)
       .trim();
+
+    // If we have a script tag, extract just the JavaScript
+    const scriptMatch = code.match(/<script>([\s\S]*?)<\/script>/);
+    if (scriptMatch) {
+      code = scriptMatch[1].trim();
+    }
+
+    // Remove any remaining HTML tags and structure
+    code = code.replace(/<\/?[^>]+(>|$)/g, '');
 
     if (!code) {
       console.log('ERROR: Empty code block found');
@@ -78,6 +87,10 @@ function extractGameCode(content: string): string | null {
 
     // Basic validation - try to parse it as a function
     try {
+      // Skip the canvas/ctx initialization since we provide those
+      code = code.replace(/const canvas[^;]+;/, '');
+      code = code.replace(/const ctx[^;]+;/, '');
+
       new Function('canvas', 'ctx', code);
     } catch (error) {
       console.log('ERROR: Code validation failed -', error.message);

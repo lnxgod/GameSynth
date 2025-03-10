@@ -1,0 +1,24 @@
+1:03:10 AM: Chat request received
+Request:
+{
+  "prompt": "write an html5 demo\n",
+  "temperature": 0.7,
+  "maxTokens": 16000
+}
+1:03:28 AM: Chat response generated
+Request:
+{
+  "prompt": "write an html5 demo\n"
+}
+Response:
+{
+  "prompt": "write an html5 demo\n",
+  "response": "Let's create a simple HTML5 Canvas game where the player controls a character that moves around the screen to collect randomly appearing stars. The objective is to collect as many stars as possible within a time limit.\n\n+++CODESTART+++\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Star Collector Game</title>\n    <style>\n        canvas {\n            border: 1px solid black;\n            display: block;\n            margin: 0 auto;\n        }\n    </style>\n</head>\n<body>\n    <canvas id=\"gameCanvas\" width=\"500\" height=\"500\"></canvas>\n    <script>\n        // Game configuration\n        const canvas = document.getElementById('gameCanvas');\n        const ctx = canvas.getContext('2d');\n        const playerSize = 20;\n        const starSize = 15;\n        const gameDuration = 30; // Game duration in seconds\n\n        // Game state\n        let player = { x: 240, y: 240, speed: 5 };\n        let star = { x: Math.random() * (canvas.width - starSize), y: Math.random() * (canvas.height - starSize) };\n        let score = 0;\n        let keysPressed = {};\n        let timeLeft = gameDuration;\n\n        // Game loop\n        function gameLoop() {\n            update();\n            draw();\n            if (timeLeft > 0) {\n                requestAnimationFrame(gameLoop);\n            } else {\n                endGame();\n            }\n        }\n\n        // Update game state\n        function update() {\n            // Move player\n            if (keysPressed['ArrowUp'] && player.y > 0) player.y -= player.speed;\n            if (keysPressed['ArrowDown'] && player.y < canvas.height - playerSize) player.y += player.speed;\n            if (keysPressed['ArrowLeft'] && player.x > 0) player.x -= player.speed;\n            if (keysPressed['ArrowRight'] && player.x < canvas.width - playerSize) player.x += player.speed;\n\n            // Check collision with star\n            if (player.x < star.x + starSize && player.x + playerSize > star.x &&\n                player.y < star.y + starSize && player.y + playerSize > star.y) {\n                score++;\n                // Reposition star\n                star.x = Math.random() * (canvas.width - starSize);\n                star.y = Math.random() * (canvas.height - starSize);\n            }\n\n            // Update timer\n            timeLeft -= 1 / 60; // Assuming 60 FPS\n        }\n\n        // Draw everything\n        function draw() {\n            ctx.clearRect(0, 0, canvas.width, canvas.height);\n\n            // Draw player\n            ctx.fillStyle = 'blue';\n            ctx.fillRect(player.x, player.y, playerSize, playerSize);\n\n            // Draw star\n            ctx.fillStyle = 'gold';\n            ctx.fillRect(star.x, star.y, starSize, starSize);\n\n            // Draw score and timer\n            ctx.fillStyle = 'black';\n            ctx.font = '20px Arial';\n            ctx.fillText(`Score: ${score}`, 10, 20);\n            ctx.fillText(`Time: ${Math.max(0, Math.floor(timeLeft))}`, 400, 20);\n        }\n\n        // End game\n        function endGame() {\n            ctx.clearRect(0, 0, canvas.width, canvas.height);\n            ctx.fillStyle = 'black';\n            ctx.font = '30px Arial';\n            ctx.fillText(`Game Over! Final Score: ${score}`, 50, canvas.height / 2);\n        }\n\n        // Handle keyboard input\n        window.addEventListener('keydown', (e) => {\n            keysPressed[e.key] = true;\n        });\n\n        window.addEventListener('keyup', (e) => {\n            keysPressed[e.key] = false;\n        });\n\n        // Start the game\n        gameLoop();\n    </script>\n</body>\n</html>\n+++CODESTOP+++\n\nIn this game, you control the player using the arrow keys. The goal is to collect as many stars as possible before the timer runs out. Each time you collect a star, it will reappear at a new random location. Enjoy the game!",
+  "code": null,
+  "id": 1,
+  "timestamp": "2025-03-10T01:03:28.857Z",
+  "settings": {
+    "temperature": 0.7,
+    "maxTokens": 16000
+  }
+}
