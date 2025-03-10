@@ -21,8 +21,42 @@ interface GameRequirements {
   specialFeatures: string;
 }
 
+const questions = [
+  {
+    id: 'gameType',
+    question: 'What type of game would you like to create?',
+    placeholder: 'e.g., Platformer, Puzzle, Arcade, Space Shooter',
+    type: 'input'
+  },
+  {
+    id: 'mechanics',
+    question: 'What are the main gameplay mechanics?',
+    placeholder: 'Describe how the game will be played',
+    type: 'textarea'
+  },
+  {
+    id: 'visualStyle',
+    question: 'What visual style would you like for your game?',
+    placeholder: 'e.g., Minimalist, Retro, Colorful, Abstract',
+    type: 'input'
+  },
+  {
+    id: 'difficulty',
+    question: 'What difficulty level should the game have?',
+    placeholder: 'e.g., Easy, Medium, Hard, Progressive',
+    type: 'input'
+  },
+  {
+    id: 'specialFeatures',
+    question: 'Are there any special features you would like to include?',
+    placeholder: 'Any unique mechanics or elements that make your game special',
+    type: 'textarea'
+  }
+];
+
 export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [requirements, setRequirements] = useState<GameRequirements>({
     gameType: "",
     mechanics: "",
@@ -30,19 +64,14 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     difficulty: "",
     specialFeatures: ""
   });
+  const [showFinalPrompt, setShowFinalPrompt] = useState(false);
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const { toast } = useToast();
 
   const generateMutation = useMutation({
     mutationFn: async () => {
       // First, send the requirements to get assistant feedback
-      const prompt = `
-Game Type: ${requirements.gameType}
-Core Mechanics: ${requirements.mechanics}
-Visual Style: ${requirements.visualStyle}
-Difficulty Level: ${requirements.difficulty}
-Special Features: ${requirements.specialFeatures}
-      `.trim();
+      const prompt = generateFinalPrompt();
 
       const chatRes = await apiRequest('POST', '/api/design/chat', {
         message: prompt,
@@ -81,93 +110,119 @@ Special Features: ${requirements.specialFeatures}
     }
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (Object.values(requirements).some(value => !value.trim())) {
-      toast({
-        title: "Missing Requirements",
-        description: "Please fill out all fields before generating code.",
-        variant: "destructive",
-      });
-      return;
-    }
-    generateMutation.mutate();
+  const generateFinalPrompt = () => {
+    return `
+Game Design Requirements:
+
+1. Game Type: ${requirements.gameType}
+2. Core Mechanics: ${requirements.mechanics}
+3. Visual Style: ${requirements.visualStyle}
+4. Difficulty Level: ${requirements.difficulty}
+5. Special Features: ${requirements.specialFeatures}
+
+Please create an HTML5 Canvas game with these specifications. The game should be engaging, well-commented, and implement all the requested features while maintaining good performance and clean code structure.
+    `.trim();
   };
+
+  const handleAnswer = (value: string) => {
+    const currentQuestion = questions[currentQuestionIndex];
+    setRequirements(prev => ({
+      ...prev,
+      [currentQuestion.id]: value
+    }));
+
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      setShowFinalPrompt(true);
+    }
+  };
+
+  const handleBack = () => {
+    if (showFinalPrompt) {
+      setShowFinalPrompt(false);
+    } else if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  const currentQuestion = questions[currentQuestionIndex];
 
   return (
     <Card className="w-full">
       <CardContent className="pt-6">
         <div className="space-y-4">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Game Design Requirements</h2>
+            <h2 className="text-lg font-semibold">Game Design Assistant</h2>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {!showFinalPrompt ? (
             <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Game Type</label>
-                <Input
-                  placeholder="e.g., Platformer, Puzzle, Arcade, Space Shooter"
-                  value={requirements.gameType}
-                  onChange={(e) => setRequirements(prev => ({ ...prev, gameType: e.target.value }))}
-                />
-              </div>
+              <div className="text-lg mb-2">{currentQuestion.question}</div>
 
-              <div>
-                <label className="text-sm font-medium">Core Mechanics</label>
+              {currentQuestion.type === 'textarea' ? (
                 <Textarea
-                  placeholder="Describe the main gameplay mechanics"
-                  value={requirements.mechanics}
-                  onChange={(e) => setRequirements(prev => ({ ...prev, mechanics: e.target.value }))}
+                  placeholder={currentQuestion.placeholder}
+                  value={requirements[currentQuestion.id as keyof GameRequirements]}
+                  onChange={(e) => handleAnswer(e.target.value)}
+                  className="min-h-[100px]"
                 />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Visual Style</label>
+              ) : (
                 <Input
-                  placeholder="e.g., Minimalist, Retro, Colorful, Abstract"
-                  value={requirements.visualStyle}
-                  onChange={(e) => setRequirements(prev => ({ ...prev, visualStyle: e.target.value }))}
+                  placeholder={currentQuestion.placeholder}
+                  value={requirements[currentQuestion.id as keyof GameRequirements]}
+                  onChange={(e) => handleAnswer(e.target.value)}
                 />
-              </div>
+              )}
 
-              <div>
-                <label className="text-sm font-medium">Difficulty Level</label>
-                <Input
-                  placeholder="e.g., Easy, Medium, Hard, Progressive"
-                  value={requirements.difficulty}
-                  onChange={(e) => setRequirements(prev => ({ ...prev, difficulty: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Special Features</label>
-                <Textarea
-                  placeholder="Any special features or mechanics you'd like to include"
-                  value={requirements.specialFeatures}
-                  onChange={(e) => setRequirements(prev => ({ ...prev, specialFeatures: e.target.value }))}
-                />
+              <div className="flex justify-between mt-4">
+                <Button
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={currentQuestionIndex === 0}
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={() => handleAnswer(requirements[currentQuestion.id as keyof GameRequirements])}
+                  disabled={!requirements[currentQuestion.id as keyof GameRequirements].trim()}
+                >
+                  {currentQuestionIndex === questions.length - 1 ? "Review" : "Next"}
+                </Button>
               </div>
             </div>
+          ) : (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Final Game Design</h3>
+              <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+                <pre className="whitespace-pre-wrap font-mono text-sm">
+                  {generateFinalPrompt()}
+                </pre>
+              </ScrollArea>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Generate Game
-                </>
-              )}
-            </Button>
-          </form>
+              <div className="flex justify-between mt-4">
+                <Button variant="outline" onClick={handleBack}>
+                  Edit Answers
+                </Button>
+                <Button
+                  onClick={() => generateMutation.mutate()}
+                  disabled={generateMutation.isPending}
+                >
+                  {generateMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      Generate Game
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {messages.length > 0 && (
             <div className="mt-8">
