@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Play, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface GameCanvasProps {
@@ -10,36 +12,57 @@ interface GameCanvasProps {
 export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
+  const [isRunning, setIsRunning] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !code) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Clean up any previous animation
+  // Clean up function to stop the game
+  const stopGame = () => {
     if (frameRef.current) {
       cancelAnimationFrame(frameRef.current);
       frameRef.current = undefined;
     }
+    setIsRunning(false);
+    onDebugLog?.("Game stopped");
+  };
 
-    onDebugLog?.("Initializing game canvas...");
+  // Reset canvas
+  const resetCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  // Start the game
+  const startGame = () => {
+    if (!code) {
+      toast({
+        title: "No Game Code",
+        description: "Please generate some game code first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Clean up any previous game state
+    stopGame();
+    resetCanvas();
+
+    onDebugLog?.("Starting game...");
     onDebugLog?.(`Canvas size: ${canvas.width}x${canvas.height}`);
 
     try {
-      // Expose canvas and ctx to the game code scope
-      const gameCode = `
-        let animationFrameId;
+      // Create game function
+      const gameFunction = new Function("canvas", "ctx", "requestAnimationFrame", "cancelAnimationFrame", code);
 
-        ${code}
-      `;
-
-      onDebugLog?.("Creating game function...");
-      const gameFunction = new Function("canvas", "ctx", "requestAnimationFrame", "cancelAnimationFrame", gameCode);
-
-      onDebugLog?.("Starting game execution...");
+      // Run the game
       gameFunction(
         canvas,
         ctx,
@@ -55,6 +78,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         }
       );
 
+      setIsRunning(true);
       onDebugLog?.("Game started successfully");
     } catch (error) {
       console.error("Error executing game code:", error);
@@ -65,34 +89,41 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         description: "There was an error running the game. Check the debug logs for details.",
         variant: "destructive",
       });
-
-      // Cleanup on error
-      if (frameRef.current) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = undefined;
-      }
     }
+  };
 
-    // Cleanup function
+  // Cleanup on unmount or code change
+  useEffect(() => {
     return () => {
-      if (frameRef.current) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = undefined;
-        onDebugLog?.("Game animation stopped");
-      }
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      stopGame();
+      resetCanvas();
     };
-  }, [code, toast, onDebugLog]);
+  }, [code]);
 
   return (
     <Card className="p-4">
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={600}
-        className="w-full h-[600px] border border-border rounded-md bg-black"
-        style={{ aspectRatio: "4/3" }}
-      />
+      <div className="space-y-4">
+        <div className="flex gap-2 justify-end">
+          {!isRunning ? (
+            <Button onClick={startGame} className="w-24">
+              <Play className="mr-2 h-4 w-4" />
+              Run
+            </Button>
+          ) : (
+            <Button onClick={stopGame} variant="destructive" className="w-24">
+              <Square className="mr-2 h-4 w-4" />
+              Stop
+            </Button>
+          )}
+        </div>
+        <canvas
+          ref={canvasRef}
+          width={800}
+          height={600}
+          className="w-full h-[600px] border border-border rounded-md bg-black"
+          style={{ aspectRatio: "4/3" }}
+        />
+      </div>
     </Card>
   );
 }

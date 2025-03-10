@@ -72,33 +72,31 @@ function extractGameCode(content: string): string | null {
       .trim();
 
     // If we have a script tag, extract just the JavaScript
-    const scriptMatch = code.match(/<script>([\s\S]*?)<\/script>/);
-    if (scriptMatch) {
-      code = scriptMatch[1].trim();
+    if (code.includes('<script>')) {
+      const scriptStart = code.indexOf('<script>') + 8;
+      const scriptEnd = code.indexOf('</script>');
+      if (scriptEnd > scriptStart) {
+        code = code.substring(scriptStart, scriptEnd).trim();
+      }
     }
 
-    // Remove any remaining HTML tags and structure
-    code = code.replace(/<\/?[^>]+(>|$)/g, '');
+    // Remove any HTML document structure
+    code = code.replace(/<!DOCTYPE.*?>/, '');
+    code = code.replace(/<html>.*?<body>/s, '');
+    code = code.replace(/<\/body>.*?<\/html>/s, '');
+
+    // Remove canvas/context initialization since we provide those
+    code = code.replace(/const canvas\s*=\s*document\.getElementById[^;]+;/, '');
+    code = code.replace(/const ctx\s*=\s*canvas\.getContext[^;]+;/, '');
 
     if (!code) {
       console.log('ERROR: Empty code block found');
       return null;
     }
 
-    // Basic validation - try to parse it as a function
-    try {
-      // Skip the canvas/ctx initialization since we provide those
-      code = code.replace(/const canvas[^;]+;/, '');
-      code = code.replace(/const ctx[^;]+;/, '');
+    // Log the extracted code for debugging
+    console.log('Extracted code:', code);
 
-      new Function('canvas', 'ctx', code);
-    } catch (error) {
-      console.log('ERROR: Code validation failed -', error.message);
-      console.log('Invalid code:', code);
-      return null;
-    }
-
-    console.log('Successfully extracted and validated code');
     return code;
   } catch (error) {
     console.error('Code extraction failed:', error);
