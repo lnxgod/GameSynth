@@ -10,28 +10,29 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Update the DESIGN_ASSISTANT_PROMPT in server/routes.ts
+// Update the DESIGN_ASSISTANT_PROMPT
 const DESIGN_ASSISTANT_PROMPT = `You are a game design assistant helping users create HTML5 Canvas games. 
-When receiving game requirements, analyze them and:
-1. Determine if there's enough information to create a working game
-2. If not, ask specific questions about missing or unclear details
-3. Consider whether the requirements would result in a playable, engaging game
-4. Suggest improvements or additions if needed
-5. Format your response as JSON with the following structure:
-   {
-     "needsMoreInfo": boolean,
-     "message": "Your detailed analysis and/or questions",
-     "suggestions": ["Any suggestions for improvement"]
-   }`;
+Analyze the specific game aspect provided and elaborate on its implementation details.
+Focus on concrete, implementable features and mechanics.
+Format your response as JSON with the following structure:
+{
+  "analysis": "Detailed analysis of this game aspect",
+  "implementation_details": ["List of specific features or mechanics to implement"],
+  "technical_considerations": ["Technical aspects to consider"]
+}`;
 
-const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
-When providing code:
-1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
-2. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
-3. Include clear comments explaining the game mechanics
-4. Return fully working, self-contained game code that handles its own game loop
-5. Use requestAnimationFrame for animation
-6. Handle cleanup properly when the game stops`;
+const FINAL_PROMPT_ASSISTANT = `You are a game design assistant helping create HTML5 Canvas games.
+Review all the analyzed aspects and create a comprehensive game design document.
+Consider how all elements work together and ensure the game will be fun and technically feasible.
+Format your response as JSON with the following structure:
+{
+  "gameDescription": "Complete game description",
+  "coreMechanics": ["List of core mechanics"],
+  "technicalRequirements": ["Technical requirements"],
+  "implementationApproach": "Suggested implementation approach",
+  "needsMoreInfo": boolean,
+  "additionalQuestions": ["Any clarifying questions if needed"]
+}`;
 
 // Store API logs in memory with full request/response data
 const apiLogs: Array<{
@@ -118,26 +119,31 @@ function extractGameCode(content: string): string | null {
   }
 }
 
+const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
+When providing code:
+1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
+2. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
+3. Include clear comments explaining the game mechanics
+4. Return fully working, self-contained game code that handles its own game loop
+5. Use requestAnimationFrame for animation
+6. Handle cleanup properly when the game stops`;
+
+
 export async function registerRoutes(app: Express) {
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
   });
 
-  // Update the chat endpoint to handle the thinking step
-  app.post("/api/design/chat", async (req, res) => {
+  app.post("/api/design/analyze", async (req, res) => {
     try {
-      const { message, sessionId } = req.body;
+      const { aspect, content, sessionId } = req.body;
 
-      // Get or create conversation history
       if (!designConversations.has(sessionId)) {
         designConversations.set(sessionId, []);
       }
       const history = designConversations.get(sessionId)!;
 
-      // Add user message to history
-      history.push({ role: 'user', content: message });
-
-      logApi("Design chat request received", { message, sessionId });
+      logApi(`Analyzing ${aspect}`, { aspect, content });
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -146,50 +152,79 @@ export async function registerRoutes(app: Express) {
             role: "system",
             content: DESIGN_ASSISTANT_PROMPT
           },
-          ...history
+          {
+            role: "user",
+            content: `Analyze this ${aspect} requirement for an HTML5 Canvas game: ${content}`
+          }
         ],
         response_format: { type: "json_object" },
         temperature: 0.7
       });
 
-      const assistantMessage = response.choices[0].message.content || "";
+      const analysis = JSON.parse(response.choices[0].message.content || "{}");
 
-      try {
-        const analysis = JSON.parse(assistantMessage);
-        // Add the analysis to the history in a readable format
-        history.push({
-          role: 'assistant',
-          content: analysis.message
-        });
+      // Store the analysis in the conversation history
+      history.push({
+        role: 'assistant',
+        content: `Analysis of ${aspect}:\n${analysis.analysis}\n\nImplementation details:\n${analysis.implementation_details.join("\n")}`
+      });
 
-        logApi("Design chat response", { message }, { analysis });
-
-        res.json({ 
-          needsMoreInfo: analysis.needsMoreInfo,
-          message: analysis.message,
-          suggestions: analysis.suggestions,
-          history: history 
-        });
-      } catch (error) {
-        // Fallback if JSON parsing fails
-        history.push({
-          role: 'assistant',
-          content: assistantMessage
-        });
-
-        res.json({ 
-          needsMoreInfo: true,
-          message: "Failed to analyze requirements properly",
-          history: history 
-        });
-      }
+      logApi(`Analysis complete for ${aspect}`, { analysis });
+      res.json(analysis);
     } catch (error: any) {
-      logApi("Error in design chat", req.body, { error: error.message });
+      logApi("Error in analysis", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Generate game code based on design conversation
+  app.post("/api/design/finalize", async (req, res) => {
+    try {
+      const { sessionId } = req.body;
+      const history = designConversations.get(sessionId);
+
+      if (!history) {
+        throw new Error("No design conversation found");
+      }
+
+      logApi("Generating final design", { sessionId });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: FINAL_PROMPT_ASSISTANT
+          },
+          {
+            role: "user",
+            content: `Create a comprehensive game design based on these analyses:\n\n${
+              history.filter(msg => msg.role === 'assistant').map(msg => msg.content).join("\n\n")
+            }`
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7
+      });
+
+      const finalDesign = JSON.parse(response.choices[0].message.content || "{}");
+
+      // Add the final design to history
+      history.push({
+        role: 'assistant',
+        content: `Final Game Design:\n${finalDesign.gameDescription}\n\nCore Mechanics:\n${finalDesign.coreMechanics.join("\n")}`
+      });
+
+      logApi("Final design generated", { finalDesign });
+      res.json({ 
+        ...finalDesign,
+        history
+      });
+    } catch (error: any) {
+      logApi("Error in final design", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/design/generate", async (req, res) => {
     try {
       const { sessionId } = req.body;

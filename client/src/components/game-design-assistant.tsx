@@ -68,11 +68,20 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const { toast } = useToast();
 
-  const thinkMutation = useMutation({
+  const analyzeMutation = useMutation({
+    mutationFn: async (aspect: keyof GameRequirements) => {
+      const res = await apiRequest('POST', '/api/design/analyze', {
+        aspect,
+        content: requirements[aspect],
+        sessionId
+      });
+      return res.json();
+    }
+  });
+
+  const finalizeMutation = useMutation({
     mutationFn: async () => {
-      const prompt = generateFinalPrompt();
-      const res = await apiRequest('POST', '/api/design/chat', {
-        message: prompt,
+      const res = await apiRequest('POST', '/api/design/finalize', {
         sessionId
       });
       return res.json();
@@ -82,21 +91,14 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
       if (data.needsMoreInfo) {
         toast({
           title: "More Information Needed",
-          description: data.message,
+          description: data.additionalQuestions.join("\n"),
         });
       } else {
         toast({
-          title: "Ready to Generate",
-          description: "Requirements are sufficient to create your game!",
+          title: "Design Ready",
+          description: "Game design is complete and ready for implementation!",
         });
       }
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
     }
   });
 
@@ -112,13 +114,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
         onCodeGenerated(data.code);
         toast({
           title: "Success",
-          description: "Game code has been generated based on your requirements!",
-        });
-      } else {
-        toast({
-          title: "Warning",
-          description: "No code was generated. Try refining your game requirements.",
-          variant: "destructive",
+          description: "Game code has been generated!",
         });
       }
     },
@@ -130,20 +126,6 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
       });
     }
   });
-
-  const generateFinalPrompt = () => {
-    return `
-Game Design Requirements:
-
-1. Game Type: ${requirements.gameType}
-2. Core Mechanics: ${requirements.mechanics}
-3. Visual Style: ${requirements.visualStyle}
-4. Difficulty Level: ${requirements.difficulty}
-5. Special Features: ${requirements.specialFeatures}
-
-Please create an HTML5 Canvas game with these specifications. The game should be engaging, well-commented, and implement all the requested features while maintaining good performance and clean code structure.
-    `.trim();
-  };
 
   const handleAnswer = (value: string) => {
     const currentQuestion = questions[currentQuestionIndex];
@@ -169,6 +151,16 @@ Please create an HTML5 Canvas game with these specifications. The game should be
     }
   };
 
+  const handleThink = async () => {
+    // Analyze each aspect sequentially
+    for (const question of questions) {
+      const aspect = question.id as keyof GameRequirements;
+      await analyzeMutation.mutateAsync(aspect);
+    }
+    // Generate final design
+    await finalizeMutation.mutateAsync();
+  };
+
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
@@ -183,7 +175,13 @@ Please create an HTML5 Canvas game with these specifications. The game should be
             <h3 className="text-lg font-semibold">Current Prompt</h3>
             <ScrollArea className="h-[200px] w-full rounded-md border p-4">
               <pre className="whitespace-pre-wrap font-mono text-sm">
-                {generateFinalPrompt()}
+                {`Game Design Requirements:
+
+1. Game Type: ${requirements.gameType}
+2. Core Mechanics: ${requirements.mechanics}
+3. Visual Style: ${requirements.visualStyle}
+4. Difficulty Level: ${requirements.difficulty}
+5. Special Features: ${requirements.specialFeatures}`}
               </pre>
             </ScrollArea>
           </div>
@@ -233,13 +231,13 @@ Please create an HTML5 Canvas game with these specifications. The game should be
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={() => thinkMutation.mutate()}
-                  disabled={thinkMutation.isPending}
+                  onClick={handleThink}
+                  disabled={analyzeMutation.isPending || finalizeMutation.isPending}
                 >
-                  {thinkMutation.isPending ? (
+                  {analyzeMutation.isPending || finalizeMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Thinking...
+                      Analyzing...
                     </>
                   ) : (
                     <>
