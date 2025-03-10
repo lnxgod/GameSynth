@@ -31,41 +31,28 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     onDebugLog?.("Initializing game canvas...");
 
     try {
-      // Prepare the animation frame handler
-      const handleAnimationFrame = (callback: FrameRequestCallback) => {
-        if (frameRef.current) {
-          cancelAnimationFrame(frameRef.current);
-        }
+      // Prepare a controlled animation frame handler
+      const handleFrame = (callback: FrameRequestCallback) => {
         frameRef.current = requestAnimationFrame(callback);
         return frameRef.current;
       };
 
-      // Create a safe execution context for the game code
-      const gameCode = `
-        "use strict";
-        // Game variables will be declared here
+      // Execute the game code in a controlled environment
+      const executeGame = new Function("canvasElement", "context", "animate", "stop", `
+        const canvas = canvasElement;
+        const ctx = context;
+        const requestAnimationFrame = animate;
+        const cancelAnimationFrame = stop;
         let animationFrameId;
 
-        try {
-          ${code}
-        } catch (error) {
-          throw new Error("Game initialization failed: " + error.message);
-        }
-      `;
+        ${code}
+      `);
 
-      const gameFunction = new Function(
-        "canvas",
-        "ctx",
-        "requestAnimationFrame",
-        "cancelAnimationFrame",
-        gameCode
-      );
-
-      // Execute the game code with controlled context
-      gameFunction(
+      // Run the game with proper bindings
+      executeGame(
         canvas,
         ctx,
-        handleAnimationFrame,
+        handleFrame,
         () => {
           if (frameRef.current) {
             cancelAnimationFrame(frameRef.current);
@@ -74,7 +61,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         }
       );
 
-      onDebugLog?.("Game code executed successfully");
+      onDebugLog?.("Game started successfully");
     } catch (error) {
       console.error("Error executing game code:", error);
       onDebugLog?.(`Error executing game code: ${error}`);
@@ -84,7 +71,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         variant: "destructive",
       });
 
-      // Ensure cleanup on error
+      // Cleanup on error
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
         frameRef.current = undefined;
