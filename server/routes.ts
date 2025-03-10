@@ -44,6 +44,39 @@ function logApi(message: string, request?: any, response?: any) {
   }
 }
 
+function extractGameCode(content: string): string | null {
+  // First, find the code block
+  const codeMatch = content.match(/\+\+\+CODESTART\+\+\+([\s\S]*?)\+\+\+CODESTOP\+\+\+/);
+  if (!codeMatch) return null;
+
+  let code = codeMatch[1];
+
+  // Remove any markdown code block markers
+  code = code.replace(/```(javascript|js)?\n/g, '');
+  code = code.replace(/```$/g, '');
+
+  // Remove any HTML comments
+  code = code.replace(/<!--[\s\S]*?-->/g, '');
+
+  // Remove any HTML tags
+  code = code.replace(/<[^>]*>/g, '');
+
+  // Basic validation
+  if (code.includes('+++CODESTART+++') || code.includes('+++CODESTOP+++')) {
+    return null;
+  }
+
+  // Ensure we have valid JavaScript by checking for basic syntax
+  try {
+    new Function('canvas', 'ctx', code);
+  } catch (e) {
+    console.error('Code validation failed:', e);
+    return null;
+  }
+
+  return code.trim();
+}
+
 export async function registerRoutes(app: Express) {
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
@@ -68,14 +101,7 @@ export async function registerRoutes(app: Express) {
       });
 
       const content = response.choices[0].message.content || "";
-
-      // Extract code between markers
-      const codeMatch = content.match(/\+\+\+CODESTART\+\+\+([\s\S]*?)\+\+\+CODESTOP\+\+\+/);
-      let code: string | null = null;
-
-      if (codeMatch) {
-        code = codeMatch[1].trim();
-      }
+      const code = extractGameCode(content);
 
       const chat = await storage.createChat({
         prompt,
@@ -92,7 +118,6 @@ export async function registerRoutes(app: Express) {
       };
 
       logApi("Chat response generated", { prompt }, result);
-
       res.json(result);
     } catch (error: any) {
       logApi("Error in chat", req.body, { error: error.message });
