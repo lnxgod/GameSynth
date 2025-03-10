@@ -10,39 +10,53 @@ interface GameCanvasProps {
 export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
+  const frameCountRef = useRef<number>(0);
   const { toast } = useToast();
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !code) return;
+    const canvasElement = canvasRef.current;
+    if (!canvasElement || !code) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const context = canvasElement.getContext("2d");
+    if (!context) return;
 
     // Clear previous animation frame
     if (frameRef.current) {
       cancelAnimationFrame(frameRef.current);
       frameRef.current = undefined;
+      frameCountRef.current = 0;
     }
 
     // Clear the canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    context.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
     onDebugLog?.("Initializing game canvas...");
 
     try {
-      // Prepare a controlled animation frame handler
+      // Prepare a controlled animation frame handler with safety check
       const handleFrame = (callback: FrameRequestCallback) => {
+        frameCountRef.current++;
+
+        // Safety check - prevent runaway animations
+        if (frameCountRef.current > 1000) {
+          onDebugLog?.("Safety: Animation frame limit reached, stopping game");
+          if (frameRef.current) {
+            cancelAnimationFrame(frameRef.current);
+            frameRef.current = undefined;
+          }
+          return;
+        }
+
         frameRef.current = requestAnimationFrame(callback);
         return frameRef.current;
       };
 
       // Execute the game code in a controlled environment
-      const executeGame = new Function("canvasElement", "context", "animate", "stop", `
-        const canvas = canvasElement;
-        const ctx = context;
-        const requestAnimationFrame = animate;
-        const cancelAnimationFrame = stop;
+      // Note: Using _canvas and _ctx to avoid naming conflicts
+      const executeGame = new Function("_canvas", "_ctx", "animate", "stop", `
+        // Make canvas and ctx available to game code
+        const canvas = _canvas;
+        const ctx = _ctx;
         let animationFrameId;
 
         ${code}
@@ -50,8 +64,8 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
       // Run the game with proper bindings
       executeGame(
-        canvas,
-        ctx,
+        canvasElement,
+        context,
         handleFrame,
         () => {
           if (frameRef.current) {
@@ -85,7 +99,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         frameRef.current = undefined;
         onDebugLog?.("Game animation stopped");
       }
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      context.clearRect(0, 0, canvasElement.width, canvasElement.height);
     };
   }, [code, toast, onDebugLog]);
 
