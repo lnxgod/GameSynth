@@ -21,6 +21,12 @@ interface GameRequirements {
   specialFeatures: string;
 }
 
+interface AnalyzedAspect {
+  analysis: string;
+  implementation_details: string[];
+  technical_considerations: string[];
+}
+
 const questions = [
   {
     id: 'gameType',
@@ -64,7 +70,9 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     difficulty: "",
     specialFeatures: ""
   });
+  const [analyses, setAnalyses] = useState<Partial<Record<keyof GameRequirements, AnalyzedAspect>>>({});
   const [showFinalPrompt, setShowFinalPrompt] = useState(false);
+  const [finalDesign, setFinalDesign] = useState<any>(null);
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const { toast } = useToast();
 
@@ -76,6 +84,12 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
         sessionId
       });
       return res.json();
+    },
+    onSuccess: (data, aspect) => {
+      setAnalyses(prev => ({
+        ...prev,
+        [aspect]: data
+      }));
     }
   });
 
@@ -88,6 +102,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     },
     onSuccess: (data) => {
       setMessages(data.history);
+      setFinalDesign(data);
       if (data.needsMoreInfo) {
         toast({
           title: "More Information Needed",
@@ -155,13 +170,67 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     // Analyze each aspect sequentially
     for (const question of questions) {
       const aspect = question.id as keyof GameRequirements;
-      await analyzeMutation.mutateAsync(aspect);
+      await analyzeMutation.mutateAsync(aspect, { aspect }); // Added aspect to onSuccess
     }
     // Generate final design
     await finalizeMutation.mutateAsync();
   };
 
   const currentQuestion = questions[currentQuestionIndex];
+
+  const renderCurrentPrompt = () => {
+    if (finalDesign) {
+      return (
+        <div className="space-y-4">
+          <div className="font-semibold">Final Game Design:</div>
+          <div>{finalDesign.gameDescription}</div>
+
+          <div className="font-semibold">Core Mechanics:</div>
+          <ul className="list-disc pl-4">
+            {finalDesign.coreMechanics.map((mechanic: string, index: number) => (
+              <li key={index}>{mechanic}</li>
+            ))}
+          </ul>
+
+          <div className="font-semibold">Technical Requirements:</div>
+          <ul className="list-disc pl-4">
+            {finalDesign.technicalRequirements.map((req: string, index: number) => (
+              <li key={index}>{req}</li>
+            ))}
+          </ul>
+
+          <div className="font-semibold">Implementation Approach:</div>
+          <div>{finalDesign.implementationApproach}</div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {Object.entries(requirements).map(([aspect, value]) => {
+          const analysis = analyses[aspect as keyof GameRequirements];
+          return (
+            <div key={aspect} className="space-y-2">
+              <div className="font-semibold capitalize">{aspect}:</div>
+              <div>{value}</div>
+              {analysis && (
+                <>
+                  <div className="text-sm text-muted-foreground">{analysis.analysis}</div>
+                  {analysis.implementation_details.length > 0 && (
+                    <ul className="list-disc pl-4 text-sm">
+                      {analysis.implementation_details.map((detail, index) => (
+                        <li key={index}>{detail}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <Card className="w-full">
@@ -172,17 +241,9 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Current Prompt</h3>
-            <ScrollArea className="h-[200px] w-full rounded-md border p-4">
-              <pre className="whitespace-pre-wrap font-mono text-sm">
-                {`Game Design Requirements:
-
-1. Game Type: ${requirements.gameType}
-2. Core Mechanics: ${requirements.mechanics}
-3. Visual Style: ${requirements.visualStyle}
-4. Difficulty Level: ${requirements.difficulty}
-5. Special Features: ${requirements.specialFeatures}`}
-              </pre>
+            <h3 className="text-lg font-semibold">Current Design</h3>
+            <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+              {renderCurrentPrompt()}
             </ScrollArea>
           </div>
 
