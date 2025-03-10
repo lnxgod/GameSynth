@@ -100,7 +100,13 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, temperature = 0.7, maxTokens = 100000 } = req.body;
+      const { prompt, temperature = 0.7, maxTokens = 16000 } = req.body; // Updated default
+
+      // Add validation for max tokens
+      if (maxTokens > 16000) {
+        throw new Error("Max tokens cannot exceed 16,000 due to model limitations");
+      }
+
       logApi("Chat request received", { prompt, temperature, maxTokens });
 
       const response = await openai.chat.completions.create({

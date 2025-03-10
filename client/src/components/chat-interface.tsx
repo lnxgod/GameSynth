@@ -30,7 +30,7 @@ When providing code:
 export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
   const [prompt, setPrompt] = useState("");
   const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(100000); // Updated maxTokens
+  const [maxTokens, setMaxTokens] = useState(16000); 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { toast } = useToast();
 
@@ -102,15 +102,15 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
                     <label className="text-sm font-medium">
                       Max Tokens: {maxTokens}
                     </label>
-                    <Slider // Updated Slider max value
+                    <Slider 
                       value={[maxTokens]}
                       onValueChange={([value]) => setMaxTokens(value)}
                       min={1000}
-                      max={100000} // Changed max value here
+                      max={16000} 
                       step={1000}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Maximum length of the generated response (larger games need more tokens)
+                      Maximum length of the generated response (maximum supported by the model)
                     </p>
                   </div>
                 </div>
