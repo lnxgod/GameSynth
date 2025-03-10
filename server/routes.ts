@@ -100,7 +100,7 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, temperature = 0.7, maxTokens = 128000 } = req.body;
+      const { prompt, temperature = 0.7, maxTokens = 100000 } = req.body;
       logApi("Chat request received", { prompt, temperature, maxTokens });
 
       const response = await openai.chat.completions.create({
