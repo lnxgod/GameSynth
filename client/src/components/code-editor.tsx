@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Download, Trash2, RotateCcw, MessageSquare } from "lucide-react";
+import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
@@ -12,9 +12,10 @@ import { apiRequest } from "@/lib/queryClient";
 interface CodeEditorProps {
   code: string;
   onCodeChange: (code: string) => void;
+  addDebugLog?: (message: string) => void; // Added optional debug logging function
 }
 
-export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
+export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps) {
   const [localCode, setLocalCode] = useState(code);
   const [savedGames, setSavedGames] = useState<{ name: string; code: string }[]>([]);
   const [saveName, setSaveName] = useState("");
@@ -98,17 +99,30 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
       return res.json();
     },
     onSuccess: (data) => {
+      // Add AI's response to chat history
       setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
+
+      // If we got updated code, apply it
       if (data.updatedCode) {
         setLocalCode(data.updatedCode);
         onCodeChange(data.updatedCode);
+        addDebugLog?.("Code updated via chat");
         toast({
           title: "Code Updated",
-          description: "The code has been modified based on your request",
+          description: "The game code has been updated based on your request",
+        });
+      } else {
+        toast({
+          title: "Info",
+          description: "Got response but no code changes were needed",
         });
       }
     },
     onError: (error) => {
+      setChatHistory(prev => [...prev, { 
+        role: 'assistant', 
+        content: "Error: Failed to process your request" 
+      }]);
       toast({
         title: "Error",
         description: error.message,
@@ -121,7 +135,12 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
     e.preventDefault();
     if (!chatMessage.trim()) return;
 
+    // Add user message to chat history
     setChatHistory(prev => [...prev, { role: 'user', content: chatMessage }]);
+
+    // Save the current code state before making changes
+    const previousCode = localCode;
+
     chatMutation.mutate(chatMessage);
     setChatMessage("");
   };
@@ -198,7 +217,9 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
                                 : 'bg-primary text-primary-foreground'
                             }`}
                           >
-                            {msg.content}
+                            <pre className="whitespace-pre-wrap text-sm">
+                              {msg.content}
+                            </pre>
                           </div>
                         </div>
                       ))}
@@ -217,7 +238,14 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
                       className="w-full"
                       disabled={chatMutation.isPending}
                     >
-                      {chatMutation.isPending ? "Processing..." : "Send"}
+                      {chatMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        "Send"
+                      )}
                     </Button>
                   </form>
                 </div>

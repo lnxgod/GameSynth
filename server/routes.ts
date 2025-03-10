@@ -370,12 +370,15 @@ export async function registerRoutes(app: Express) {
             role: "system",
             content: `You are a game development assistant specialized in HTML5 Canvas games.
 When asked to modify code:
-1. Analyze the current code and the requested changes
-2. If providing modified code, wrap it between +++CODESTART+++ and +++CODESTOP+++ markers
+1. Always provide the COMPLETE updated code, never partial updates
+2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
 3. Explain the changes you're making in clear, simple terms
-4. Ensure any modified code maintains the game's core functionality
-5. Keep the code structure and style consistent
-6. Handle any necessary cleanup or initialization code`
+4. Maintain game functionality and style consistency
+5. Include initialization and cleanup code
+6. Respond in this format:
+   - Brief explanation of changes
+   - Single complete code block between markers
+   - Any additional notes or warnings`
           },
           {
             role: "user",
