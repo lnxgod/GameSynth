@@ -10,17 +10,23 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const SYSTEM_PROMPT = [
-  "You are a game development assistant specialized in creating HTML5 Canvas games.",
-  "When providing code:",
-  "1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers",
-  "2. Do not include backticks in your response",
-  "3. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API",
-  "4. Include clear comments explaining the game mechanics",
-  "5. Return fully working, self-contained game code that handles its own game loop",
-  "6. Use requestAnimationFrame for animation",
-  "7. Handle cleanup properly when the game stops"
-].join("\n");
+// Design assistant system prompt
+const DESIGN_ASSISTANT_PROMPT = `You are a game design assistant helping users create HTML5 Canvas games. 
+Ask questions to understand their requirements. Focus on:
+1. Game genre and style
+2. Core gameplay mechanics
+3. Visual style and theme
+4. Difficulty level
+5. Special features or elements`;
+
+const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
+When providing code:
+1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
+2. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
+3. Include clear comments explaining the game mechanics
+4. Return fully working, self-contained game code that handles its own game loop
+5. Use requestAnimationFrame for animation
+6. Handle cleanup properly when the game stops`;
 
 // Store API logs in memory with full request/response data
 const apiLogs: Array<{
@@ -44,11 +50,16 @@ function logApi(message: string, request?: any, response?: any) {
   }
 }
 
+// Game design conversation history
+const designConversations = new Map<string, Array<{
+  role: 'assistant' | 'user';
+  content: string;
+}>>();
+
 function extractGameCode(content: string): string | null {
   try {
     console.log('Starting code extraction...');
 
-    // Find the code block
     const startMarker = '+++CODESTART+++';
     const endMarker = '+++CODESTOP+++';
 
@@ -66,7 +77,6 @@ function extractGameCode(content: string): string | null {
       return null;
     }
 
-    // Extract the code between markers
     let code = content
       .substring(startIndex + startMarker.length, endIndex)
       .trim();
@@ -94,10 +104,9 @@ function extractGameCode(content: string): string | null {
       return null;
     }
 
-    // Log the extracted code for debugging
     console.log('Extracted code:', code);
-
     return code;
+
   } catch (error) {
     console.error('Code extraction failed:', error);
     return null;
@@ -109,9 +118,101 @@ export async function registerRoutes(app: Express) {
     res.json(apiLogs);
   });
 
+  // New endpoint for game design assistance
+  app.post("/api/design/chat", async (req, res) => {
+    try {
+      const { message, sessionId } = req.body;
+
+      // Get or create conversation history
+      if (!designConversations.has(sessionId)) {
+        designConversations.set(sessionId, []);
+      }
+      const history = designConversations.get(sessionId)!;
+
+      // Add user message to history
+      history.push({ role: 'user', content: message });
+
+      logApi("Design chat request received", { message, sessionId });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: DESIGN_ASSISTANT_PROMPT
+          },
+          ...history
+        ],
+        temperature: 0.7
+      });
+
+      const assistantMessage = response.choices[0].message.content || "";
+
+      // Add assistant response to history
+      history.push({ role: 'assistant', content: assistantMessage });
+
+      logApi("Design chat response", { message }, { response: assistantMessage });
+
+      res.json({ 
+        message: assistantMessage,
+        history: history 
+      });
+    } catch (error: any) {
+      logApi("Error in design chat", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate game code based on design conversation
+  app.post("/api/design/generate", async (req, res) => {
+    try {
+      const { sessionId } = req.body;
+      const history = designConversations.get(sessionId);
+
+      if (!history) {
+        throw new Error("No design conversation found");
+      }
+
+      logApi("Game generation request", { sessionId });
+
+      // Compile the conversation into a detailed game specification
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: SYSTEM_PROMPT
+          },
+          {
+            role: "user",
+            content: `Based on the following conversation, create a complete game implementation:\n\n${
+              history.map(msg => `${msg.role}: ${msg.content}`).join('\n')
+            }`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 16000
+      });
+
+      const content = response.choices[0].message.content || "";
+      const code = extractGameCode(content);
+
+      const result = {
+        code,
+        response: content
+      };
+
+      logApi("Game code generated", { sessionId }, result);
+      res.json(result);
+    } catch (error: any) {
+      logApi("Error generating game", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, temperature = 0.7, maxTokens = 16000 } = req.body; // Updated default
+      const { prompt, temperature = 0.7, maxTokens = 16000 } = req.body;
 
       // Add validation for max tokens
       if (maxTokens > 16000) {
@@ -129,7 +230,7 @@ export async function registerRoutes(app: Express) {
           },
           { role: "user", content: prompt }
         ],
-        temperature: temperature,
+        temperature,
         max_tokens: maxTokens
       });
 

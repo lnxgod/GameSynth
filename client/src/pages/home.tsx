@@ -4,6 +4,7 @@ import { GameCanvas } from "@/components/game-canvas";
 import { CodeEditor } from "@/components/code-editor";
 import { DebugLogs } from "@/components/debug-logs";
 import { ApiLogs } from "@/components/api-logs";
+import { GameDesignAssistant } from "@/components/game-design-assistant";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Home() {
@@ -26,7 +27,20 @@ export default function Home() {
       </h1>
 
       <div className="space-y-8">
-        <ChatInterface onCodeReceived={setGameCode} />
+        <Tabs defaultValue="assistant" className="w-full">
+          <TabsList className="w-full">
+            <TabsTrigger value="assistant" className="flex-1">Design Assistant</TabsTrigger>
+            <TabsTrigger value="direct" className="flex-1">Direct Input</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="assistant" className="mt-4">
+            <GameDesignAssistant onCodeGenerated={setGameCode} />
+          </TabsContent>
+
+          <TabsContent value="direct" className="mt-4">
+            <ChatInterface onCodeReceived={setGameCode} />
+          </TabsContent>
+        </Tabs>
 
         <Tabs defaultValue="preview" className="w-full">
           <TabsList className="w-full">
