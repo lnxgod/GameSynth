@@ -74,6 +74,10 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   const [showFinalPrompt, setShowFinalPrompt] = useState(false);
   const [finalDesign, setFinalDesign] = useState<any>(null);
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
+  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+  const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
+  const [currentFollowUpIndex, setCurrentFollowUpIndex] = useState<number>(-1);
+  const [showFollowUp, setShowFollowUp] = useState(false);
   const { toast } = useToast();
 
   const analyzeMutation = useMutation({
@@ -104,9 +108,12 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
       setMessages(data.history);
       setFinalDesign(data);
       if (data.needsMoreInfo) {
+        setFollowUpQuestions(data.additionalQuestions.slice(0, 3));
+        setCurrentFollowUpIndex(0);
+        setShowFollowUp(true);
         toast({
-          title: "More Information Needed",
-          description: data.additionalQuestions.join("\n"),
+          title: "Additional Information Needed",
+          description: "Let's answer some follow-up questions to refine the game design.",
         });
       } else {
         toast({
@@ -120,7 +127,8 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   const generateMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/generate', {
-        sessionId
+        sessionId,
+        followUpAnswers
       });
       return res.json();
     },
@@ -150,6 +158,15 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     }));
   };
 
+  const handleFollowUpAnswer = (value: string) => {
+    if (currentFollowUpIndex >= 0 && currentFollowUpIndex < followUpQuestions.length) {
+      setFollowUpAnswers(prev => ({
+        ...prev,
+        [followUpQuestions[currentFollowUpIndex]]: value
+      }));
+    }
+  };
+
   const handleNext = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
@@ -158,8 +175,23 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     }
   };
 
+  const handleNextFollowUp = () => {
+    if (currentFollowUpIndex < followUpQuestions.length - 1) {
+      setCurrentFollowUpIndex(prev => prev + 1);
+    } else {
+      setShowFollowUp(false);
+      finalizeMutation.mutate(); // Re-analyze with follow-up answers
+    }
+  };
+
   const handleBack = () => {
-    if (showFinalPrompt) {
+    if (showFollowUp) {
+      if (currentFollowUpIndex > 0) {
+        setCurrentFollowUpIndex(prev => prev - 1);
+      } else {
+        setShowFollowUp(false);
+      }
+    } else if (showFinalPrompt) {
       setShowFinalPrompt(false);
     } else if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
@@ -170,7 +202,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     // Analyze each aspect sequentially
     for (const question of questions) {
       const aspect = question.id as keyof GameRequirements;
-      await analyzeMutation.mutateAsync(aspect, { aspect }); // Added aspect to onSuccess
+      await analyzeMutation.mutateAsync(aspect);
     }
     // Generate final design
     await finalizeMutation.mutateAsync();
@@ -201,6 +233,19 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
 
           <div className="font-semibold">Implementation Approach:</div>
           <div>{finalDesign.implementationApproach}</div>
+
+          {Object.entries(followUpAnswers).length > 0 && (
+            <>
+              <div className="font-semibold">Additional Details:</div>
+              <ul className="list-disc pl-4">
+                {Object.entries(followUpAnswers).map(([question, answer], index) => (
+                  <li key={index}>
+                    <span className="font-medium">{question}</span>: {answer}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       );
     }
@@ -247,7 +292,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
             </ScrollArea>
           </div>
 
-          {!showFinalPrompt ? (
+          {!showFinalPrompt && !showFollowUp ? (
             <div className="space-y-4">
               <div className="text-lg mb-2">{currentQuestion.question}</div>
 
@@ -279,6 +324,33 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
                   disabled={!requirements[currentQuestion.id as keyof GameRequirements].trim()}
                 >
                   {currentQuestionIndex === questions.length - 1 ? "Review" : "Next"}
+                </Button>
+              </div>
+            </div>
+          ) : showFollowUp ? (
+            <div className="space-y-4">
+              <div className="text-lg mb-2">{followUpQuestions[currentFollowUpIndex]}</div>
+
+              <Textarea
+                placeholder="Enter your answer..."
+                value={followUpAnswers[followUpQuestions[currentFollowUpIndex]] || ""}
+                onChange={(e) => handleFollowUpAnswer(e.target.value)}
+                className="min-h-[100px]"
+              />
+
+              <div className="flex justify-between mt-4">
+                <Button
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={currentFollowUpIndex === 0}
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextFollowUp}
+                  disabled={!followUpAnswers[followUpQuestions[currentFollowUpIndex]]?.trim()}
+                >
+                  {currentFollowUpIndex === followUpQuestions.length - 1 ? "Finish" : "Next"}
                 </Button>
               </div>
             </div>
@@ -314,12 +386,12 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
                   {generateMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
+                      Building...
                     </>
                   ) : (
                     <>
                       <Wand2 className="mr-2 h-4 w-4" />
-                      Force Generate
+                      Build It
                     </>
                   )}
                 </Button>
