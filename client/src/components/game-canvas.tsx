@@ -10,97 +10,56 @@ interface GameCanvasProps {
 export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
-  const frameCountRef = useRef<number>(0);
   const { toast } = useToast();
 
   useEffect(() => {
-    const canvasElement = canvasRef.current;
-    if (!canvasElement || !code) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !code) return;
 
-    const context = canvasElement.getContext("2d");
-    if (!context) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    // Clear previous animation frame
+    // Clean up any previous animation
     if (frameRef.current) {
       cancelAnimationFrame(frameRef.current);
       frameRef.current = undefined;
-      frameCountRef.current = 0;
     }
 
-    // Clear the canvas
-    context.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
     onDebugLog?.("Initializing game canvas...");
-    onDebugLog?.("Preparing game code execution environment...");
+    onDebugLog?.(`Canvas size: ${canvas.width}x${canvas.height}`);
 
     try {
-      // Prepare a controlled animation frame handler with safety check
-      const handleFrame = (callback: FrameRequestCallback) => {
-        frameCountRef.current++;
+      // Expose canvas and ctx to the game code scope
+      const gameCode = `
+        let animationFrameId;
 
-        // Safety check - prevent runaway animations
-        if (frameCountRef.current > 1000) {
-          onDebugLog?.("Safety: Animation frame limit reached, stopping game");
-          if (frameRef.current) {
-            cancelAnimationFrame(frameRef.current);
+        ${code}
+      `;
+
+      onDebugLog?.("Creating game function...");
+      const gameFunction = new Function("canvas", "ctx", "requestAnimationFrame", "cancelAnimationFrame", gameCode);
+
+      onDebugLog?.("Starting game execution...");
+      gameFunction(
+        canvas,
+        ctx,
+        (callback: FrameRequestCallback) => {
+          frameRef.current = requestAnimationFrame(callback);
+          return frameRef.current;
+        },
+        (id: number) => {
+          if (frameRef.current === id) {
+            cancelAnimationFrame(id);
             frameRef.current = undefined;
           }
-          return;
         }
-
-        frameRef.current = requestAnimationFrame(callback);
-        return frameRef.current;
-      };
-
-      // Create the game execution wrapper
-      const wrappedCode = `
-        return (function(canvasObj, contextObj) {
-          // Debug the execution environment
-          if (!canvasObj || !contextObj) {
-            throw new Error('Canvas context initialization failed');
-          }
-
-          // Game state management
-          let __gameState = {
-            frameId: null,
-            isRunning: false
-          };
-
-          // Inject canvas and context without declaring new variables
-          Object.defineProperties(window, {
-            canvas: {
-              value: canvasObj,
-              writable: false
-            },
-            ctx: {
-              value: contextObj,
-              writable: false
-            }
-          });
-
-          try {
-            ${code}
-          } catch (error) {
-            throw new Error('Game code execution failed: ' + error.message);
-          }
-
-          return __gameState;
-        })`;
-
-      onDebugLog?.("Executing game code with following setup:");
-      onDebugLog?.("Canvas dimensions: " + canvasElement.width + "x" + canvasElement.height);
-
-      // Create and execute the game function
-      const gameFunction = new Function(wrappedCode);
-      const gameInstance = gameFunction();
-
-      // Execute the game with proper context
-      gameInstance(canvasElement, context);
+      );
 
       onDebugLog?.("Game started successfully");
     } catch (error) {
       console.error("Error executing game code:", error);
       onDebugLog?.(`Error executing game code: ${error}`);
+
       toast({
         title: "Game Error",
         description: "There was an error running the game. Check the debug logs for details.",
@@ -121,7 +80,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
         frameRef.current = undefined;
         onDebugLog?.("Game animation stopped");
       }
-      context.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
   }, [code, toast, onDebugLog]);
 

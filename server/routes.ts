@@ -19,44 +19,25 @@ const SYSTEM_PROMPT = [
   "4. Include clear comments explaining the game mechanics",
   "5. Return fully working, self-contained game code that handles its own game loop",
   "6. Use requestAnimationFrame for animation",
-  "7. Handle cleanup properly when the game stops",
-  "8. Example structure:",
-  "+++CODESTART+++",
-  "// Game variables",
-  "let x = canvas.width/2;",
-  "let y = canvas.height/2;",
-  "let dx = 5;",
-  "let dy = -5;",
-  "",
-  "// Game loop function",
-  "function gameLoop() {",
-  "  // Clear canvas",
-  "  ctx.clearRect(0, 0, canvas.width, canvas.height);",
-  "",
-  "  // Update game state",
-  "  x += dx;",
-  "  y += dy;",
-  "",
-  "  // Draw game objects",
-  "  ctx.beginPath();",
-  "  ctx.arc(x, y, 10, 0, Math.PI * 2);",
-  "  ctx.fill();",
-  "",
-  "  // Request next frame",
-  "  animationFrameId = requestAnimationFrame(gameLoop);",
-  "}",
-  "",
-  "// Start the game loop",
-  "gameLoop();",
-  "+++CODESTOP+++"
+  "7. Handle cleanup properly when the game stops"
 ].join("\n");
 
-// Store API logs in memory
-const apiLogs: Array<{ timestamp: string; message: string }> = [];
+// Store API logs in memory with full request/response data
+const apiLogs: Array<{ 
+  timestamp: string; 
+  message: string;
+  request?: any;
+  response?: any;
+}> = [];
 
-function logApi(message: string) {
+function logApi(message: string, request?: any, response?: any) {
   const timestamp = new Date().toLocaleTimeString();
-  apiLogs.push({ timestamp, message });
+  apiLogs.push({ 
+    timestamp, 
+    message,
+    request: request ? JSON.stringify(request, null, 2) : undefined,
+    response: response ? JSON.stringify(response, null, 2) : undefined
+  });
   // Keep only the last 100 logs
   if (apiLogs.length > 100) {
     apiLogs.shift();
@@ -70,8 +51,8 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, temperature = 0.7, maxTokens = 2048 } = req.body;
-      logApi(`Chat request received: ${prompt.slice(0, 50)}...`);
+      const { prompt, temperature = 0.7, maxTokens = 15000 } = req.body;
+      logApi("Chat request received", { prompt, temperature, maxTokens });
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -88,20 +69,12 @@ export async function registerRoutes(app: Express) {
 
       const content = response.choices[0].message.content || "";
 
-      // Extract code between markers and clean it
+      // Extract code between markers
       const codeMatch = content.match(/\+\+\+CODESTART\+\+\+([\s\S]*?)\+\+\+CODESTOP\+\+\+/);
       let code: string | null = null;
 
       if (codeMatch) {
-        code = codeMatch[1].trim()
-          // Remove any markdown code block markers
-          .replace(/^```[\w]*\n?/g, '')
-          .replace(/```$/g, '')
-          // Remove any HTML comments
-          .replace(/<!--[\s\S]*?-->/g, '')
-          // Remove any HTML tags
-          .replace(/<[^>]*>/g, '')
-          .trim();
+        code = codeMatch[1].trim();
       }
 
       const chat = await storage.createChat({
@@ -110,17 +83,19 @@ export async function registerRoutes(app: Express) {
         code
       });
 
-      logApi(`Chat response generated with ${code ? 'code' : 'no code'}`);
-
-      res.json({
+      const result = {
         ...chat,
         settings: {
           temperature,
           maxTokens
         }
-      });
+      };
+
+      logApi("Chat response generated", { prompt }, result);
+
+      res.json(result);
     } catch (error: any) {
-      logApi(`Error in chat: ${error.message}`);
+      logApi("Error in chat", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
   });
@@ -128,10 +103,10 @@ export async function registerRoutes(app: Express) {
   app.get("/api/chats", async (req, res) => {
     try {
       const chats = await storage.getAllChats();
-      logApi(`Retrieved ${chats.length} chats`);
+      logApi(`Retrieved ${chats.length} chats`, req.query, { count: chats.length });
       res.json(chats);
     } catch (error: any) {
-      logApi(`Error getting chats: ${error.message}`);
+      logApi("Error getting chats", req.query, { error: error.message });
       res.status(500).json({ error: error.message });
     }
   });
@@ -140,10 +115,10 @@ export async function registerRoutes(app: Express) {
     try {
       const game = insertGameSchema.parse(req.body);
       const created = await storage.createGame(game);
-      logApi(`New game created: ${game.name}`);
+      logApi("New game created", req.body, created);
       res.json(created);
     } catch (error: any) {
-      logApi(`Error creating game: ${error.message}`);
+      logApi("Error creating game", req.body, { error: error.message });
       res.status(400).json({ error: error.message });
     }
   });
@@ -151,10 +126,10 @@ export async function registerRoutes(app: Express) {
   app.get("/api/games", async (req, res) => {
     try {
       const games = await storage.getAllGames();
-      logApi(`Retrieved ${games.length} games`);
+      logApi(`Retrieved ${games.length} games`, req.query, { count: games.length });
       res.json(games);
     } catch (error: any) {
-      logApi(`Error getting games: ${error.message}`);
+      logApi("Error getting games", req.query, { error: error.message });
       res.status(500).json({ error: error.message });
     }
   });
