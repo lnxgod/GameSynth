@@ -128,7 +128,17 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
-        followUpAnswers
+        followUpAnswers,
+        analyses: Object.fromEntries(
+          Object.entries(analyses).map(([key, value]) => [
+            key,
+            {
+              analysis: value?.analysis,
+              implementation_details: value?.implementation_details,
+              technical_considerations: value?.technical_considerations
+            }
+          ])
+        )
       });
       return res.json();
     },
@@ -180,7 +190,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
       setCurrentFollowUpIndex(prev => prev + 1);
     } else {
       setShowFollowUp(false);
-      finalizeMutation.mutate(); // Re-analyze with follow-up answers
+      finalizeMutation.mutate(); 
     }
   };
 
@@ -199,12 +209,10 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   };
 
   const handleThink = async () => {
-    // Analyze each aspect sequentially
     for (const question of questions) {
       const aspect = question.id as keyof GameRequirements;
       await analyzeMutation.mutateAsync(aspect);
     }
-    // Generate final design
     await finalizeMutation.mutateAsync();
   };
 
@@ -378,6 +386,14 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
                       Think About It
                     </>
                   )}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => finalizeMutation.mutate()}
+                  disabled={finalizeMutation.isPending}
+                >
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Follow Up
                 </Button>
                 <Button
                   onClick={() => generateMutation.mutate()}

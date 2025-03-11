@@ -227,7 +227,7 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/design/generate", async (req, res) => {
     try {
-      const { sessionId, followUpAnswers } = req.body;
+      const { sessionId, followUpAnswers, analyses } = req.body;
       const history = designConversations.get(sessionId);
 
       if (!history) {
@@ -239,12 +239,23 @@ export async function registerRoutes(app: Express) {
       // Add follow-up answers to the conversation history
       if (followUpAnswers) {
         Object.entries(followUpAnswers).forEach(([question, answer]) => {
-          history.push({ 
-            role: 'user', 
-            content: `Follow-up Question: ${question}\nAnswer: ${answer}` 
+          history.push({
+            role: 'user',
+            content: `Follow-up Question: ${question}\nAnswer: ${answer}`
           });
         });
       }
+
+      // Incorporate analyses into the conversation history
+      if (analyses) {
+          Object.entries(analyses).forEach(([aspect, analysisData]) => {
+              history.push({
+                  role: 'assistant',
+                  content: `Analysis of ${aspect}:\n${analysisData.analysis}\n\nImplementation details:\n${analysisData.implementation_details.join("\n")}\n\nTechnical Considerations:\n${analysisData.technical_considerations.join("\n")}`
+              });
+          });
+      }
+
 
       // Compile the conversation into a detailed game specification
       const response = await openai.chat.completions.create({
@@ -256,7 +267,7 @@ export async function registerRoutes(app: Express) {
           },
           {
             role: "user",
-            content: `Based on all our discussions, including follow-up details, create a complete HTML5 Canvas game implementation. Here's the full conversation:\n\n${
+            content: `Based on all our discussions, including follow-up details and analyses, create a complete HTML5 Canvas game implementation. Here's the full conversation:\n\n${
               history.map(msg => `${msg.role}: ${msg.content}`).join('\n')
             }`
           }
