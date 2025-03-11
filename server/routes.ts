@@ -754,8 +754,17 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         throw new Error("Missing required build information");
       }
 
-      if (!/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(packageName)) {
-        throw new Error("Invalid package name format");
+      // Strict package name validation following Android conventions
+      const packageNameRegex = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+      if (!packageNameRegex.test(packageName)) {
+        throw new Error(
+          "Invalid package name format. Package name must:\n" +
+          "- Start with a lowercase letter\n" +
+          "- Contain at least two segments (e.g., com.example)\n" +
+          "- Only use lowercase letters, numbers, and underscores\n" +
+          "- Each segment must start with a letter\n" +
+          "Example: com.mygame.app"
+        );
       }
 
       logApi("Android build request received", { appName, packageName });
@@ -867,12 +876,11 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       res.status(500).json({ 
         error: "Build failed",
         message: error.message,
-        details: "Please ensure the package name is valid and try again."
+        details: "Please ensure the package name follows Android conventions (e.g., com.mygame.app)"
       });
     }
   });
 
-  // Add download route
   app.get("/download/android/:filename", (req, res) => {
     const { filename } = req.params;
     const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'debug', filename);

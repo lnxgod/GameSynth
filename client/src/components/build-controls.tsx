@@ -19,6 +19,10 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
   const [packageName, setPackageName] = useState('com.mygame.app');
   const { toast } = useToast();
 
+  // Real-time package name validation
+  const packageNameRegex = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+  const isPackageNameValid = packageNameRegex.test(packageName);
+
   const buildMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/build/android", {
@@ -59,7 +63,7 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
   return (
     <Card className="p-4 space-y-4">
       <h2 className="text-lg font-semibold">Build Android App</h2>
-      
+
       <div className="space-y-2">
         <div className="space-y-1">
           <Label htmlFor="appName">App Name</Label>
@@ -73,7 +77,14 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
         </div>
 
         <div className="space-y-1">
-          <Label htmlFor="packageName">Package Name</Label>
+          <Label htmlFor="packageName" className="flex items-center justify-between">
+            Package Name
+            {packageName && (
+              <span className={`text-xs ${isPackageNameValid ? 'text-green-500' : 'text-red-500'}`}>
+                {isPackageNameValid ? '✓ Valid format' : '✗ Invalid format'}
+              </span>
+            )}
+          </Label>
           <Input
             id="packageName"
             value={packageName}
@@ -81,16 +92,28 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
             placeholder="com.mygame.app"
             pattern="[a-z][a-z0-9_]*(\.[a-z0-9_]+)+"
             disabled={buildMutation.isPending}
+            className={packageName && (isPackageNameValid ? 'border-green-500' : 'border-red-500')}
           />
-          <p className="text-xs text-muted-foreground">
-            Format: com.example.app (only lowercase letters, numbers, and dots)
-          </p>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              Package name must:
+            </p>
+            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+              <li>Start with a lowercase letter</li>
+              <li>Contain at least two segments (e.g., com.example)</li>
+              <li>Only use lowercase letters, numbers, and underscores</li>
+              <li>Each segment must start with a letter</li>
+            </ul>
+            <p className="text-xs text-muted-foreground mt-1">
+              Example: com.mygame.app
+            </p>
+          </div>
         </div>
       </div>
 
       <Button
         onClick={() => buildMutation.mutate()}
-        disabled={buildMutation.isPending}
+        disabled={buildMutation.isPending || !isPackageNameValid}
         className="w-full bg-gradient-to-r from-green-500 to-emerald-700 hover:from-green-600 hover:to-emerald-800"
       >
         {buildMutation.isPending ? (
