@@ -22,7 +22,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
       frameRef.current = undefined;
     }
     setIsRunning(false);
-    onDebugLog?.("Game stopped");
+    onDebugLog?.("🛑 Game stopped");
   };
 
   // Reset canvas
@@ -32,6 +32,29 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     if (canvas && ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
+  };
+
+  // Global error handler for the game
+  const handleGameError = (error: any) => {
+    // Log the error details
+    const errorDetails = {
+      message: error.message || "Unknown error",
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    };
+
+    // Send to debug logs
+    onDebugLog?.(`🚨 Error executing game code: ${JSON.stringify(errorDetails)}`);
+
+    // Stop the game
+    stopGame();
+
+    // Show a user-friendly toast
+    toast({
+      title: "Game Error",
+      description: "There was an error running the game. Check the debug logs for details.",
+      variant: "destructive",
+    });
   };
 
   // Start the game
@@ -55,49 +78,72 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     stopGame();
     resetCanvas();
 
-    onDebugLog?.("Starting game...");
-    onDebugLog?.(`Canvas size: ${canvas.width}x${canvas.height}`);
+    onDebugLog?.("🎮 Starting game...");
+    onDebugLog?.(`📐 Canvas size: ${canvas.width}x${canvas.height}`);
 
     try {
-      // Create game function
-      const gameFunction = new Function("canvas", "ctx", "requestAnimationFrame", "cancelAnimationFrame", code);
-
-      // Run the game
-      gameFunction(
-        canvas,
-        ctx,
-        (callback: FrameRequestCallback) => {
-          frameRef.current = requestAnimationFrame(callback);
-          return frameRef.current;
-        },
-        (id: number) => {
-          if (frameRef.current === id) {
-            cancelAnimationFrame(id);
-            frameRef.current = undefined;
-          }
+      // Wrap game code in error handling
+      const wrappedCode = `
+        try {
+          ${code}
+        } catch (error) {
+          throw new Error(JSON.stringify({
+            message: error.message,
+            stack: error.stack,
+            line: error.lineNumber,
+            column: error.columnNumber
+          }));
         }
-      );
+      `;
 
-      setIsRunning(true);
-      onDebugLog?.("Game started successfully");
+      // Create game function with error boundary
+      const gameFunction = new Function("canvas", "ctx", "requestAnimationFrame", "cancelAnimationFrame", wrappedCode);
+
+      // Set up error event listener
+      window.addEventListener('error', handleGameError);
+
+      // Run the game with error handling
+      try {
+        gameFunction(
+          canvas,
+          ctx,
+          (callback: FrameRequestCallback) => {
+            try {
+              frameRef.current = requestAnimationFrame(callback);
+              return frameRef.current;
+            } catch (error) {
+              handleGameError(error);
+              return 0;
+            }
+          },
+          (id: number) => {
+            if (frameRef.current === id) {
+              cancelAnimationFrame(id);
+              frameRef.current = undefined;
+            }
+          }
+        );
+
+        setIsRunning(true);
+        onDebugLog?.("✅ Game started successfully");
+      } catch (error) {
+        handleGameError(error);
+      }
     } catch (error) {
-      console.error("Error executing game code:", error);
-      onDebugLog?.(`Error executing game code: ${error}`);
-
-      toast({
-        title: "Game Error",
-        description: "There was an error running the game. Check the debug logs for details.",
-        variant: "destructive",
-      });
+      handleGameError(error);
     }
   };
 
   // Cleanup on unmount or code change
   useEffect(() => {
-    return () => {
+    // Remove error event listener on cleanup
+    const cleanup = () => {
+      window.removeEventListener('error', handleGameError);
       stopGame();
       resetCanvas();
     };
+
+    return cleanup;
   }, [code]);
 
   return (
@@ -122,6 +168,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
           height={600}
           className="w-full h-[600px] border border-border rounded-md bg-black"
           style={{ aspectRatio: "4/3" }}
+          onError={handleGameError}
         />
       </div>
     </Card>
