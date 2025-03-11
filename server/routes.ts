@@ -390,13 +390,16 @@ export async function registerRoutes(app: Express) {
           {
             role: "system",
             content: `You are a game development assistant specialized in HTML5 Canvas games.
-When asked to modify code:
+When modifying code:
 1. ALWAYS provide the COMPLETE updated code, never partial updates
 2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
 3. Explain the changes you're making in clear, simple terms
 4. Maintain game functionality and style consistency
 5. Include initialization and cleanup code
-6. Respond in this format:
+6. The canvas and context variables (canvas, ctx) are already provided, DO NOT create them
+7. Assume canvas and ctx are available in the scope
+8. DO NOT include HTML, just the JavaScript game code
+9. Respond in this format:
    - Brief explanation of changes
    - Single complete code block between markers
    - Any additional notes or warnings`
@@ -436,17 +439,15 @@ When asked to modify code:
           {
             role: "system",
             content: `You are a game development assistant specialized in improving HTML5 Canvas games.
-When providing suggestions and implementing them:
-1. Analyze the provided game code and suggest 3 specific improvements
-2. When implementing each improvement, ALWAYS provide the COMPLETE updated code
-3. Always wrap code blocks between +++CODESTART+++ and +++CODESTOP+++ markers
-4. Never use backticks (\`\`\`) for code blocks
-5. Format your response as JSON with this structure:
+When providing suggestions:
+1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
+2. Focus on gameplay mechanics, visual effects, and user experience
+3. Format your response as JSON with this structure:
 {
   "questions": [
-    "Question about implementing feature 1...",
-    "Question about implementing feature 2...",
-    "Question about implementing feature 3..."
+    "Suggestion 1: [Brief description of the first improvement]",
+    "Suggestion 2: [Brief description of the second improvement]",
+    "Suggestion 3: [Brief description of the third improvement]"
   ]
 }`
           },
@@ -459,10 +460,10 @@ When providing suggestions and implementing them:
         temperature: 0.7
       });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+      const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
-      logApi("Remix suggestions generated", { code }, result);
-      res.json(result);
+      logApi("Remix suggestions generated", { code }, suggestions);
+      res.json(suggestions);
     } catch (error: any) {
       logApi("Error generating remix suggestions", req.body, { error: error.message });
       res.status(500).json({ error: error.message });

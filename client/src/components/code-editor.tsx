@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +22,8 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
   const [showChat, setShowChat] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'assistant' | 'user', content: string }>>([]);
-  const [remixQuestions, setRemixQuestions] = useState<string[]>([]);
-  const [currentRemixQuestion, setCurrentRemixQuestion] = useState<number>(-1);
-  const [showRemixQuestions, setShowRemixQuestions] = useState(false);
+  const [remixSuggestions, setRemixSuggestions] = useState<string[]>([]);
+  const [showRemixSuggestions, setShowRemixSuggestions] = useState(false);
   const { toast } = useToast();
 
   // Load saved games from localStorage on mount
@@ -142,12 +141,11 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
       return res.json();
     },
     onSuccess: (data) => {
-      setRemixQuestions(data.questions.slice(0, 3));
-      setCurrentRemixQuestion(0);
-      setShowRemixQuestions(true);
+      setRemixSuggestions(data.questions);
+      setShowRemixSuggestions(true);
       toast({
         title: "Ready to Remix",
-        description: "Let's enhance your game with some improvements!",
+        description: "Choose an improvement to implement!",
       });
     }
   });
@@ -159,21 +157,17 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
     // Add user message to chat history
     setChatHistory(prev => [...prev, { role: 'user', content: chatMessage }]);
 
-    // Save the current code state before making changes
-    const previousCode = localCode;
-
     chatMutation.mutate(chatMessage);
     setChatMessage("");
   };
 
-  const handleRemixAnswer = (answer: string) => {
-    chatMutation.mutate(answer);
-    if (currentRemixQuestion < remixQuestions.length - 1) {
-      setCurrentRemixQuestion(prev => prev + 1);
-    } else {
-      setShowRemixQuestions(false);
-      setCurrentRemixQuestion(-1);
-    }
+  const handleRemixSelection = (suggestion: string) => {
+    chatMutation.mutate(`Please implement this improvement: ${suggestion}`);
+    setShowRemixSuggestions(false);
+    toast({
+      title: "Implementing Improvement",
+      description: "Updating game code with selected enhancement...",
+    });
   };
 
   return (
@@ -247,17 +241,26 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
               spellCheck="false"
             />
 
-            {(showChat || showRemixQuestions) && (
+            {(showChat || showRemixSuggestions) && (
               <Card className="w-96 p-4">
                 <div className="space-y-4">
                   <ScrollArea className="h-[500px] w-full rounded-md border p-4">
                     <div className="space-y-4">
-                      {showRemixQuestions ? (
+                      {showRemixSuggestions ? (
                         <div className="space-y-4">
-                          <div className="font-semibold">
-                            Question {currentRemixQuestion + 1} of {remixQuestions.length}:
+                          <div className="font-semibold mb-4">
+                            Choose an improvement to implement:
                           </div>
-                          <div>{remixQuestions[currentRemixQuestion]}</div>
+                          {remixSuggestions.map((suggestion, index) => (
+                            <Button
+                              key={index}
+                              onClick={() => handleRemixSelection(suggestion)}
+                              variant="outline"
+                              className="w-full text-left justify-start h-auto whitespace-normal p-4"
+                            >
+                              {suggestion}
+                            </Button>
+                          ))}
                         </div>
                       ) : (
                         chatHistory.map((msg, index) => (
@@ -284,38 +287,30 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
                     </div>
                   </ScrollArea>
 
-                  <form onSubmit={handleChatSubmit} className="space-y-2">
-                    <Textarea
-                      placeholder={
-                        showRemixQuestions
-                          ? "Enter your answer..."
-                          : "Ask about modifying or debugging your code..."
-                      }
-                      value={chatMessage}
-                      onChange={(e) => setChatMessage(e.target.value)}
-                      className="min-h-[80px]"
-                    />
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={chatMutation.isPending}
-                      onClick={() => {
-                        if (showRemixQuestions) {
-                          handleRemixAnswer(chatMessage);
-                          setChatMessage("");
-                        }
-                      }}
-                    >
-                      {chatMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        "Send"
-                      )}
-                    </Button>
-                  </form>
+                  {!showRemixSuggestions && (
+                    <form onSubmit={handleChatSubmit} className="space-y-2">
+                      <Textarea
+                        placeholder="Ask about modifying or debugging your code..."
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        className="min-h-[80px]"
+                      />
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={chatMutation.isPending}
+                      >
+                        {chatMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          "Send"
+                        )}
+                      </Button>
+                    </form>
+                  )}
                 </div>
               </Card>
             )}
