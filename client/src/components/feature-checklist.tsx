@@ -138,7 +138,28 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistP
   return (
     <Card className="p-4">
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Game Design Document</h3>
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold">Game Design Document</h3>
+          <Button
+            onClick={() => generateFeaturesMutation.mutate()}
+            disabled={generateFeaturesMutation.isPending}
+            variant="secondary"
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+          >
+            {generateFeaturesMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating Features...
+              </>
+            ) : (
+              <>
+                <ListPlus className="mr-2 h-4 w-4" />
+                Generate More Features
+              </>
+            )}
+          </Button>
+        </div>
+
         <div className="space-y-4">
           <div>
             <div className="font-semibold">Game Description:</div>
@@ -160,24 +181,6 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistP
             <Button onClick={handleAddFeature} className="whitespace-nowrap">
               <Plus className="mr-2 h-4 w-4" />
               Add Feature
-            </Button>
-            <Button
-              onClick={() => generateFeaturesMutation.mutate()}
-              disabled={generateFeaturesMutation.isPending}
-              variant="secondary"
-              className="whitespace-nowrap"
-            >
-              {generateFeaturesMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <ListPlus className="mr-2 h-4 w-4" />
-                  Generate Features
-                </>
-              )}
             </Button>
           </div>
 
