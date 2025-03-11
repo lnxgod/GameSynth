@@ -83,7 +83,10 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="features" className="mt-4">
-            <FeatureChecklist gameDesign={gameDesign} />
+            <FeatureChecklist
+              gameDesign={gameDesign}
+              onCodeUpdate={handleCodeChange}
+            />
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4">

@@ -2,6 +2,11 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 interface Feature {
   id: string;
@@ -11,10 +16,12 @@ interface Feature {
 
 interface FeatureChecklistProps {
   gameDesign: any;
+  onCodeUpdate?: (code: string) => void;
 }
 
-export function FeatureChecklist({ gameDesign }: FeatureChecklistProps) {
+export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistProps) {
   const [features, setFeatures] = useState<Feature[]>([]);
+  const { toast } = useToast();
 
   // Initialize features from game design
   useEffect(() => {
@@ -35,10 +42,33 @@ export function FeatureChecklist({ gameDesign }: FeatureChecklistProps) {
     }
   }, [gameDesign]);
 
+  const implementFeatureMutation = useMutation({
+    mutationFn: async (feature: string) => {
+      const res = await apiRequest('POST', '/api/code/chat', {
+        message: `Please implement this feature: ${feature}`,
+        gameDesign
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.updatedCode) {
+        onCodeUpdate?.(data.updatedCode);
+        toast({
+          title: "Feature Implementation",
+          description: "The selected feature has been implemented in the game code.",
+        });
+      }
+    }
+  });
+
   const toggleFeature = (id: string) => {
-    setFeatures(prev => prev.map(feature => 
+    setFeatures(prev => prev.map(feature =>
       feature.id === id ? { ...feature, completed: !feature.completed } : feature
     ));
+  };
+
+  const handleImplementFeature = (feature: Feature) => {
+    implementFeatureMutation.mutate(feature.description);
   };
 
   if (!gameDesign) {
@@ -79,9 +109,17 @@ export function FeatureChecklist({ gameDesign }: FeatureChecklistProps) {
                         checked={feature.completed}
                         onCheckedChange={() => toggleFeature(feature.id)}
                       />
-                      <label htmlFor={feature.id} className="text-sm">
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleImplementFeature(feature)}
+                        disabled={implementFeatureMutation.isPending}
+                        className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                      >
                         {feature.description}
-                      </label>
+                        {implementFeatureMutation.isPending && (
+                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        )}
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -94,9 +132,17 @@ export function FeatureChecklist({ gameDesign }: FeatureChecklistProps) {
                         checked={feature.completed}
                         onCheckedChange={() => toggleFeature(feature.id)}
                       />
-                      <label htmlFor={feature.id} className="text-sm">
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleImplementFeature(feature)}
+                        disabled={implementFeatureMutation.isPending}
+                        className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                      >
                         {feature.description}
-                      </label>
+                        {implementFeatureMutation.isPending && (
+                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        )}
+                      </Button>
                     </div>
                   ))}
                 </div>
