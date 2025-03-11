@@ -148,10 +148,13 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
         addDebugLog?.("🔧 AI Debug: Analyzing game code...");
 
-        const res = await apiRequest("POST", "/api/code/debug", {
+        // Ensure we're sending a clean object without circular references
+        const cleanPayload = {
           code: localCode,
-          error: errorMessage
-        });
+          error: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)
+        };
+
+        const res = await apiRequest("POST", "/api/code/debug", cleanPayload);
         return res.json();
       },
       onSuccess: (data) => {
