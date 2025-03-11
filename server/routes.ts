@@ -542,53 +542,51 @@ When providing suggestions:
     }
   });
 
-  // Added debug endpoint here
   app.post("/api/code/debug", async (req, res) => {
     try {
-      const { code, logs } = req.body;
+      const { code, error } = req.body;
 
-      if (!logs || !code) {
+      if (!error || !code) {
         return res.status(400).json({
-          error: "Missing required information",
-          message: "Please run the game first to generate error logs."
+          error: "Missing Information",
+          message: "Please run the game first so I can help fix any errors.",
         });
       }
 
-      logApi("Debug request received", { logs });
+      logApi("Debug request received", { error });
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: `You are a friendly game development debugging assistant.
-Your task is to help fix game errors in a way that's easy for non-technical users to understand.
+            content: `You are a helpful game debugging assistant.
+Help fix HTML5 Canvas game errors in simple, clear language.
 
-When analyzing errors:
-1. Focus on game-specific problems like:
-   - Missing game elements or functions
-   - Animation and movement issues
-   - Collision detection problems
-   - Game loop and timing issues
-   - Input handling errors
+When explaining fixes:
+1. Identify the core problem in simple terms
+2. Suggest a clear solution
+3. Provide the complete fixed code
 
-Provide your response in this format:
-1. 🔍 Simple explanation of what went wrong
-2. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
-3. ✨ Brief explanation of what was fixed
-4. 💡 Tip to prevent similar issues`
+Remember:
+- Focus on common game issues (collisions, animations, input handling)
+- Explain in non-technical terms
+- Always include the full working code
+
+Format your response as:
+1. 🎮 What went wrong? (simple explanation)
+2. 💡 How we'll fix it
+3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`
           },
           {
             role: "user",
-            content: `Please help fix these game errors:
+            content: `The game has this error:
+${error}
 
-Error Log:
-${logs}
-
-Current Game Code:
+Here's the current code:
 ${code}
 
-Please provide a complete fixed version of the code that resolves these issues.`
+Please help fix this issue!`
           }
         ],
         temperature: 0.7,
@@ -602,18 +600,23 @@ Please provide a complete fixed version of the code that resolves these issues.`
         throw new Error("Could not generate valid fixed code");
       }
 
+      // Extract the explanation without the code block
+      const explanation = content
+        .replace(/\+\+\+CODESTART\+\+\+[\s\S]*\+\+\+CODESTOP\+\+\+/, '')
+        .trim();
+
       const result = {
-        message: content.replace(/\+\+\+CODESTART\+\+\+[\s\S]*\+\+\+CODESTOP\+\+\+/, '').trim(),
+        message: explanation,
         updatedCode
       };
 
-      logApi("Debug fixes generated", { logs }, result);
+      logApi("Debug suggestions generated", { error }, result);
       res.json(result);
     } catch (error: any) {
       logApi("Error in debug", req.body, { error: error.message });
       res.status(500).json({
-        error: "Debug Analysis Failed",
-        message: "There was a problem analyzing the errors. Please try again or check if the game is running properly.",
+        error: "Debug Helper Error",
+        message: "I couldn't analyze the game properly. Please try running the game again to generate fresh error information.",
         details: error.message
       });
     }

@@ -118,12 +118,37 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     }
   });
 
+  const extractGameErrors = () => {
+    // Query both error logs and debug logs to ensure we catch all errors
+    const consoleLog = document.querySelector('.webview_console_logs')?.textContent || '';
+
+    // Look for errors in the format we receive from the game execution
+    const errorPattern = /"message":"([^"]+)"/;
+    const match = consoleLog.match(errorPattern);
+
+    if (match && match[1]) {
+      return match[1];
+    }
+
+    // Fallback to looking for general error messages
+    if (consoleLog.includes('Error executing game code:')) {
+      const errorMatch = consoleLog.match(/Error executing game code:(.*?)(?=\n|$)/);
+      return errorMatch ? errorMatch[1].trim() : null;
+    }
+
+    return null;
+  };
+
   const debugMutation = useMutation({
-    mutationFn: async (logs: string) => {
+    mutationFn: async () => {
+      const errorMessage = extractGameErrors();
+      if (!errorMessage) {
+        throw new Error("No error found in game execution");
+      }
+
       const res = await apiRequest("POST", "/api/code/debug", {
         code: localCode,
-        logs,
-        gameDesign
+        error: errorMessage
       });
       return res.json();
     },
@@ -131,16 +156,17 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
       if (data.updatedCode) {
         setLocalCode(data.updatedCode);
         onCodeChange(data.updatedCode);
-        addDebugLog?.("Code updated based on error analysis");
+        addDebugLog?.("🔧 AI Debug: Applied suggested fixes");
+
         toast({
-          title: "Debug Fix Applied",
-          description: data.message || "Code has been updated to fix the detected issues",
+          title: "Debug Fixes Applied",
+          description: data.message || "Your code has been updated to fix the detected issues",
         });
       }
     },
     onError: (error: any) => {
       toast({
-        title: "Debug Error",
+        title: "Debug Assistant",
         description: error.message,
         variant: "destructive",
       });
@@ -235,62 +261,9 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     ));
   };
 
-  const extractGameErrors = () => {
-    // Query both error logs and debug logs to ensure we catch all errors
-    const errorElements = document.querySelectorAll('.error-log, .debug-log');
-    let errors = [];
-
-    errorElements.forEach(el => {
-      const text = el.textContent || '';
-      // Look for any error patterns we might encounter
-      if (text.includes('Error executing game code')) {
-        const matches = text.match(/Error executing game code:([^]*?)(?=\n|$)/);
-        if (matches) {
-          errors.push(matches[1].trim());
-        }
-      } else if (text.includes('Method -error:')) {
-        // Handle the specific format we're seeing in the logs
-        const matches = text.match(/Method -error:[^[]*(\[.*\])/);
-        if (matches) {
-          try {
-            const errorData = JSON.parse(matches[1]);
-            if (errorData[0] === "Error executing game code:") {
-              const errorDetails = errorData[1];
-              if (typeof errorDetails === 'object' && Object.keys(errorDetails).length > 0) {
-                errors.push(JSON.stringify(errorDetails));
-              } else if (typeof errorDetails === 'string') {
-                errors.push(errorDetails);
-              }
-            }
-          } catch (e) {
-            // If JSON parsing fails, add the raw error message
-            errors.push(matches[1]);
-          }
-        }
-      }
-    });
-
-    // Join all errors with clear separation
-    return errors.join('\n---\n');
-  };
-
   const handleDebug = () => {
-    const errors = extractGameErrors();
-    if (errors) {
-      debugMutation.mutate(errors);
-      addDebugLog?.("📝 Analyzing game execution errors. Please wait...");
-
-      toast({
-        title: "Analyzing Errors",
-        description: "The AI is reviewing your game code for issues...",
-      });
-    } else {
-      toast({
-        title: "No Game Errors Found",
-        description: "No error messages were found in the game logs. Try running the game first.",
-        variant: "warning"
-      });
-    }
+    addDebugLog?.("🔍 AI Debug: Analyzing game code...");
+    debugMutation.mutate();
   };
 
   return (
@@ -340,18 +313,18 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
           <Button
             onClick={handleDebug}
             variant="outline"
-            className="bg-yellow-100 hover:bg-yellow-200 border-yellow-500"
+            className="bg-gradient-to-r from-yellow-100 to-orange-100 hover:from-yellow-200 hover:to-orange-200 border-yellow-500"
             disabled={debugMutation.isPending}
           >
             {debugMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Fixing...
+                AI Fixing...
               </>
             ) : (
               <>
                 <Bug className="mr-2 h-4 w-4" />
-                Auto Debug
+                AI Debug
               </>
             )}
           </Button>
