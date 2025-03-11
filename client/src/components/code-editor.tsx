@@ -29,10 +29,11 @@ interface CodeEditorProps {
   onCodeChange: (code: string) => void;
   addDebugLog?: (message: string) => void;
   gameDesign?: any;
+  debugContext?: string;
 }
 
 export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => void }, CodeEditorProps>(
-  ({ code, onCodeChange, addDebugLog, gameDesign }, ref) => {
+  ({ code, onCodeChange, addDebugLog, gameDesign, debugContext }, ref) => {
     const [localCode, setLocalCode] = useState(code);
     const [savedProjects, setSavedProjects] = useState<ProjectState[]>([]);
     const [saveName, setSaveName] = useState("");
@@ -83,7 +84,8 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         const res = await apiRequest("POST", "/api/code/chat", {
           code: localCode,
           message,
-          gameDesign
+          gameDesign,
+          debugContext // Include debug context in the chat API request
         });
         return res.json();
       },
@@ -268,14 +270,19 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         // Open chat window if not already open
         setShowChat(true);
 
+        // Create a comprehensive debug message including context
+        const debugMessage = debugContext
+          ? `Please help fix this error in my game code:\n${errorMessage}\n\nAdditional Debug Context:\n${debugContext}`
+          : `Please help fix this error in my game code:\n${errorMessage}`;
+
         // Add error to chat history as user message
         setChatHistory(prev => [...prev, {
           role: 'user',
-          content: `Please help fix this error in my game code:\n${errorMessage}`
+          content: debugMessage
         }]);
 
         // Automatically trigger chat mutation
-        chatMutation.mutate(`Please help fix this error in my game code:\n${errorMessage}`);
+        chatMutation.mutate(debugMessage);
 
         addDebugLog?.("💬 Error sent to AI chat assistant for analysis");
       }

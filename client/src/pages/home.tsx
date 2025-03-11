@@ -13,6 +13,7 @@ export default function Home() {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [gameDesign, setGameDesign] = useState<any>(null);
   const [features, setFeatures] = useState<string[]>([]);
+  const [debugContext, setDebugContext] = useState<string>("");
   const codeEditorRef = useRef<{ handleDebug: (errorMessage?: string) => void } | null>(null);
 
   const addDebugLog = (log: string) => {
@@ -25,6 +26,9 @@ export default function Home() {
   };
 
   const handleDebugError = (error: string) => {
+    // Update debug context when an error is encountered
+    setDebugContext(error);
+
     // Switch to the code editor tab
     const codeEditorTab = document.querySelector('[data-tab="code"]');
     if (codeEditorTab instanceof HTMLElement) {
@@ -68,6 +72,7 @@ export default function Home() {
               onCodeGenerated={setGameCode}
               onDesignGenerated={setGameDesign}
               onFeaturesGenerated={setFeatures}
+              debugContext={debugContext}
             />
           </TabsContent>
 
@@ -96,6 +101,7 @@ export default function Home() {
               onCodeChange={handleCodeChange}
               addDebugLog={addDebugLog}
               gameDesign={gameDesign}
+              debugContext={debugContext}
             />
           </TabsContent>
 

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2, ListPlus, Settings2 } from "lucide-react";
+import { Loader2, Wand2, ListPlus, Settings2, Bug } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -19,6 +19,7 @@ interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
   onDesignGenerated: (design: any) => void;
   onFeaturesGenerated: (features: string[]) => void;
+  debugContext?: string;
 }
 
 interface GameRequirements {
@@ -68,7 +69,12 @@ const questions = [
   }
 ];
 
-export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeaturesGenerated }: GameDesignAssistantProps) {
+export function GameDesignAssistant({
+  onCodeGenerated,
+  onDesignGenerated,
+  onFeaturesGenerated,
+  debugContext
+}: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [requirements, setRequirements] = useState<GameRequirements>({
@@ -91,6 +97,8 @@ export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeat
 
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(8000);
+
+  const [showDebugContext, setShowDebugContext] = useState(false);
 
 
   const analyzeMutation = useMutation({
@@ -386,6 +394,43 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     );
   };
 
+  const renderDebugContext = () => {
+    if (!debugContext) return null;
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Debug Context</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDebugContext(!showDebugContext)}
+          >
+            {showDebugContext ? "Hide Context" : "Show Context"}
+          </Button>
+        </div>
+
+        {showDebugContext && (
+          <Card className="p-4">
+            <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <Bug className="h-5 w-5 mt-1 text-yellow-500" />
+                  <div>
+                    <div className="font-medium">Current Debug Information:</div>
+                    <pre className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {debugContext}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Card className="w-full">
       <CardContent className="pt-6">
@@ -400,6 +445,8 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
               {renderCurrentPrompt()}
             </ScrollArea>
           </div>
+
+          {renderDebugContext()}
 
           {!showFinalPrompt && !showFollowUp ? (
             <div className="space-y-4">
