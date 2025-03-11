@@ -138,7 +138,7 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
     <Card className="p-4">
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">Game Design Document</h3>
+          <h3 className="text-lg font-semibold">Game Features</h3>
           <Button
             onClick={() => generateFeaturesMutation.mutate()}
             disabled={generateFeaturesMutation.isPending}
@@ -159,108 +159,95 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
           </Button>
         </div>
 
+        <div className="flex gap-2 items-center">
+          <Input
+            placeholder="Add a new feature..."
+            value={newFeature}
+            onChange={(e) => setNewFeature(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleAddFeature()}
+          />
+          <Button onClick={handleAddFeature} className="whitespace-nowrap">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Feature
+          </Button>
+        </div>
+
         <div className="space-y-4">
-          <div>
-            <div className="font-semibold">Game Description:</div>
-            <p className="text-muted-foreground">{gameDesign.gameDescription}</p>
-          </div>
-
-          <div>
-            <div className="font-semibold">Implementation Approach:</div>
-            <p className="text-muted-foreground">{gameDesign.implementationApproach}</p>
-          </div>
-
-          <div className="flex gap-2 items-center">
-            <Input
-              placeholder="Add a new feature..."
-              value={newFeature}
-              onChange={(e) => setNewFeature(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddFeature()}
-            />
-            <Button onClick={handleAddFeature} className="whitespace-nowrap">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Feature
-            </Button>
-          </div>
-
-          <div className="space-y-4">
-            <h4 className="font-semibold">Features Checklist</h4>
-            <ScrollArea className="h-[300px]">
-              <div className="space-y-4">
-                <div>
-                  <h5 className="font-medium mb-2">Core Mechanics</h5>
-                  {features.filter(f => f.id.startsWith('mechanic-')).map(feature => (
-                    <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                      <Checkbox
-                        id={feature.id}
-                        checked={feature.completed}
-                        onCheckedChange={() => toggleFeature(feature.id)}
-                      />
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleImplementFeature(feature)}
-                        disabled={implementFeatureMutation.isPending}
-                        className="flex-grow text-left justify-start px-2 hover:bg-accent"
-                      >
-                        {feature.description}
-                        {implementFeatureMutation.isPending && (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        )}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                <div>
-                  <h5 className="font-medium mb-2">Technical Requirements</h5>
-                  {features.filter(f => f.id.startsWith('tech-')).map(feature => (
-                    <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                      <Checkbox
-                        id={feature.id}
-                        checked={feature.completed}
-                        onCheckedChange={() => toggleFeature(feature.id)}
-                      />
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleImplementFeature(feature)}
-                        disabled={implementFeatureMutation.isPending}
-                        className="flex-grow text-left justify-start px-2 hover:bg-accent"
-                      >
-                        {feature.description}
-                        {implementFeatureMutation.isPending && (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        )}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                <div>
-                  <h5 className="font-medium mb-2">Additional Features</h5>
-                  {features.filter(f => f.id.startsWith('generated-') || f.id.startsWith('manual-')).map(feature => (
-                    <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                      <Checkbox
-                        id={feature.id}
-                        checked={feature.completed}
-                        onCheckedChange={() => toggleFeature(feature.id)}
-                      />
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleImplementFeature(feature)}
-                        disabled={implementFeatureMutation.isPending}
-                        className="flex-grow text-left justify-start px-2 hover:bg-accent"
-                      >
-                        {feature.description}
-                        {implementFeatureMutation.isPending && (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        )}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+          <ScrollArea className="h-[300px]">
+            <div className="space-y-4">
+              <div>
+                <h5 className="font-medium mb-2">Core Mechanics</h5>
+                {features.filter(f => f.id.startsWith('mechanic-')).map(feature => (
+                  <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                    <Checkbox
+                      id={feature.id}
+                      checked={feature.completed}
+                      onCheckedChange={() => toggleFeature(feature.id)}
+                    />
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleImplementFeature(feature)}
+                      disabled={implementFeatureMutation.isPending}
+                      className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                    >
+                      {feature.description}
+                      {implementFeatureMutation.isPending && (
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
               </div>
-            </ScrollArea>
-          </div>
+
+              <div>
+                <h5 className="font-medium mb-2">Technical Requirements</h5>
+                {features.filter(f => f.id.startsWith('tech-')).map(feature => (
+                  <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                    <Checkbox
+                      id={feature.id}
+                      checked={feature.completed}
+                      onCheckedChange={() => toggleFeature(feature.id)}
+                    />
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleImplementFeature(feature)}
+                      disabled={implementFeatureMutation.isPending}
+                      className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                    >
+                      {feature.description}
+                      {implementFeatureMutation.isPending && (
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <h5 className="font-medium mb-2">Additional Features</h5>
+                {features.filter(f => f.id.startsWith('generated-') || f.id.startsWith('manual-')).map(feature => (
+                  <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                    <Checkbox
+                      id={feature.id}
+                      checked={feature.completed}
+                      onCheckedChange={() => toggleFeature(feature.id)}
+                    />
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleImplementFeature(feature)}
+                      disabled={implementFeatureMutation.isPending}
+                      className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                    >
+                      {feature.description}
+                      {implementFeatureMutation.isPending && (
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ScrollArea>
         </div>
       </div>
     </Card>
