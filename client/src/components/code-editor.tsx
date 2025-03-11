@@ -236,32 +236,59 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
   };
 
   const extractGameErrors = () => {
-    const errorElements = document.querySelectorAll('.error-log');
+    // Query both error logs and debug logs to ensure we catch all errors
+    const errorElements = document.querySelectorAll('.error-log, .debug-log');
     let errors = [];
 
     errorElements.forEach(el => {
       const text = el.textContent || '';
+      // Look for any error patterns we might encounter
       if (text.includes('Error executing game code')) {
-        // Extract the specific game execution error
         const matches = text.match(/Error executing game code:([^]*?)(?=\n|$)/);
         if (matches) {
           errors.push(matches[1].trim());
         }
+      } else if (text.includes('Method -error:')) {
+        // Handle the specific format we're seeing in the logs
+        const matches = text.match(/Method -error:[^[]*(\[.*\])/);
+        if (matches) {
+          try {
+            const errorData = JSON.parse(matches[1]);
+            if (errorData[0] === "Error executing game code:") {
+              const errorDetails = errorData[1];
+              if (typeof errorDetails === 'object' && Object.keys(errorDetails).length > 0) {
+                errors.push(JSON.stringify(errorDetails));
+              } else if (typeof errorDetails === 'string') {
+                errors.push(errorDetails);
+              }
+            }
+          } catch (e) {
+            // If JSON parsing fails, add the raw error message
+            errors.push(matches[1]);
+          }
+        }
       }
     });
 
-    return errors.join('\n');
+    // Join all errors with clear separation
+    return errors.join('\n---\n');
   };
 
   const handleDebug = () => {
     const errors = extractGameErrors();
     if (errors) {
       debugMutation.mutate(errors);
-      addDebugLog?.("Analyzing game execution errors");
+      addDebugLog?.("📝 Analyzing game execution errors. Please wait...");
+
+      toast({
+        title: "Analyzing Errors",
+        description: "The AI is reviewing your game code for issues...",
+      });
     } else {
       toast({
         title: "No Game Errors Found",
-        description: "No game execution errors detected to analyze",
+        description: "No error messages were found in the game logs. Try running the game first.",
+        variant: "warning"
       });
     }
   };

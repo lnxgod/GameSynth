@@ -547,6 +547,13 @@ When providing suggestions:
     try {
       const { code, logs } = req.body;
 
+      if (!logs || !code) {
+        return res.status(400).json({
+          error: "Missing required information",
+          message: "Please run the game first to generate error logs."
+        });
+      }
+
       logApi("Debug request received", { logs });
 
       const response = await openai.chat.completions.create({
@@ -554,36 +561,34 @@ When providing suggestions:
         messages: [
           {
             role: "system",
-            content: `You are a game development debugging assistant specialized in HTML5 Canvas games.
-Your task is to analyze and fix game execution errors in the code.
+            content: `You are a friendly game development debugging assistant.
+Your task is to help fix game errors in a way that's easy for non-technical users to understand.
 
 When analyzing errors:
-1. Focus specifically on game execution errors
-2. Look for common issues like:
-   - Undefined variables or methods
-   - Canvas context state management
-   - Animation frame timing issues
-   - Event listener conflicts
-   - Game loop synchronization problems
-   - Collision detection edge cases
+1. Focus on game-specific problems like:
+   - Missing game elements or functions
+   - Animation and movement issues
+   - Collision detection problems
+   - Game loop and timing issues
+   - Input handling errors
 
 Provide your response in this format:
-1. Brief explanation of the error
+1. 🔍 Simple explanation of what went wrong
 2. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
-3. Summary of changes made
-4. Prevention tips for similar issues`
+3. ✨ Brief explanation of what was fixed
+4. 💡 Tip to prevent similar issues`
           },
           {
             role: "user",
-            content: `Fix these game execution errors:
+            content: `Please help fix these game errors:
 
-Game Error Log:
+Error Log:
 ${logs}
 
 Current Game Code:
 ${code}
 
-Please analyze the errors and provide a complete fixed version of the code.`
+Please provide a complete fixed version of the code that resolves these issues.`
           }
         ],
         temperature: 0.7,
@@ -592,6 +597,10 @@ Please analyze the errors and provide a complete fixed version of the code.`
 
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
+
+      if (!updatedCode) {
+        throw new Error("Could not generate valid fixed code");
+      }
 
       const result = {
         message: content.replace(/\+\+\+CODESTART\+\+\+[\s\S]*\+\+\+CODESTOP\+\+\+/, '').trim(),
@@ -602,7 +611,11 @@ Please analyze the errors and provide a complete fixed version of the code.`
       res.json(result);
     } catch (error: any) {
       logApi("Error in debug", req.body, { error: error.message });
-      res.status(500).json({ error: error.message });
+      res.status(500).json({
+        error: "Debug Analysis Failed",
+        message: "There was a problem analyzing the errors. Please try again or check if the game is running properly.",
+        details: error.message
+      });
     }
   });
 
