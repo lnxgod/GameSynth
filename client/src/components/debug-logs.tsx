@@ -1,7 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bug, Loader2 } from "lucide-react";
+import { MessageSquare, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 interface DebugLogsProps {
@@ -57,12 +57,12 @@ export function DebugLogs({ logs, onDebugError }: DebugLogsProps) {
                     {processingErrorIndex === index ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        Fixing...
+                        Opening Chat...
                       </>
                     ) : (
                       <>
-                        <Bug className="h-4 w-4 mr-1" />
-                        Fix Error
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        Ask AI Help
                       </>
                     )}
                   </Button>
@@ -70,7 +70,7 @@ export function DebugLogs({ logs, onDebugError }: DebugLogsProps) {
               </div>
               {processingErrorIndex === index && (
                 <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400 animate-pulse">
-                  🔧 AI is analyzing and fixing this error...
+                  💬 Opening chat with AI assistant...
                 </div>
               )}
             </div>

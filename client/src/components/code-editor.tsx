@@ -264,14 +264,20 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
     };
 
     const handleDebug = (errorMessage?: string) => {
-      addDebugLog?.("🔍 AI Debug: Analyzing game code...");
-
       if (errorMessage) {
-        // Use the error message from debug logs if provided
-        debugMutation.mutate(errorMessage);
-      } else {
-        // Otherwise use the default error extraction
-        debugMutation.mutate();
+        // Open chat window if not already open
+        setShowChat(true);
+
+        // Add error to chat history as user message
+        setChatHistory(prev => [...prev, {
+          role: 'user',
+          content: `Please help fix this error in my game code:\n${errorMessage}`
+        }]);
+
+        // Automatically trigger chat mutation
+        chatMutation.mutate(`Please help fix this error in my game code:\n${errorMessage}`);
+
+        addDebugLog?.("💬 Error sent to AI chat assistant for analysis");
       }
     };
 
