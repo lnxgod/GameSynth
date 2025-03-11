@@ -3,12 +3,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2, Bug } from "lucide-react";
+import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2, Bug, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
+import { BuildControls } from "@/components/build-controls";
 
 interface ProjectState {
   name: string;
@@ -45,6 +46,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
     const [showRemixSuggestions, setShowRemixSuggestions] = useState(false);
     const [features, setFeatures] = useState<Feature[]>([]);
     const { toast } = useToast();
+    const [showBuildControls, setShowBuildControls] = useState(false);
 
     useEffect(() => {
       if (gameDesign && gameDesign.coreMechanics && gameDesign.technicalRequirements) {
@@ -381,6 +383,14 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
                 </>
               )}
             </Button>
+            <Button
+              onClick={() => setShowBuildControls(!showBuildControls)}
+              variant="outline"
+              className="bg-gradient-to-r from-green-500 to-emerald-700 hover:from-green-600 hover:to-emerald-800 text-white"
+            >
+              <Smartphone className="mr-2 h-4 w-4" />
+              {showBuildControls ? "Hide Build" : "Build Android"}
+            </Button>
           </div>
 
           {savedProjects.length > 0 && (
@@ -421,7 +431,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
               />
             </div>
 
-            {(showChat || showRemixSuggestions) && (
+            {(showChat || showRemixSuggestions || showBuildControls) && (
               <Card className="w-96 p-4">
                 <ScrollArea className="h-[600px]">
                   <div className="space-y-4">
@@ -486,6 +496,15 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
                           </Button>
                         </form>
                       </>
+                    )}
+                    {showBuildControls && (
+                      <Card className="w-96 p-4">
+                        <BuildControls
+                          gameCode={localCode}
+                          onBuildStart={() => onAiOperation?.({ type: 'Building Android APK...', active: true })}
+                          onBuildComplete={() => onAiOperation?.({ type: '', active: false })}
+                        />
+                      </Card>
                     )}
                   </div>
                 </ScrollArea>

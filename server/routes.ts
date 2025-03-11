@@ -4,6 +4,10 @@ import { storage } from "./storage";
 import { insertChatSchema, insertGameSchema } from "@shared/schema";
 import OpenAI from "openai";
 import {insertFeatureSchema} from "@shared/schema"; // Assuming this schema is defined elsewhere
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import fs from 'fs/promises';
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -20,7 +24,8 @@ Format your response as JSON with the following structure:
   "analysis": "Detailed analysis of this game aspect",
   "implementation_details": ["List of specific features or mechanics to implement"],
   "technical_considerations": ["Technical aspects to consider"]
-}`;
+}
+`;
 
 const FINAL_PROMPT_ASSISTANT = `You are a game design assistant helping create HTML5 Canvas games.
 Review all the analyzed aspects and create a comprehensive game design document.
@@ -33,7 +38,8 @@ Format your response as JSON with the following structure:
   "implementationApproach": "Suggested implementation approach",
   "needsMoreInfo": boolean,
   "additionalQuestions": ["Any clarifying questions if needed"]
-}`;
+}
+`;
 
 // Store API logs in memory with full request/response data
 const apiLogs: Array<{
@@ -262,7 +268,6 @@ Format your response as JSON with this structure:
           {
             role: "user",
             content: `Based on this game design, suggest specific features to implement:
-
 Game Description:
 ${gameDesign.gameDescription}
 
@@ -739,6 +744,105 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
+
+  app.post("/api/build/android", async (req, res) => {
+    try {
+      const { gameCode, appName, packageName } = req.body;
+
+      // Validate inputs
+      if (!gameCode || !appName || !packageName) {
+        throw new Error("Missing required build information");
+      }
+
+      if (!/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(packageName)) {
+        throw new Error("Invalid package name format");
+      }
+
+      logApi("Android build request received", { appName, packageName });
+
+      // Create build directory
+      const buildDir = path.join(process.cwd(), 'android-build');
+      await fs.mkdir(buildDir, { recursive: true });
+
+      // Create index.html with the game code
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>${appName}</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size to match viewport
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        ${gameCode}
+    </script>
+</body>
+</html>`;
+
+      await fs.writeFile(path.join(buildDir, 'index.html'), html);
+
+      // Assuming a config object exists elsewhere,  replace with your actual config
+      const config = {}; // Replace with your actual capacitor.config.json content
+
+      // Update capacitor config
+      const capacitorConfig = {
+        ...config,
+        appId: packageName,
+        appName: appName,
+      };
+      await fs.writeFile(
+        path.join(buildDir, 'capacitor.config.json'),
+        JSON.stringify(capacitorConfig, null, 2)
+      );
+
+      // Initialize Capacitor project
+      const execAsync = promisify(exec);
+      await execAsync('npx cap init "${appName}" "${packageName}" --web-dir="android-build"');
+
+      // Add Android platform
+      await execAsync('npx cap add android');
+
+      // Build APK
+      await execAsync('cd android && ./gradlew assembleDebug');
+
+      // Get APK path
+      const apkPath = path.join(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+
+      // Create download URL
+      const downloadUrl = `/download/android/${path.basename(apkPath)}`;
+
+      logApi("Android build completed", { downloadUrl });
+
+      res.json({ downloadUrl });
+    } catch (error: any) {
+      logApi("Error in Android build", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add download route
+  app.get("/download/android/:filename", (req, res) => {
+    const { filename } = req.params;
+    const filePath = path.join(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'debug', filename);
+    res.download(filePath);
+  });
 
   const httpServer = createServer(app);
   return httpServer;
