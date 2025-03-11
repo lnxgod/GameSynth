@@ -8,7 +8,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, ListPlus } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
 
 interface Feature {
   id: number;
@@ -28,6 +27,19 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
   const [newFeature, setNewFeature] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Initialize features from initialFeatures prop
+  useEffect(() => {
+    if (initialFeatures.length > 0) {
+      initialFeatures.forEach((feature: string) => {
+        createFeatureMutation.mutate({
+          description: feature,
+          type: 'generated',
+          completed: false
+        });
+      });
+    }
+  }, [initialFeatures]);
 
   const { data: features = [] } = useQuery({
     queryKey: ['features'],
@@ -61,81 +73,6 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
     }
   });
 
-  const generateFeaturesMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/design/generate-features', {
-        gameDesign,
-        currentFeatures: features
-      });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      data.features.forEach((description: string) => {
-        createFeatureMutation.mutate({
-          description,
-          type: 'generated',
-          completed: false
-        });
-      });
-
-      toast({
-        title: "Features Generated",
-        description: `Added ${data.features.length} new features to the checklist.`,
-      });
-    }
-  });
-
-  useEffect(() => {
-    if (gameDesign && features.length === 0) {
-      gameDesign.coreMechanics?.forEach((mechanic: string) => {
-        createFeatureMutation.mutate({
-          description: mechanic,
-          type: 'core',
-          completed: false
-        });
-      });
-
-      gameDesign.technicalRequirements?.forEach((req: string) => {
-        createFeatureMutation.mutate({
-          description: req,
-          type: 'tech',
-          completed: false
-        });
-      });
-
-      initialFeatures.forEach((feature: string) => {
-        createFeatureMutation.mutate({
-          description: feature,
-          type: 'generated',
-          completed: false
-        });
-      });
-    }
-  }, [gameDesign]);
-
-  const handleAddFeature = () => {
-    if (!newFeature.trim()) return;
-
-    createFeatureMutation.mutate({
-      description: newFeature,
-      type: 'manual',
-      completed: false
-    });
-
-    setNewFeature("");
-  };
-
-  const toggleFeature = (id: number, completed: boolean) => {
-    updateFeatureStatusMutation.mutate({ id, completed });
-  };
-
-  const handleImplementFeature = (feature: Feature) => {
-    //  This part remains largely the same, except feature.description is used.  
-    //  Consider refactoring to use a mutation for consistency.
-    implementFeatureMutation.mutate(feature.description);
-  };
-
-
   const implementFeatureMutation = useMutation({
     mutationFn: async (feature: string) => {
       const res = await apiRequest('POST', '/api/code/chat', {
@@ -155,40 +92,31 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
     }
   });
 
+  const handleAddFeature = () => {
+    if (!newFeature.trim()) return;
 
-  if (!gameDesign) {
-    return (
-      <Card className="p-4">
-        <div className="text-center text-muted-foreground italic">
-          No game design available. Please use the Design Assistant first.
-        </div>
-      </Card>
-    );
-  }
+    createFeatureMutation.mutate({
+      description: newFeature,
+      type: 'manual',
+      completed: false
+    });
+
+    setNewFeature("");
+  };
+
+  const toggleFeature = (id: number, completed: boolean) => {
+    updateFeatureStatusMutation.mutate({ id, completed });
+  };
+
+  const handleImplementFeature = (feature: Feature) => {
+    implementFeatureMutation.mutate(feature.description);
+  };
 
   return (
     <Card className="p-4">
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold">Game Features</h3>
-          <Button
-            onClick={() => generateFeaturesMutation.mutate()}
-            disabled={generateFeaturesMutation.isPending}
-            variant="secondary"
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-          >
-            {generateFeaturesMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating Features...
-              </>
-            ) : (
-              <>
-                <ListPlus className="mr-2 h-4 w-4" />
-                Generate Features List
-              </>
-            )}
-          </Button>
         </div>
 
         <div className="flex gap-2 items-center">
@@ -208,32 +136,8 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
           <ScrollArea className="h-[300px]">
             <div className="space-y-4">
               <div>
-                <h5 className="font-medium mb-2">Core Mechanics</h5>
-                {features.filter(f => f.type === 'core').map(feature => (
-                  <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                    <Checkbox
-                      id={feature.id.toString()} // Ensure id is a string
-                      checked={feature.completed}
-                      onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
-                    />
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleImplementFeature(feature)}
-                      disabled={implementFeatureMutation.isPending}
-                      className="flex-grow text-left justify-start px-2 hover:bg-accent"
-                    >
-                      {feature.description}
-                      {implementFeatureMutation.isPending && (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      )}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <h5 className="font-medium mb-2">Technical Requirements</h5>
-                {features.filter(f => f.type === 'tech').map(feature => (
+                <h5 className="font-medium mb-2">Generated Features</h5>
+                {features.filter(f => f.type === 'generated').map(feature => (
                   <div key={feature.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
                       id={feature.id.toString()}
@@ -255,29 +159,31 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
                 ))}
               </div>
 
-              <div>
-                <h5 className="font-medium mb-2">Additional Features</h5>
-                {features.filter(f => f.type === 'generated' || f.type === 'manual').map(feature => (
-                  <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                    <Checkbox
-                      id={feature.id.toString()}
-                      checked={feature.completed}
-                      onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
-                    />
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleImplementFeature(feature)}
-                      disabled={implementFeatureMutation.isPending}
-                      className="flex-grow text-left justify-start px-2 hover:bg-accent"
-                    >
-                      {feature.description}
-                      {implementFeatureMutation.isPending && (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      )}
-                    </Button>
-                  </div>
-                ))}
-              </div>
+              {features.filter(f => f.type === 'manual').length > 0 && (
+                <div>
+                  <h5 className="font-medium mb-2">Custom Features</h5>
+                  {features.filter(f => f.type === 'manual').map(feature => (
+                    <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                      <Checkbox
+                        id={feature.id.toString()}
+                        checked={feature.completed}
+                        onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
+                      />
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleImplementFeature(feature)}
+                        disabled={implementFeatureMutation.isPending}
+                        className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                      >
+                        {feature.description}
+                        {implementFeatureMutation.isPending && (
+                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </ScrollArea>
         </div>
