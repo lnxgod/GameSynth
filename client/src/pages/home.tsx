@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export default function Home() {
   const [gameCode, setGameCode] = useState("");
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [gameDesign, setGameDesign] = useState<any>(null);
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -34,7 +35,10 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="assistant" className="mt-4">
-            <GameDesignAssistant onCodeGenerated={setGameCode} />
+            <GameDesignAssistant
+              onCodeGenerated={setGameCode}
+              onDesignGenerated={setGameDesign}
+            />
           </TabsContent>
 
           <TabsContent value="direct" className="mt-4">
@@ -55,7 +59,12 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="code" className="mt-4">
-            <CodeEditor code={gameCode} onCodeChange={handleCodeChange} />
+            <CodeEditor
+              code={gameCode}
+              onCodeChange={handleCodeChange}
+              addDebugLog={addDebugLog}
+              gameDesign={gameDesign}
+            />
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4">

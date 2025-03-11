@@ -380,9 +380,9 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/code/chat", async (req, res) => {
     try {
-      const { code, message } = req.body;
+      const { code, message, features } = req.body;
 
-      logApi("Code chat request received", { message });
+      logApi("Code chat request received", { message, features });
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -399,14 +399,16 @@ When modifying code:
 6. The canvas and context variables (canvas, ctx) are already provided, DO NOT create them
 7. Assume canvas and ctx are available in the scope
 8. DO NOT include HTML, just the JavaScript game code
-9. Respond in this format:
-   - Brief explanation of changes
-   - Single complete code block between markers
-   - Any additional notes or warnings`
+9. Focus on implementing these remaining features: ${features?.join(", ")}
+10. Respond in this format:
+    - Brief explanation of changes
+    - Single complete code block between markers
+    - Any additional notes or warnings
+    - List which features were implemented in this update`
           },
           {
             role: "user",
-            content: `Here is my current game code:\n\n${code}\n\nUser request: ${message}`
+            content: `Here is my current game code:\n\n${code}\n\nUser request: ${message}\n\nRemaining features to implement: ${features?.join(", ")}`
           }
         ],
         temperature: 0.7,
@@ -431,7 +433,7 @@ When modifying code:
 
   app.post("/api/code/remix", async (req, res) => {
     try {
-      const { code } = req.body;
+      const { code, features } = req.body;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -441,7 +443,7 @@ When modifying code:
             content: `You are a game development assistant specialized in improving HTML5 Canvas games.
 When providing suggestions:
 1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
-2. Focus on gameplay mechanics, visual effects, and user experience
+2. Focus on implementing these remaining features: ${features?.join(", ")}
 3. Format your response as JSON with this structure:
 {
   "questions": [
@@ -453,7 +455,7 @@ When providing suggestions:
           },
           {
             role: "user",
-            content: `Please analyze this game code and suggest 3 improvements:\n\n${code}`
+            content: `Please analyze this game code and suggest 3 improvements that help implement these remaining features: ${features?.join(", ")}\n\n${code}`
           }
         ],
         response_format: { type: "json_object" },

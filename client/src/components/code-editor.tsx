@@ -3,19 +3,27 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2 } from "lucide-react";
+import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2, CheckSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface CodeEditorProps {
   code: string;
   onCodeChange: (code: string) => void;
   addDebugLog?: (message: string) => void;
+  gameDesign?: any; // Add game design prop
 }
 
-export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps) {
+interface Feature {
+  id: string;
+  description: string;
+  completed: boolean;
+}
+
+export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: CodeEditorProps) {
   const [localCode, setLocalCode] = useState(code);
   const [savedGames, setSavedGames] = useState<{ name: string; code: string }[]>([]);
   const [saveName, setSaveName] = useState("");
@@ -24,7 +32,27 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'assistant' | 'user', content: string }>>([]);
   const [remixSuggestions, setRemixSuggestions] = useState<string[]>([]);
   const [showRemixSuggestions, setShowRemixSuggestions] = useState(false);
+  const [features, setFeatures] = useState<Feature[]>([]);
   const { toast } = useToast();
+
+  // Initialize features from game design
+  useEffect(() => {
+    if (gameDesign) {
+      const newFeatures: Feature[] = [
+        ...gameDesign.coreMechanics.map((mechanic: string) => ({
+          id: `mechanic-${mechanic}`,
+          description: mechanic,
+          completed: false
+        })),
+        ...gameDesign.technicalRequirements.map((req: string) => ({
+          id: `tech-${req}`,
+          description: req,
+          completed: false
+        }))
+      ];
+      setFeatures(newFeatures);
+    }
+  }, [gameDesign]);
 
   // Load saved games from localStorage on mount
   useEffect(() => {
@@ -44,67 +72,23 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
     onCodeChange(e.target.value);
   };
 
-  const handleSave = () => {
-    if (!saveName) {
-      toast({
-        title: "Error",
-        description: "Please enter a name for your game",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newSavedGames = [...savedGames, { name: saveName, code: localCode }];
-    setSavedGames(newSavedGames);
-    localStorage.setItem("savedGames", JSON.stringify(newSavedGames));
-
-    toast({
-      title: "Success",
-      description: `Game "${saveName}" saved successfully`,
-    });
-    setSaveName("");
-  };
-
-  const handleLoad = (savedCode: string) => {
-    setLocalCode(savedCode);
-    onCodeChange(savedCode);
-    toast({
-      title: "Success",
-      description: "Game code loaded successfully",
-    });
-  };
-
-  const handleReset = () => {
-    setLocalCode("");
-    onCodeChange("");
-    toast({
-      title: "Reset",
-      description: "Code editor has been reset",
-    });
-  };
-
-  const handleClearSaved = () => {
-    localStorage.removeItem("savedGames");
-    setSavedGames([]);
-    toast({
-      title: "Cleared",
-      description: "All saved games have been removed",
-    });
+  const toggleFeature = (id: string) => {
+    setFeatures(prev => prev.map(feature => 
+      feature.id === id ? { ...feature, completed: !feature.completed } : feature
+    ));
   };
 
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
       const res = await apiRequest("POST", "/api/code/chat", {
         code: localCode,
-        message
+        message,
+        features: features.filter(f => !f.completed).map(f => f.description)
       });
       return res.json();
     },
     onSuccess: (data) => {
-      // Add AI's response to chat history
       setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
-
-      // If we got updated code, apply it
       if (data.updatedCode) {
         setLocalCode(data.updatedCode);
         onCodeChange(data.updatedCode);
@@ -112,11 +96,6 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
         toast({
           title: "Code Updated",
           description: "The game code has been updated based on your request",
-        });
-      } else {
-        toast({
-          title: "Info",
-          description: "Got response but no code changes were needed",
         });
       }
     },
@@ -136,7 +115,8 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
   const remixMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/code/remix", {
-        code: localCode
+        code: localCode,
+        features: features.filter(f => !f.completed).map(f => f.description)
       });
       return res.json();
     },
@@ -154,9 +134,7 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
     e.preventDefault();
     if (!chatMessage.trim()) return;
 
-    // Add user message to chat history
     setChatHistory(prev => [...prev, { role: 'user', content: chatMessage }]);
-
     chatMutation.mutate(chatMessage);
     setChatMessage("");
   };
@@ -217,34 +195,58 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
             </Button>
           </div>
 
-          {savedGames.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {savedGames.map((game, index) => (
-                <Button
-                  key={index}
-                  variant="outline"
-                  onClick={() => handleLoad(game.code)}
-                  className="whitespace-nowrap"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Load "{game.name}"
-                </Button>
-              ))}
-            </div>
-          )}
-
           <div className="flex gap-4">
-            <textarea
-              value={localCode}
-              onChange={handleCodeChange}
-              className="w-full h-[600px] font-mono text-sm p-4 bg-background border rounded-md"
-              spellCheck="false"
-            />
+            <div className="flex-1">
+              <textarea
+                value={localCode}
+                onChange={handleCodeChange}
+                className="w-full h-[600px] font-mono text-sm p-4 bg-background border rounded-md"
+                spellCheck="false"
+              />
+            </div>
 
-            {(showChat || showRemixSuggestions) && (
-              <Card className="w-96 p-4">
-                <div className="space-y-4">
-                  <ScrollArea className="h-[500px] w-full rounded-md border p-4">
+            <div className="w-96 space-y-4">
+              <Card className="p-4">
+                <h3 className="text-lg font-semibold mb-4">Feature Checklist</h3>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Core Mechanics</h4>
+                      {features.filter(f => f.id.startsWith('mechanic-')).map(feature => (
+                        <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                          <Checkbox
+                            id={feature.id}
+                            checked={feature.completed}
+                            onCheckedChange={() => toggleFeature(feature.id)}
+                          />
+                          <label htmlFor={feature.id} className="text-sm">
+                            {feature.description}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Technical Requirements</h4>
+                      {features.filter(f => f.id.startsWith('tech-')).map(feature => (
+                        <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                          <Checkbox
+                            id={feature.id}
+                            checked={feature.completed}
+                            onCheckedChange={() => toggleFeature(feature.id)}
+                          />
+                          <label htmlFor={feature.id} className="text-sm">
+                            {feature.description}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </ScrollArea>
+              </Card>
+
+              {(showChat || showRemixSuggestions) && (
+                <Card className="p-4">
+                  <ScrollArea className="h-[250px]">
                     <div className="space-y-4">
                       {showRemixSuggestions ? (
                         <div className="space-y-4">
@@ -288,7 +290,7 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
                   </ScrollArea>
 
                   {!showRemixSuggestions && (
-                    <form onSubmit={handleChatSubmit} className="space-y-2">
+                    <form onSubmit={handleChatSubmit} className="mt-4 space-y-2">
                       <Textarea
                         placeholder="Ask about modifying or debugging your code..."
                         value={chatMessage}
@@ -311,9 +313,9 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
                       </Button>
                     </form>
                   )}
-                </div>
-              </Card>
-            )}
+                </Card>
+              )}
+            </div>
           </div>
         </div>
       </Card>
