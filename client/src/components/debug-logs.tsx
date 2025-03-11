@@ -1,7 +1,8 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bug } from "lucide-react";
+import { Bug, Loader2 } from "lucide-react";
+import { useState } from "react";
 
 interface DebugLogsProps {
   logs: string[];
@@ -9,16 +10,21 @@ interface DebugLogsProps {
 }
 
 export function DebugLogs({ logs, onDebugError }: DebugLogsProps) {
+  const [processingErrorIndex, setProcessingErrorIndex] = useState<number | null>(null);
+
   const isErrorLog = (log: string) => {
     return log.includes('Error executing game code') || log.includes('🚨');
   };
 
-  const handleErrorClick = (log: string) => {
+  const handleErrorClick = (log: string, index: number) => {
     if (onDebugError && isErrorLog(log)) {
+      setProcessingErrorIndex(index);
       // Extract the error message from the log
       const errorMatch = log.match(/Error executing game code: (.+)/);
       if (errorMatch) {
         onDebugError(errorMatch[1]);
+        // Reset processing state after a delay to show animation
+        setTimeout(() => setProcessingErrorIndex(null), 2000);
       }
     }
   };
@@ -30,23 +36,42 @@ export function DebugLogs({ logs, onDebugError }: DebugLogsProps) {
           {logs.map((log, index) => (
             <div 
               key={index} 
-              className={`text-muted-foreground p-2 rounded ${
+              className={`text-muted-foreground p-2 rounded transition-all duration-200 ${
                 isErrorLog(log) 
-                  ? 'bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 cursor-pointer group flex items-center justify-between' 
+                  ? 'bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 cursor-pointer group' 
                   : ''
-              }`}
-              onClick={() => handleErrorClick(log)}
+              } ${processingErrorIndex === index ? 'border-2 border-yellow-500' : ''}`}
+              onClick={() => handleErrorClick(log, index)}
             >
-              {log}
-              {isErrorLog(log) && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Bug className="h-4 w-4 mr-1" />
-                  Fix Error
-                </Button>
+              <div className="flex items-center justify-between">
+                <div className="flex-1">{log}</div>
+                {isErrorLog(log) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className={`opacity-0 group-hover:opacity-100 transition-opacity ${
+                      processingErrorIndex === index ? 'opacity-100' : ''
+                    }`}
+                    disabled={processingErrorIndex !== null}
+                  >
+                    {processingErrorIndex === index ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Fixing...
+                      </>
+                    ) : (
+                      <>
+                        <Bug className="h-4 w-4 mr-1" />
+                        Fix Error
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              {processingErrorIndex === index && (
+                <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400 animate-pulse">
+                  🔧 AI is analyzing and fixing this error...
+                </div>
               )}
             </div>
           ))}

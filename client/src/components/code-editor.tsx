@@ -143,6 +143,8 @@ export const CodeEditor = forwardRef<{ handleDebug: () => void }, CodeEditorProp
           throw new Error("No error found in game execution");
         }
 
+        addDebugLog?.("🔧 AI Debug: Analyzing game code...");
+
         const res = await apiRequest("POST", "/api/code/debug", {
           code: localCode,
           error: errorMessage
@@ -153,7 +155,8 @@ export const CodeEditor = forwardRef<{ handleDebug: () => void }, CodeEditorProp
         if (data.updatedCode) {
           setLocalCode(data.updatedCode);
           onCodeChange(data.updatedCode);
-          addDebugLog?.("🔧 AI Debug: Applied suggested fixes");
+
+          addDebugLog?.("✅ AI Debug: Fixed - " + data.message);
 
           toast({
             title: "Debug Fixes Applied",
@@ -162,6 +165,8 @@ export const CodeEditor = forwardRef<{ handleDebug: () => void }, CodeEditorProp
         }
       },
       onError: (error: any) => {
+        addDebugLog?.("❌ AI Debug: Failed - " + error.message);
+
         toast({
           title: "Debug Assistant",
           description: error.message,
