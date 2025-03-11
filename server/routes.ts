@@ -106,6 +106,11 @@ function extractGameCode(content: string): string | null {
     code = code.replace(/const canvas\s*=\s*document\.getElementById[^;]+;/, '');
     code = code.replace(/const ctx\s*=\s*canvas\.getContext[^;]+;/, '');
 
+    // Remove ```javascript or ``` markers
+    code = code.replace(/^```javascript\n/, '');
+    code = code.replace(/^```\n/, '');
+    code = code.replace(/\n```$/, '');
+
     if (!code) {
       console.log('ERROR: Empty code block found');
       return null;
