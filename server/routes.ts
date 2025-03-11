@@ -248,12 +248,12 @@ export async function registerRoutes(app: Express) {
 
       // Incorporate analyses into the conversation history
       if (analyses) {
-          Object.entries(analyses).forEach(([aspect, analysisData]) => {
-              history.push({
-                  role: 'assistant',
-                  content: `Analysis of ${aspect}:\n${analysisData.analysis}\n\nImplementation details:\n${analysisData.implementation_details.join("\n")}\n\nTechnical Considerations:\n${analysisData.technical_considerations.join("\n")}`
-              });
+        Object.entries(analyses).forEach(([aspect, analysisData]) => {
+          history.push({
+            role: 'assistant',
+            content: `Analysis of ${aspect}:\n${analysisData.analysis}\n\nImplementation details:\n${analysisData.implementation_details.join("\n")}\n\nTechnical Considerations:\n${analysisData.technical_considerations.join("\n")}`
           });
+        });
       }
 
 
@@ -422,6 +422,45 @@ When asked to modify code:
       res.json(result);
     } catch (error: any) {
       logApi("Error in code chat", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/code/remix", async (req, res) => {
+    try {
+      const { code } = req.body;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a game development assistant specialized in improving HTML5 Canvas games.
+Analyze the provided game code and suggest 3 specific improvements that could enhance the game.
+Format your response as JSON with the following structure:
+{
+  "questions": [
+    "Question about implementing feature 1...",
+    "Question about implementing feature 2...",
+    "Question about implementing feature 3..."
+  ]
+}`
+          },
+          {
+            role: "user",
+            content: `Please analyze this game code and suggest 3 improvements:\n\n${code}`
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+
+      logApi("Remix suggestions generated", { code }, result);
+      res.json(result);
+    } catch (error: any) {
+      logApi("Error generating remix suggestions", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
   });

@@ -186,12 +186,9 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   };
 
   const handleNextFollowUp = () => {
-    if (currentFollowUpIndex < followUpQuestions.length - 1) {
-      setCurrentFollowUpIndex(prev => prev + 1);
-    } else {
-      setShowFollowUp(false);
-      finalizeMutation.mutate(); 
-    }
+    // Only one round of follow-ups
+    setShowFollowUp(false);
+    finalizeMutation.mutate();
   };
 
   const handleBack = () => {
@@ -218,33 +215,42 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
 
   const currentQuestion = questions[currentQuestionIndex];
 
-  const renderCurrentPrompt = () => {
-    if (finalDesign) {
-      return (
+  const renderDesignDoc = () => {
+    if (!finalDesign) return null;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Game Design Document</h3>
         <div className="space-y-4">
-          <div className="font-semibold">Final Game Design:</div>
-          <div>{finalDesign.gameDescription}</div>
+          <div>
+            <div className="font-semibold">Initial Requirements:</div>
+            <ul className="list-disc pl-4">
+              <li>Game Type: {requirements.gameType}</li>
+              <li>Mechanics: {requirements.mechanics}</li>
+              <li>Visual Style: {requirements.visualStyle}</li>
+              <li>Difficulty: {requirements.difficulty}</li>
+              <li>Special Features: {requirements.specialFeatures}</li>
+            </ul>
+          </div>
 
-          <div className="font-semibold">Core Mechanics:</div>
-          <ul className="list-disc pl-4">
-            {finalDesign.coreMechanics.map((mechanic: string, index: number) => (
-              <li key={index}>{mechanic}</li>
+          <div>
+            <div className="font-semibold">Technical Analysis:</div>
+            {Object.entries(analyses).map(([aspect, analysis]) => (
+              <div key={aspect} className="mt-2">
+                <div className="font-medium capitalize">{aspect}:</div>
+                <div className="text-sm text-muted-foreground">{analysis?.analysis}</div>
+                <ul className="list-disc pl-4 text-sm mt-1">
+                  {analysis?.implementation_details.map((detail, i) => (
+                    <li key={i}>{detail}</li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
 
-          <div className="font-semibold">Technical Requirements:</div>
-          <ul className="list-disc pl-4">
-            {finalDesign.technicalRequirements.map((req: string, index: number) => (
-              <li key={index}>{req}</li>
-            ))}
-          </ul>
-
-          <div className="font-semibold">Implementation Approach:</div>
-          <div>{finalDesign.implementationApproach}</div>
-
-          {Object.entries(followUpAnswers).length > 0 && (
-            <>
-              <div className="font-semibold">Additional Details:</div>
+          {Object.keys(followUpAnswers).length > 0 && (
+            <div>
+              <div className="font-semibold">Follow-up Details:</div>
               <ul className="list-disc pl-4">
                 {Object.entries(followUpAnswers).map(([question, answer], index) => (
                   <li key={index}>
@@ -252,9 +258,58 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
                   </li>
                 ))}
               </ul>
-            </>
+            </div>
           )}
         </div>
+      </div>
+    );
+  };
+
+  const renderAIPrompt = () => {
+    if (!finalDesign) return null;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">AI Generation Prompt</h3>
+        <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+          <pre className="whitespace-pre-wrap font-mono text-sm">
+            {`Creating HTML5 Canvas game with the following specifications:
+
+Game Description:
+${finalDesign.gameDescription}
+
+Core Mechanics:
+${finalDesign.coreMechanics.join("\n")}
+
+Technical Requirements:
+${finalDesign.technicalRequirements.join("\n")}
+
+Implementation Approach:
+${finalDesign.implementationApproach}
+
+Additional Specifications:
+${Object.entries(analyses).map(([aspect, analysis]) => 
+  `${aspect.toUpperCase()}:
+  - Analysis: ${analysis?.analysis}
+  - Implementation: ${analysis?.implementation_details.join(", ")}
+  - Technical: ${analysis?.technical_considerations.join(", ")}`
+).join("\n\n")}
+
+Follow-up Details:
+${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")}`}
+          </pre>
+        </ScrollArea>
+      </div>
+    );
+  };
+
+  const renderCurrentPrompt = () => {
+    if (finalDesign) {
+      return (
+        <>
+          {renderDesignDoc()}
+          {renderAIPrompt()}
+        </>
       );
     }
 

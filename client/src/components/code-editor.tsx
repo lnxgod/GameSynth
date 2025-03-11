@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2 } from "lucide-react";
+import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
@@ -22,6 +22,9 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
   const [showChat, setShowChat] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'assistant' | 'user', content: string }>>([]);
+  const [remixQuestions, setRemixQuestions] = useState<string[]>([]);
+  const [currentRemixQuestion, setCurrentRemixQuestion] = useState<number>(-1);
+  const [showRemixQuestions, setShowRemixQuestions] = useState(false);
   const { toast } = useToast();
 
   // Load saved games from localStorage on mount
@@ -119,14 +122,32 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
       }
     },
     onError: (error) => {
-      setChatHistory(prev => [...prev, { 
-        role: 'assistant', 
-        content: "Error: Failed to process your request" 
+      setChatHistory(prev => [...prev, {
+        role: 'assistant',
+        content: "Error: Failed to process your request"
       }]);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
+      });
+    }
+  });
+
+  const remixMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/code/remix", {
+        code: localCode
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setRemixQuestions(data.questions.slice(0, 3));
+      setCurrentRemixQuestion(0);
+      setShowRemixQuestions(true);
+      toast({
+        title: "Ready to Remix",
+        description: "Let's enhance your game with some improvements!",
       });
     }
   });
@@ -143,6 +164,16 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
 
     chatMutation.mutate(chatMessage);
     setChatMessage("");
+  };
+
+  const handleRemixAnswer = (answer: string) => {
+    chatMutation.mutate(answer);
+    if (currentRemixQuestion < remixQuestions.length - 1) {
+      setCurrentRemixQuestion(prev => prev + 1);
+    } else {
+      setShowRemixQuestions(false);
+      setCurrentRemixQuestion(-1);
+    }
   };
 
   return (
@@ -172,6 +203,24 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
               <MessageSquare className="mr-2 h-4 w-4" />
               {showChat ? "Hide Chat" : "Show Chat"}
             </Button>
+            <Button
+              onClick={() => remixMutation.mutate()}
+              variant="secondary"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+              disabled={remixMutation.isPending}
+            >
+              {remixMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  REMIX
+                </>
+              )}
+            </Button>
           </div>
 
           {savedGames.length > 0 && (
@@ -198,37 +247,50 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
               spellCheck="false"
             />
 
-            {showChat && (
+            {(showChat || showRemixQuestions) && (
               <Card className="w-96 p-4">
                 <div className="space-y-4">
                   <ScrollArea className="h-[500px] w-full rounded-md border p-4">
                     <div className="space-y-4">
-                      {chatHistory.map((msg, index) => (
-                        <div
-                          key={index}
-                          className={`flex ${
-                            msg.role === 'assistant' ? 'justify-start' : 'justify-end'
-                          }`}
-                        >
+                      {showRemixQuestions ? (
+                        <div className="space-y-4">
+                          <div className="font-semibold">
+                            Question {currentRemixQuestion + 1} of {remixQuestions.length}:
+                          </div>
+                          <div>{remixQuestions[currentRemixQuestion]}</div>
+                        </div>
+                      ) : (
+                        chatHistory.map((msg, index) => (
                           <div
-                            className={`max-w-[80%] rounded-lg p-3 ${
-                              msg.role === 'assistant'
-                                ? 'bg-muted'
-                                : 'bg-primary text-primary-foreground'
+                            key={index}
+                            className={`flex ${
+                              msg.role === 'assistant' ? 'justify-start' : 'justify-end'
                             }`}
                           >
-                            <pre className="whitespace-pre-wrap text-sm">
-                              {msg.content}
-                            </pre>
+                            <div
+                              className={`max-w-[80%] rounded-lg p-3 ${
+                                msg.role === 'assistant'
+                                  ? 'bg-muted'
+                                  : 'bg-primary text-primary-foreground'
+                              }`}
+                            >
+                              <pre className="whitespace-pre-wrap text-sm">
+                                {msg.content}
+                              </pre>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </ScrollArea>
 
                   <form onSubmit={handleChatSubmit} className="space-y-2">
                     <Textarea
-                      placeholder="Ask about modifying or debugging your code..."
+                      placeholder={
+                        showRemixQuestions
+                          ? "Enter your answer..."
+                          : "Ask about modifying or debugging your code..."
+                      }
                       value={chatMessage}
                       onChange={(e) => setChatMessage(e.target.value)}
                       className="min-h-[80px]"
@@ -237,6 +299,12 @@ export function CodeEditor({ code, onCodeChange, addDebugLog }: CodeEditorProps)
                       type="submit"
                       className="w-full"
                       disabled={chatMutation.isPending}
+                      onClick={() => {
+                        if (showRemixQuestions) {
+                          handleRemixAnswer(chatMessage);
+                          setChatMessage("");
+                        }
+                      }}
                     >
                       {chatMutation.isPending ? (
                         <>
