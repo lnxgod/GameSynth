@@ -436,8 +436,12 @@ When asked to modify code:
           {
             role: "system",
             content: `You are a game development assistant specialized in improving HTML5 Canvas games.
-Analyze the provided game code and suggest 3 specific improvements that could enhance the game.
-Format your response as JSON with the following structure:
+When providing suggestions and implementing them:
+1. Analyze the provided game code and suggest 3 specific improvements
+2. When implementing each improvement, ALWAYS provide the COMPLETE updated code
+3. Always wrap code blocks between +++CODESTART+++ and +++CODESTOP+++ markers
+4. Never use backticks (\`\`\`) for code blocks
+5. Format your response as JSON with this structure:
 {
   "questions": [
     "Question about implementing feature 1...",
