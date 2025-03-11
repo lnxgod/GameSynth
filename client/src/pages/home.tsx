@@ -8,6 +8,8 @@ import { GameDesignAssistant } from "@/components/game-design-assistant";
 import { FeatureChecklist } from "@/components/feature-checklist";
 import { AIStatusIndicator } from "@/components/ai-status-indicator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState("");
@@ -19,6 +21,7 @@ export default function Home() {
     type: '',
     active: false
   });
+  const [isNonTechnicalMode, setIsNonTechnicalMode] = useState(false);
 
   const codeEditorRef = useRef<{ handleDebug: (errorMessage?: string) => void } | null>(null);
 
@@ -60,9 +63,22 @@ export default function Home() {
 
   return (
     <div className="container mx-auto p-4 min-h-screen">
-      <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-        AI Game Creator
-      </h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+          AI Game Creator
+        </h1>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="non-technical-mode"
+            checked={isNonTechnicalMode}
+            onCheckedChange={setIsNonTechnicalMode}
+            className="data-[state=checked]:bg-primary"
+          />
+          <Label htmlFor="non-technical-mode" className="text-sm">
+            {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
+          </Label>
+        </div>
+      </div>
 
       <div className="space-y-8">
         <Tabs defaultValue="assistant" className="w-full">
@@ -78,6 +94,7 @@ export default function Home() {
               onFeaturesGenerated={setFeatures}
               debugContext={debugContext}
               onAiOperation={setAiOperation}
+              isNonTechnicalMode={isNonTechnicalMode}
             />
           </TabsContent>
 
@@ -85,6 +102,7 @@ export default function Home() {
             <ChatInterface 
               onCodeReceived={setGameCode}
               onAiOperation={setAiOperation}
+              isNonTechnicalMode={isNonTechnicalMode}
             />
           </TabsContent>
         </Tabs>
@@ -111,6 +129,7 @@ export default function Home() {
               gameDesign={gameDesign}
               debugContext={debugContext}
               onAiOperation={setAiOperation}
+              isNonTechnicalMode={isNonTechnicalMode}
             />
           </TabsContent>
 
@@ -120,6 +139,7 @@ export default function Home() {
               onCodeUpdate={handleCodeChange}
               initialFeatures={features}
               onAiOperation={setAiOperation}
+              isNonTechnicalMode={isNonTechnicalMode}
             />
           </TabsContent>
 

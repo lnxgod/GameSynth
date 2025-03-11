@@ -455,35 +455,44 @@ Each feature should be specific and actionable.`
 
   app.post("/api/code/chat", async (req, res) => {
     try {
-      const { code, message, features } = req.body;
+      const { code, message, gameDesign, debugContext, isNonTechnicalMode } = req.body;
 
-      logApi("Code chat request received", { message, features });
+      logApi("Code chat request received", { message, isNonTechnicalMode });
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a game development assistant specialized in HTML5 Canvas games.
+      const systemPrompt = isNonTechnicalMode
+        ? `You are a friendly game development assistant helping create HTML5 Canvas games.
+Explain things in simple terms as if talking to someone new to programming.
+When explaining code or changes:
+1. Use everyday analogies and simple examples
+2. Avoid technical jargon - when you must use it, explain it simply
+3. Focus on what the code does, not how it works internally
+4. Use friendly, encouraging language
+5. Break down complex concepts into simple steps
+6. Always wrap the code between +++CODESTART+++ and +++CODESTOP+++ markers
+7. The canvas and context variables are already provided`
+        : `You are a game development assistant specialized in HTML5 Canvas games.
 When modifying code:
 1. ALWAYS provide the COMPLETE updated code, never partial updates
 2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
 3. Explain the changes you're making in clear, simple terms
 4. Maintain game functionality and style consistency
 5. Include initialization and cleanup code
-6. The canvas and context variables (canvas, ctx) are already provided, DO NOT create them
+6. The canvas and context variables are already provided, DO NOT create them
 7. Assume canvas and ctx are available in the scope
-8. DO NOT include HTML, just the JavaScript game code
-9. Focus on implementing these remaining features: ${features?.join(", ")}
-10. Respond in this format:
-    - Brief explanation of changes
-    - Single complete code block between markers
-    - Any additional notes or warnings
-    - List which features were implemented in this update`
+8. DO NOT include HTML, just the JavaScript game code`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
           },
           {
             role: "user",
-            content: `Here is my current game code:\n\n${code}\n\nUser request: ${message}\n\nRemaining features to implement: ${features?.join(", ")}`
+            content: `Here is my current game code:\n\n${code}\n\nUser request: ${message}${
+              debugContext ? `\n\nDebug Context: ${debugContext}` : ''
+            }`
           }
         ],
         temperature: 0.7,
@@ -549,23 +558,41 @@ When providing suggestions:
 
   app.post("/api/code/debug", async (req, res) => {
     try {
-      const { code, error } = req.body;
+      const { code, error, isNonTechnicalMode } = req.body;
 
       if (!error || !code) {
         return res.status(400).json({
           error: "Missing Information",
-          message: "Please run the game first so I can help fix any errors.",
+          message: isNonTechnicalMode
+            ? "I need to see the game running first to help fix any problems. Could you try playing the game and let me know what's not working?"
+            : "Please run the game first so I can help fix any errors.",
         });
       }
 
       logApi("Debug request received", { error });
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a helpful game debugging assistant.
+      const systemPrompt = isNonTechnicalMode
+        ? `You are a friendly game helper who explains problems in simple terms.
+Help fix game problems using everyday language and simple explanations.
+
+When explaining fixes:
+1. Explain what's wrong in simple, friendly terms
+2. Use everyday examples to explain the solution
+3. Break down the fix into easy steps
+4. Avoid technical terms - if you must use them, explain them simply
+5. Be encouraging and positive
+
+Remember:
+- Focus on what the game should do vs what it's doing
+- Explain things like you're talking to a friend
+- Keep it simple and clear
+- Always include the complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
+
+Format your response as:
+1. 🎮 What's not working? (simple explanation)
+2. 💡 Here's how we'll fix it (in friendly terms)
+3. Complete fixed code between the markers`
+        : `You are a helpful game debugging assistant.
 Help fix HTML5 Canvas game errors in simple, clear language.
 
 When explaining fixes:
@@ -582,7 +609,14 @@ Remember:
 Format your response as:
 1. 🎮 What went wrong? (simple explanation)
 2. 💡 How we'll fix it
-3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`
+3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
           },
           {
             role: "user",
@@ -622,7 +656,7 @@ Please help fix this issue!`
       logApi("Error in debug", req.body, { error: error.message });
       res.status(500).json({
         error: "Debug Helper Error",
-        message: "I couldn't analyze the game properly. Please try running the game again to generate fresh error information.",
+        message: "I couldn't analyze the game properly. Please try running the game again to get fresh error information.",
         details: error.message
       });
     }
@@ -704,7 +738,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       res.status(500).json({ error: error.message });
     }
   });
-
 
 
   const httpServer = createServer(app);
