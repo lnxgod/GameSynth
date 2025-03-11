@@ -7,6 +7,7 @@ import { Loader2, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface BuildControlsProps {
   gameCode: string;
@@ -20,6 +21,7 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
   const [keystorePassword, setKeystorePassword] = useState('');
   const [keyAlias, setKeyAlias] = useState('release');
   const [keyPassword, setKeyPassword] = useState('');
+  const [buildLogs, setBuildLogs] = useState<string[]>([]);
   const { toast } = useToast();
 
   // Real-time package name validation
@@ -29,6 +31,7 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
   const buildMutation = useMutation({
     mutationFn: async () => {
       onBuildStart?.();
+      setBuildLogs([]);
 
       // Log the build parameters for debugging
       console.log('Build parameters:', {
@@ -59,6 +62,9 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
     },
     onSuccess: (data) => {
       onBuildComplete?.();
+      if (data.logs) {
+        setBuildLogs(data.logs);
+      }
       if (data.downloadUrl) {
         toast({
           title: "Build Complete",
@@ -70,9 +76,12 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
     onError: (error: any) => {
       onBuildComplete?.();
       console.error('Build error:', error);
+      if (error.logs) {
+        setBuildLogs(error.logs);
+      }
       toast({
         title: "Build Failed",
-        description: error.message || "Failed to build Android APK. Please check the console for details.",
+        description: error.message || "Failed to build Android APK. Please check the build logs for details.",
         variant: "destructive",
       });
     },
@@ -181,6 +190,17 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
           </div>
         </div>
       </div>
+
+      {buildLogs.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <h3 className="text-sm font-medium">Build Logs</h3>
+          <ScrollArea className="h-40 w-full rounded-md border bg-muted p-4">
+            <pre className="text-xs">
+              {buildLogs.join('\n')}
+            </pre>
+          </ScrollArea>
+        </div>
+      )}
 
       <Button
         onClick={() => buildMutation.mutate()}

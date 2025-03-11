@@ -3,7 +3,7 @@ import { createServer } from "http";
 import { storage } from "./storage";
 import { insertChatSchema, insertGameSchema } from "@shared/schema";
 import OpenAI from "openai";
-import {insertFeatureSchema} from "@shared/schema"; // Assuming this schema is defined elsewhere
+import {insertFeatureSchema} from "@shared/schema"; 
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
@@ -15,7 +15,6 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Update the DESIGN_ASSISTANT_PROMPT
 const DESIGN_ASSISTANT_PROMPT = `You are a game design assistant helping users create HTML5 Canvas games. 
 Analyze the specific game aspect provided and elaborate on its implementation details.
 Focus on concrete, implementable features and mechanics.
@@ -41,7 +40,6 @@ Format your response as JSON with the following structure:
 }
 `;
 
-// Store API logs in memory with full request/response data
 const apiLogs: Array<{
   timestamp: string;
   message: string;
@@ -57,13 +55,11 @@ function logApi(message: string, request?: any, response?: any) {
     request: request ? JSON.stringify(request, null, 2) : undefined,
     response: response ? JSON.stringify(response, null, 2) : undefined
   });
-  // Keep only the last 100 logs
   if (apiLogs.length > 100) {
     apiLogs.shift();
   }
 }
 
-// Game design conversation history
 const designConversations = new Map<string, Array<{
   role: 'assistant' | 'user';
   content: string;
@@ -94,7 +90,6 @@ function extractGameCode(content: string): string | null {
       .substring(startIndex + startMarker.length, endIndex)
       .trim();
 
-    // If we have a script tag, extract just the JavaScript
     if (code.includes('<script>')) {
       const scriptStart = code.indexOf('<script>') + 8;
       const scriptEnd = code.indexOf('</script>');
@@ -103,16 +98,13 @@ function extractGameCode(content: string): string | null {
       }
     }
 
-    // Remove any HTML document structure
     code = code.replace(/<!DOCTYPE.*?>/, '');
     code = code.replace(/<html>.*?<body>/s, '');
     code = code.replace(/<\/body>.*?<\/html>/s, '');
 
-    // Remove canvas/context initialization since we provide those
     code = code.replace(/const canvas\s*=\s*document\.getElementById[^;]+;/, '');
     code = code.replace(/const ctx\s*=\s*canvas\.getContext[^;]+;/, '');
 
-    // Remove ```javascript or ``` markers
     code = code.replace(/^```javascript\n/, '');
     code = code.replace(/^```\n/, '');
     code = code.replace(/\n```$/, '');
@@ -175,7 +167,6 @@ export async function registerRoutes(app: Express) {
 
       const analysis = JSON.parse(response.choices[0].message.content || "{}");
 
-      // Store the analysis in the conversation history
       history.push({
         role: 'assistant',
         content: `Analysis of ${aspect}:\n${analysis.analysis}\n\nImplementation details:\n${analysis.implementation_details.join("\n")}`
@@ -220,7 +211,6 @@ export async function registerRoutes(app: Express) {
 
       const finalDesign = JSON.parse(response.choices[0].message.content || "{}");
 
-      // Add the final design to history
       history.push({
         role: 'assistant',
         content: `Final Game Design:\n${finalDesign.gameDescription}\n\nCore Mechanics:\n${finalDesign.coreMechanics.join("\n")}`
@@ -313,7 +303,6 @@ Each feature should be specific and actionable.`
 
       logApi("Game generation request", { sessionId, settings });
 
-      // Add follow-up answers to the conversation history
       if (followUpAnswers) {
         Object.entries(followUpAnswers).forEach(([question, answer]) => {
           history.push({
@@ -323,7 +312,6 @@ Each feature should be specific and actionable.`
         });
       }
 
-      // Incorporate analyses into the conversation history
       if (analyses) {
         Object.entries(analyses).forEach(([aspect, analysisData]) => {
           history.push({
@@ -333,11 +321,9 @@ Each feature should be specific and actionable.`
         });
       }
 
-      // Use provided settings or defaults
       const temperature = settings?.temperature ?? 0.7;
       const maxTokens = settings?.maxTokens ?? 16000;
 
-      // Compile the conversation into a detailed game specification
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -376,7 +362,6 @@ Each feature should be specific and actionable.`
     try {
       const { prompt, temperature = 0.7, maxTokens = 16000 } = req.body;
 
-      // Add validation for max tokens
       if (maxTokens > 16000) {
         throw new Error("Max tokens cannot exceed 16,000 due to model limitations");
       }
@@ -645,7 +630,6 @@ Please help fix this issue!`
         throw new Error("Could not generate valid fixed code");
       }
 
-      // Extract the explanation without the code block
       const explanation = content
         .replace(/\+\+\+CODESTART\+\+\+[\s\S]*\+\+\+CODESTOP\+\+\+/, '')
         .trim();
@@ -745,53 +729,37 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   });
 
 
-  app.post("/api/build/android", async (req, res) => {
+  async function handleAndroidBuild(buildDir: string, options: {
+    gameCode: string;
+    appName: string;
+    packageName: string;
+    keystore: {
+      password: string;
+      alias: string;
+      keyPassword: string;
+    };
+  }) {
+    const execAsync = promisify(exec);
+    const buildLogs: string[] = [];
+
+    function log(message: string, details?: any) {
+      const logMessage = details ? `${message}: ${JSON.stringify(details)}` : message;
+      buildLogs.push(logMessage);
+      console.log(logMessage);
+    }
+
     try {
-      const { gameCode, appName, packageName, keystore } = req.body;
-
-      // Validate inputs
-      if (!gameCode || !appName || !packageName) {
-        throw new Error("Missing required build information");
-      }
-
-      // Strict package name validation following Android conventions
-      const packageNameRegex = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
-      if (!packageNameRegex.test(packageName)) {
-        throw new Error(
-          "Invalid package name format. Package name must:\n" +
-          "- Start with a lowercase letter\n" +
-          "- Contain at least two segments (e.g., com.example)\n" +
-          "- Only use lowercase letters, numbers, and underscores\n" +
-          "- Each segment must start with a letter\n" +
-          "Example: com.mygame.app"
-        );
-      }
-
-      // Validate keystore information
-      if (!keystore?.password || keystore.password.length < 6) {
-        throw new Error("Keystore password must be at least 6 characters");
-      }
-      if (!keystore?.alias) {
-        throw new Error("Key alias is required");
-      }
-      if (!keystore?.keyPassword || keystore.keyPassword.length < 6) {
-        throw new Error("Key password must be at least 6 characters");
-      }
-
-      logApi("Android build request received", { appName, packageName });
-
-      // Create build directory
-      const buildDir = path.join(process.cwd(), 'android-build');
+      log('Creating build directory');
       await fs.mkdir(buildDir, { recursive: true });
 
-      // Create index.html with the game code
+      log('Creating index.html');
       const html = `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>${appName}</title>
+    <title>${options.appName}</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
         canvas { width: 100vw; height: 100vh; display: block; }
@@ -810,16 +778,16 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        ${gameCode}
+        ${options.gameCode}
     </script>
 </body>
 </html>`;
 
       await fs.writeFile(path.join(buildDir, 'index.html'), html);
 
-      // Create package.json if it doesn't exist in the build directory
+      log('Creating package.json');
       const packageJson = {
-        name: packageName.replace(/\./g, '-'),
+        name: options.packageName.replace(/\./g, '-'),
         version: "1.0.0",
         private: true,
         dependencies: {
@@ -832,10 +800,10 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         JSON.stringify(packageJson, null, 2)
       );
 
-      // Update capacitor config
+      log('Creating capacitor.config.json');
       const capacitorConfig = {
-        appId: packageName,
-        appName: appName,
+        appId: options.packageName,
+        appName: options.appName,
         webDir: ".",
         server: {
           androidScheme: "https"
@@ -843,9 +811,9 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         android: {
           buildOptions: {
             keystorePath: 'release.keystore',
-            keystoreAlias: keystore.alias,
-            keystorePassword: keystore.password,
-            keyPassword: keystore.keyPassword,
+            keystoreAlias: options.keystore.alias,
+            keystorePassword: options.keystore.password,
+            keyPassword: options.keystore.keyPassword,
           }
         }
       };
@@ -854,71 +822,137 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         JSON.stringify(capacitorConfig, null, 2)
       );
 
-      const execAsync = promisify(exec);
+      try {
+        log('Initializing Capacitor project');
+        const initCommand = `npx cap init "${options.appName}" "${options.packageName}" --web-dir=.`;
+        const initResult = await execAsync(initCommand, { cwd: buildDir });
+        log('Capacitor init completed', { stdout: initResult.stdout, stderr: initResult.stderr });
+      } catch (error: any) {
+        log('Capacitor init failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
+        throw new Error(`Capacitor initialization failed: ${error.stderr || error.message}`);
+      }
 
       try {
-        // Initialize Capacitor project with proper argument escaping
-        const initCommand = `npx cap init ${JSON.stringify(appName)} ${JSON.stringify(packageName)} --web-dir=.`;
-        logApi("Running Capacitor init", { command: initCommand });
-        const initResult = await execAsync(initCommand, { cwd: buildDir });
-        logApi("Capacitor init completed", { stdout: initResult.stdout, stderr: initResult.stderr });
-
-        // Install dependencies
-        logApi("Installing dependencies");
+        log('Installing dependencies');
         const installResult = await execAsync('npm install', { cwd: buildDir });
-        logApi("Dependencies installed", { stdout: installResult.stdout, stderr: installResult.stderr });
-
-        // Add Android platform
-        logApi("Adding Android platform");
-        const platformResult = await execAsync('npx cap add android', { cwd: buildDir });
-        logApi("Android platform added", { stdout: platformResult.stdout, stderr: platformResult.stderr });
-
-        // Generate keystore file
-        const keytoolCommand = `keytool -genkey -v -keystore release.keystore -alias ${keystore.alias} -keyalg RSA -keysize 2048 -validity 10000 -storepass ${keystore.password} -keypass ${keystore.keyPassword} -dname "CN=Android Debug,O=Android,C=US"`;
-        logApi("Generating keystore");
-        const keystoreResult = await execAsync(keytoolCommand, { cwd: buildDir });
-        logApi("Keystore generated", { stdout: keystoreResult.stdout, stderr: keystoreResult.stderr });
-
-        // Build APK
-        logApi("Building release APK");
-        const buildResult = await execAsync('cd android && ./gradlew assembleRelease', { cwd: buildDir });
-        logApi("APK build completed", { stdout: buildResult.stdout, stderr: buildResult.stderr });
-
-        // Get APK path
-        const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-
-        // Check if APK exists
-        await fs.access(apkPath);
-
-        // Create download URL
-        const downloadUrl = `/download/android/${path.basename(apkPath)}`;
-
-        logApi("Android build completed", { downloadUrl });
-        res.json({ downloadUrl });
-      } catch (buildError: any) {
-        logApi("Build process failed", { 
-          error: buildError.message,
-          stdout: buildError.stdout,
-          stderr: buildError.stderr
-        });
-        throw new Error(`Build failed: ${buildError.message}\n${buildError.stderr || ''}`);
+        log('Dependencies installed', { stdout: installResult.stdout, stderr: installResult.stderr });
+      } catch (error: any) {
+        log('Dependencies installation failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
+        throw new Error(`Dependencies installation failed: ${error.stderr || error.message}`);
       }
+
+      try {
+        log('Adding Android platform');
+        const platformResult = await execAsync('npx cap add android', { cwd: buildDir });
+        log('Android platform added', { stdout: platformResult.stdout, stderr: platformResult.stderr });
+      } catch (error: any) {
+        log('Adding Android platform failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
+        throw new Error(`Adding Android platform failed: ${error.stderr || error.message}`);
+      }
+
+      try {
+        log('Generating keystore');
+        const keytoolCommand = `keytool -genkey -v -keystore release.keystore -alias ${options.keystore.alias} -keyalg RSA -keysize 2048 -validity 10000 -storepass ${options.keystore.password} -keypass ${options.keystore.keyPassword} -dname "CN=Android Debug,O=Android,C=US"`;
+        const keystoreResult = await execAsync(keytoolCommand, { cwd: buildDir });
+        log('Keystore generated', { stdout: keystoreResult.stdout, stderr: keystoreResult.stderr });
+      } catch (error: any) {
+        log('Keystore generation failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
+        throw new Error(`Keystore generation failed: ${error.stderr || error.message}`);
+      }
+
+      try {
+        log('Building release APK');
+        const buildResult = await execAsync('cd android && ./gradlew assembleRelease', { cwd: buildDir });
+        log('APK build completed', { stdout: buildResult.stdout, stderr: buildResult.stderr });
+      } catch (error: any) {
+        log('APK build failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
+        throw new Error(`APK build failed: ${error.stderr || error.message}`);
+      }
+
+      const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+      await fs.access(apkPath);
+      log('APK file verified at:', apkPath);
+
+      return {
+        apkPath,
+        logs: buildLogs,
+        downloadUrl: `/download/android/${path.basename(apkPath)}`
+      };
     } catch (error: any) {
-      logApi("Error in Android build", req.body, { error: error.message });
-      res.status(500).json({ 
-        error: "Build failed",
+      log('Build process failed', { error: error.message, logs: buildLogs });
+      throw {
         message: error.message,
-        details: "Please ensure the package name follows Android conventions (e.g., com.mygame.app)"
+        logs: buildLogs
+      };
+    }
+  }
+
+  app.post("/api/build/android", async (req, res) => {
+    try {
+      const { gameCode, appName, packageName, keystore } = req.body;
+
+      if (!gameCode || !appName || !packageName) {
+        throw new Error("Missing required build information");
+      }
+
+      const packageNameRegex = /^[a-z][az0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+    if (!packageNameRegex.test(packageName)) {
+      throw new Error(
+        "Invalid package name format. Package name must:\n" +
+        "- Start with a lowercase letter\n" +
+        "- Contain at least two segments (e.g., com.example)\n" +
+        "- Only use lowercase letters, numbers, and underscores\n" +
+        "- Each segment must start with a letter\n" +
+        "Example: com.mygame.app"
+      );
+    }
+
+    if (!keystore?.password || keystore.password.length < 6) {
+      throw new Error("Keystore password must be at least 6 characters");
+    }
+    if (!keystore?.alias) {
+      throw new Error("Key alias is required");
+    }
+    if (!keystore?.keyPassword || keystore.keyPassword.length < 6) {
+      throw new Error("Key password must be at least 6 characters");
+    }
+
+    const buildDir = path.join(process.cwd(), 'android-build');
+
+    try {
+      const result = await handleAndroidBuild(buildDir, {
+        gameCode,
+        appName,
+        packageName,
+        keystore
+      });
+
+      res.json({
+        downloadUrl: result.downloadUrl,
+        logs: result.logs
+      });
+    } catch (buildError: any) {
+      res.status(500).json({
+        error: "Build failed",
+        message: buildError.message,
+        logs: buildError.logs,
+        details: "Check the build logs for more information"
       });
     }
-  });
+  } catch (error: any) {
+    res.status(400).json({
+      error: "Invalid build configuration",
+      message: error.message
+    });
+  }
+});
 
-  app.get("/download/android/:filename", (req, res) => {
-    const { filename } = req.params;
-    const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'release', filename);
-    res.download(filePath);
-  });
+app.get("/download/android/:filename", (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'release', filename);
+  res.download(filePath);
+});
 
-  const httpServer = createServer(app);
-  return httpServer;
+const httpServer = createServer(app);
+return httpServer;
 }

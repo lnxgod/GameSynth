@@ -1,6 +1,6 @@
 {
-  "appId": "com.gamechangers.game1",
-  "appName": "My Game pizza",
+  "appId": "com.game.kaboom",
+  "appName": "kaboom2",
   "webDir": ".",
   "server": {
     "androidScheme": "https"
@@ -9,8 +9,8 @@
     "buildOptions": {
       "keystorePath": "release.keystore",
       "keystoreAlias": "release",
-      "keystorePassword": "password123",
-      "keyPassword": "password123"
+      "keystorePassword": "asdfasdf",
+      "keyPassword": "asdfasdf"
     }
   }
 }
