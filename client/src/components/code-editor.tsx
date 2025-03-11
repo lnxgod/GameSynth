@@ -235,14 +235,33 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     ));
   };
 
+  const extractGameErrors = () => {
+    const errorElements = document.querySelectorAll('.error-log');
+    let errors = [];
+
+    errorElements.forEach(el => {
+      const text = el.textContent || '';
+      if (text.includes('Error executing game code')) {
+        // Extract the specific game execution error
+        const matches = text.match(/Error executing game code:([^]*?)(?=\n|$)/);
+        if (matches) {
+          errors.push(matches[1].trim());
+        }
+      }
+    });
+
+    return errors.join('\n');
+  };
+
   const handleDebug = () => {
-    const errorLogs = document.querySelector('.error-log')?.textContent || '';
-    if (errorLogs) {
-      debugMutation.mutate(errorLogs);
+    const errors = extractGameErrors();
+    if (errors) {
+      debugMutation.mutate(errors);
+      addDebugLog?.("Analyzing game execution errors");
     } else {
       toast({
-        title: "No Errors Found",
-        description: "No error logs detected to analyze",
+        title: "No Game Errors Found",
+        description: "No game execution errors detected to analyze",
       });
     }
   };

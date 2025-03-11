@@ -555,31 +555,35 @@ When providing suggestions:
           {
             role: "system",
             content: `You are a game development debugging assistant specialized in HTML5 Canvas games.
-Your task is to:
-1. Analyze the provided error logs and code
-2. Identify the root cause of the errors
-3. Provide fixes while maintaining game functionality
-4. Always return the COMPLETE updated code between +++CODESTART+++ and +++CODESTOP+++ markers
-5. Explain the changes made in clear, simple terms
+Your task is to analyze and fix game execution errors in the code.
 
-Focus on common HTML5 Canvas game issues like:
-- Animation frame handling
-- Event listener cleanup
-- Canvas context methods
-- Game loop timing
-- Collision detection accuracy`
+When analyzing errors:
+1. Focus specifically on game execution errors
+2. Look for common issues like:
+   - Undefined variables or methods
+   - Canvas context state management
+   - Animation frame timing issues
+   - Event listener conflicts
+   - Game loop synchronization problems
+   - Collision detection edge cases
+
+Provide your response in this format:
+1. Brief explanation of the error
+2. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
+3. Summary of changes made
+4. Prevention tips for similar issues`
           },
           {
             role: "user",
-            content: `Please analyze and fix these errors in the game code:
+            content: `Fix these game execution errors:
 
-Error Logs:
+Game Error Log:
 ${logs}
 
-Current Code:
+Current Game Code:
 ${code}
 
-Please provide a complete fixed version of the code and explain what was wrong.`
+Please analyze the errors and provide a complete fixed version of the code.`
           }
         ],
         temperature: 0.7,
