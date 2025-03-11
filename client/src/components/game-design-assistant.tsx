@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2 } from "lucide-react";
+import { Loader2, Wand2, ListPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -124,6 +124,38 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     }
   });
 
+  const generateFeaturesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/design/generate-features', {
+        gameDesign: finalDesign,
+        currentFeatures: []
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (!data.features || !Array.isArray(data.features)) {
+        throw new Error("Invalid response format");
+      }
+
+      setFinalDesign(prev => ({
+        ...prev,
+        coreMechanics: [...(prev?.coreMechanics || []), ...data.features]
+      }));
+
+      toast({
+        title: "Features Generated",
+        description: `Added ${data.features.length} new features to the game design.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error Generating Features",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
   const generateMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/generate', {
@@ -160,6 +192,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     }
   });
 
+
   const handleAnswer = (value: string) => {
     const currentQuestion = questions[currentQuestionIndex];
     setRequirements(prev => ({
@@ -186,7 +219,6 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   };
 
   const handleNextFollowUp = () => {
-    // Only one round of follow-ups
     setShowFollowUp(false);
     finalizeMutation.mutate();
   };
@@ -274,7 +306,6 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
         <ScrollArea className="h-[200px] w-full rounded-md border p-4">
           <pre className="whitespace-pre-wrap font-mono text-sm">
             {`Creating HTML5 Canvas game with the following specifications:
-
 Game Description:
 ${finalDesign.gameDescription}
 
@@ -288,7 +319,7 @@ Implementation Approach:
 ${finalDesign.implementationApproach}
 
 Additional Specifications:
-${Object.entries(analyses).map(([aspect, analysis]) => 
+${Object.entries(analyses).map(([aspect, analysis]) =>
   `${aspect.toUpperCase()}:
   - Analysis: ${analysis?.analysis}
   - Implementation: ${analysis?.implementation_details.join(", ")}
@@ -444,11 +475,21 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={() => finalizeMutation.mutate()}
-                  disabled={finalizeMutation.isPending}
+                  onClick={() => generateFeaturesMutation.mutate()}
+                  disabled={generateFeaturesMutation.isPending}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
                 >
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Follow Up
+                  {generateFeaturesMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating Features...
+                    </>
+                  ) : (
+                    <>
+                      <ListPlus className="mr-2 h-4 w-4" />
+                      Generate Features List
+                    </>
+                  )}
                 </Button>
                 <Button
                   onClick={() => generateMutation.mutate()}
