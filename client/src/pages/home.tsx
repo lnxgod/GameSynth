@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChatInterface } from "@/components/chat-interface";
 import { GameCanvas } from "@/components/game-canvas";
 import { CodeEditor } from "@/components/code-editor";
@@ -21,6 +21,19 @@ export default function Home() {
     setGameCode(newCode);
     addDebugLog("Code updated in editor");
   };
+
+  // Listen for game design updates from project loading
+  useEffect(() => {
+    const handleGameDesignLoad = (e: CustomEvent<any>) => {
+      setGameDesign(e.detail);
+      addDebugLog("Loaded game design from saved project");
+    };
+
+    window.addEventListener('loadGameDesign', handleGameDesignLoad as EventListener);
+    return () => {
+      window.removeEventListener('loadGameDesign', handleGameDesignLoad as EventListener);
+    };
+  }, []);
 
   return (
     <div className="container mx-auto p-4 min-h-screen">
@@ -65,6 +78,7 @@ export default function Home() {
               code={gameCode}
               onCodeChange={handleCodeChange}
               addDebugLog={addDebugLog}
+              gameDesign={gameDesign}
             />
           </TabsContent>
 

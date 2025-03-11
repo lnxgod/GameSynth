@@ -3,18 +3,19 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2, CheckSquare } from "lucide-react";
+import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
 
-interface CodeEditorProps {
+interface ProjectState {
+  name: string;
   code: string;
-  onCodeChange: (code: string) => void;
-  addDebugLog?: (message: string) => void;
-  gameDesign?: any; // Add game design prop
+  gameDesign: any;
+  features: Feature[];
+  timestamp: string;
 }
 
 interface Feature {
@@ -23,9 +24,16 @@ interface Feature {
   completed: boolean;
 }
 
+interface CodeEditorProps {
+  code: string;
+  onCodeChange: (code: string) => void;
+  addDebugLog?: (message: string) => void;
+  gameDesign?: any;
+}
+
 export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: CodeEditorProps) {
   const [localCode, setLocalCode] = useState(code);
-  const [savedGames, setSavedGames] = useState<{ name: string; code: string }[]>([]);
+  const [savedProjects, setSavedProjects] = useState<ProjectState[]>([]);
   const [saveName, setSaveName] = useState("");
   const [showChat, setShowChat] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
@@ -54,11 +62,11 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     }
   }, [gameDesign]);
 
-  // Load saved games from localStorage on mount
+  // Load saved projects from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem("savedGames");
+    const saved = localStorage.getItem("savedProjects");
     if (saved) {
-      setSavedGames(JSON.parse(saved));
+      setSavedProjects(JSON.parse(saved));
     }
   }, []);
 
@@ -73,9 +81,75 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
   };
 
   const toggleFeature = (id: string) => {
-    setFeatures(prev => prev.map(feature => 
+    setFeatures(prev => prev.map(feature =>
       feature.id === id ? { ...feature, completed: !feature.completed } : feature
     ));
+  };
+
+  const handleSave = () => {
+    if (!saveName) {
+      toast({
+        title: "Error",
+        description: "Please enter a name for your project",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const projectState: ProjectState = {
+      name: saveName,
+      code: localCode,
+      gameDesign: gameDesign,
+      features: features,
+      timestamp: new Date().toISOString(),
+    };
+
+    const newSavedProjects = [...savedProjects, projectState];
+    setSavedProjects(newSavedProjects);
+    localStorage.setItem("savedProjects", JSON.stringify(newSavedProjects));
+
+    toast({
+      title: "Success",
+      description: `Project "${saveName}" saved successfully`,
+    });
+    setSaveName("");
+  };
+
+  const handleLoad = (project: ProjectState) => {
+    setLocalCode(project.code);
+    onCodeChange(project.code);
+    setFeatures(project.features);
+
+    // Emit event to update game design
+    const event = new CustomEvent('loadGameDesign', { detail: project.gameDesign });
+    window.dispatchEvent(event);
+
+    toast({
+      title: "Success",
+      description: "Project loaded successfully",
+    });
+  };
+
+  const handleReset = () => {
+    if (confirm("Are you sure you want to reset? This will clear the current code.")) {
+      setLocalCode("");
+      onCodeChange("");
+      toast({
+        title: "Reset",
+        description: "Code editor has been reset",
+      });
+    }
+  };
+
+  const handleClearSaved = () => {
+    if (confirm("Are you sure you want to clear all saved projects? This cannot be undone.")) {
+      localStorage.removeItem("savedProjects");
+      setSavedProjects([]);
+      toast({
+        title: "Cleared",
+        description: "All saved projects have been removed",
+      });
+    }
   };
 
   const chatMutation = useMutation({
@@ -83,7 +157,7 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
       const res = await apiRequest("POST", "/api/code/chat", {
         code: localCode,
         message,
-        features: features.filter(f => !f.completed).map(f => f.description)
+        gameDesign
       });
       return res.json();
     },
@@ -98,17 +172,6 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
           description: "The game code has been updated based on your request",
         });
       }
-    },
-    onError: (error) => {
-      setChatHistory(prev => [...prev, {
-        role: 'assistant',
-        content: "Error: Failed to process your request"
-      }]);
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
     }
   });
 
@@ -116,7 +179,7 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/code/remix", {
         code: localCode,
-        features: features.filter(f => !f.completed).map(f => f.description)
+        gameDesign
       });
       return res.json();
     },
@@ -149,176 +212,161 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
   };
 
   return (
-    <div className="space-y-4">
-      <Card className="p-4">
-        <div className="space-y-4">
-          <div className="flex gap-2 items-center">
-            <Input
-              placeholder="Enter game name to save"
-              value={saveName}
-              onChange={(e) => setSaveName(e.target.value)}
-              className="flex-1"
+    <Card className="p-4">
+      <div className="space-y-4">
+        <div className="flex gap-2 items-center">
+          <Input
+            placeholder="Enter project name to save"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            className="flex-1"
+          />
+          <Button onClick={handleSave} className="whitespace-nowrap">
+            <Save className="mr-2 h-4 w-4" />
+            Save Project
+          </Button>
+          <Button onClick={handleReset} variant="outline">
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button onClick={handleClearSaved} variant="destructive">
+            <Trash2 className="mr-2 h-4 w-4" />
+            Clear Saved
+          </Button>
+          <Button onClick={() => setShowChat(!showChat)} variant="outline">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            {showChat ? "Hide Chat" : "Show Chat"}
+          </Button>
+          <Button
+            onClick={() => remixMutation.mutate()}
+            variant="secondary"
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+            disabled={remixMutation.isPending}
+          >
+            {remixMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Wand2 className="mr-2 h-4 w-4" />
+                REMIX
+              </>
+            )}
+          </Button>
+        </div>
+
+        {savedProjects.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Saved Projects</h3>
+            <ScrollArea className="h-32 w-full rounded-md border">
+              <div className="p-4 space-y-2">
+                {savedProjects.map((project, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium">{project.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Saved on: {new Date(project.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handleLoad(project)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Load
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <textarea
+              value={localCode}
+              onChange={handleCodeChange}
+              className="w-full h-[600px] font-mono text-sm p-4 bg-background border rounded-md"
+              spellCheck="false"
             />
-            <Button onClick={handleSave} className="whitespace-nowrap">
-              <Save className="mr-2 h-4 w-4" />
-              Save Game
-            </Button>
-            <Button onClick={handleReset} variant="outline">
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Reset
-            </Button>
-            <Button onClick={handleClearSaved} variant="destructive">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Clear Saved
-            </Button>
-            <Button onClick={() => setShowChat(!showChat)} variant="outline">
-              <MessageSquare className="mr-2 h-4 w-4" />
-              {showChat ? "Hide Chat" : "Show Chat"}
-            </Button>
-            <Button
-              onClick={() => remixMutation.mutate()}
-              variant="secondary"
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-              disabled={remixMutation.isPending}
-            >
-              {remixMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  REMIX
-                </>
-              )}
-            </Button>
           </div>
 
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <textarea
-                value={localCode}
-                onChange={handleCodeChange}
-                className="w-full h-[600px] font-mono text-sm p-4 bg-background border rounded-md"
-                spellCheck="false"
-              />
-            </div>
-
-            <div className="w-96 space-y-4">
-              <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Feature Checklist</h3>
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium mb-2">Core Mechanics</h4>
-                      {features.filter(f => f.id.startsWith('mechanic-')).map(feature => (
-                        <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                          <Checkbox
-                            id={feature.id}
-                            checked={feature.completed}
-                            onCheckedChange={() => toggleFeature(feature.id)}
-                          />
-                          <label htmlFor={feature.id} className="text-sm">
-                            {feature.description}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                    <div>
-                      <h4 className="font-medium mb-2">Technical Requirements</h4>
-                      {features.filter(f => f.id.startsWith('tech-')).map(feature => (
-                        <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                          <Checkbox
-                            id={feature.id}
-                            checked={feature.completed}
-                            onCheckedChange={() => toggleFeature(feature.id)}
-                          />
-                          <label htmlFor={feature.id} className="text-sm">
-                            {feature.description}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </ScrollArea>
-              </Card>
-
-              {(showChat || showRemixSuggestions) && (
-                <Card className="p-4">
-                  <ScrollArea className="h-[250px]">
+          {(showChat || showRemixSuggestions) && (
+            <Card className="w-96 p-4">
+              <ScrollArea className="h-[600px]">
+                <div className="space-y-4">
+                  {showRemixSuggestions ? (
                     <div className="space-y-4">
-                      {showRemixSuggestions ? (
-                        <div className="space-y-4">
-                          <div className="font-semibold mb-4">
-                            Choose an improvement to implement:
-                          </div>
-                          {remixSuggestions.map((suggestion, index) => (
-                            <Button
-                              key={index}
-                              onClick={() => handleRemixSelection(suggestion)}
-                              variant="outline"
-                              className="w-full text-left justify-start h-auto whitespace-normal p-4"
-                            >
-                              {suggestion}
-                            </Button>
-                          ))}
-                        </div>
-                      ) : (
-                        chatHistory.map((msg, index) => (
+                      <div className="font-semibold mb-4">
+                        Choose an improvement to implement:
+                      </div>
+                      {remixSuggestions.map((suggestion, index) => (
+                        <Button
+                          key={index}
+                          onClick={() => handleRemixSelection(suggestion)}
+                          variant="outline"
+                          className="w-full text-left justify-start h-auto whitespace-normal p-4"
+                        >
+                          {suggestion}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      {chatHistory.map((msg, index) => (
+                        <div
+                          key={index}
+                          className={`flex ${
+                            msg.role === 'assistant' ? 'justify-start' : 'justify-end'
+                          }`}
+                        >
                           <div
-                            key={index}
-                            className={`flex ${
-                              msg.role === 'assistant' ? 'justify-start' : 'justify-end'
+                            className={`max-w-[80%] rounded-lg p-3 ${
+                              msg.role === 'assistant'
+                                ? 'bg-muted'
+                                : 'bg-primary text-primary-foreground'
                             }`}
                           >
-                            <div
-                              className={`max-w-[80%] rounded-lg p-3 ${
-                                msg.role === 'assistant'
-                                  ? 'bg-muted'
-                                  : 'bg-primary text-primary-foreground'
-                              }`}
-                            >
-                              <pre className="whitespace-pre-wrap text-sm">
-                                {msg.content}
-                              </pre>
-                            </div>
+                            <pre className="whitespace-pre-wrap text-sm">
+                              {msg.content}
+                            </pre>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
-
-                  {!showRemixSuggestions && (
-                    <form onSubmit={handleChatSubmit} className="mt-4 space-y-2">
-                      <Textarea
-                        placeholder="Ask about modifying or debugging your code..."
-                        value={chatMessage}
-                        onChange={(e) => setChatMessage(e.target.value)}
-                        className="min-h-[80px]"
-                      />
-                      <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={chatMutation.isPending}
-                      >
-                        {chatMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          "Send"
-                        )}
-                      </Button>
-                    </form>
+                        </div>
+                      ))}
+                      <form onSubmit={handleChatSubmit} className="mt-4 space-y-2">
+                        <Textarea
+                          placeholder="Ask about modifying or debugging your code..."
+                          value={chatMessage}
+                          onChange={(e) => setChatMessage(e.target.value)}
+                          className="min-h-[80px]"
+                        />
+                        <Button
+                          type="submit"
+                          className="w-full"
+                          disabled={chatMutation.isPending}
+                        >
+                          {chatMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            "Send"
+                          )}
+                        </Button>
+                      </form>
+                    </>
                   )}
-                </Card>
-              )}
-            </div>
-          </div>
+                </div>
+              </ScrollArea>
+            </Card>
+          )}
         </div>
-      </Card>
-    </div>
+      </div>
+    </Card>
   );
 }
