@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChatInterface } from "@/components/chat-interface";
 import { GameCanvas } from "@/components/game-canvas";
 import { CodeEditor } from "@/components/code-editor";
@@ -13,6 +13,7 @@ export default function Home() {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [gameDesign, setGameDesign] = useState<any>(null);
   const [features, setFeatures] = useState<string[]>([]);
+  const codeEditorRef = useRef<{ handleDebug: () => void } | null>(null);
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -21,6 +22,19 @@ export default function Home() {
   const handleCodeChange = (newCode: string) => {
     setGameCode(newCode);
     addDebugLog("Code updated in editor");
+  };
+
+  const handleDebugError = (error: string) => {
+    // Switch to the code editor tab
+    const codeEditorTab = document.querySelector('[data-tab="code"]');
+    if (codeEditorTab instanceof HTMLElement) {
+      codeEditorTab.click();
+    }
+
+    // Trigger the debug functionality
+    if (codeEditorRef.current) {
+      codeEditorRef.current.handleDebug();
+    }
   };
 
   // Listen for game design updates from project loading
@@ -65,7 +79,7 @@ export default function Home() {
         <Tabs defaultValue="preview" className="w-full">
           <TabsList className="w-full">
             <TabsTrigger value="preview" className="flex-1">Game Preview</TabsTrigger>
-            <TabsTrigger value="code" className="flex-1">Code Editor</TabsTrigger>
+            <TabsTrigger value="code" className="flex-1" data-tab="code">Code Editor</TabsTrigger>
             <TabsTrigger value="features" className="flex-1">Features</TabsTrigger>
             <TabsTrigger value="debug" className="flex-1">Debug Logs</TabsTrigger>
             <TabsTrigger value="api" className="flex-1">API Logs</TabsTrigger>
@@ -77,6 +91,7 @@ export default function Home() {
 
           <TabsContent value="code" className="mt-4">
             <CodeEditor
+              ref={codeEditorRef}
               code={gameCode}
               onCodeChange={handleCodeChange}
               addDebugLog={addDebugLog}
@@ -93,7 +108,10 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4">
-            <DebugLogs logs={debugLogs} />
+            <DebugLogs 
+              logs={debugLogs} 
+              onDebugError={handleDebugError}
+            />
           </TabsContent>
 
           <TabsContent value="api" className="mt-4">
