@@ -140,7 +140,6 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
     const debugMutation = useMutation({
       mutationFn: async (providedError?: string) => {
-        // If no error provided and no debug context, check console logs
         const errorMessage = providedError || debugContext || extractGameErrors();
         if (!errorMessage) {
           throw new Error("No error found in game execution");
@@ -148,10 +147,39 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
         addDebugLog?.("🔧 AI Debug: Analyzing game code...");
 
-        // Ensure we're sending a clean object without circular references
+        // Extract only the necessary error information
+        let cleanError;
+        try {
+          if (typeof errorMessage === 'string') {
+            cleanError = errorMessage;
+          } else if (errorMessage instanceof Error) {
+            cleanError = errorMessage.message;
+          } else if (typeof errorMessage === 'object') {
+            // Check if it's a DOM element
+            if (errorMessage instanceof Element) {
+              cleanError = "Error in DOM element interaction";
+            } else {
+              // Try to extract basic properties without circular references
+              const safeProperties = {
+                message: errorMessage.message || 'Unknown error',
+                type: errorMessage.constructor?.name || typeof errorMessage,
+                details: Object.getOwnPropertyNames(errorMessage)
+                  .filter(prop => typeof errorMessage[prop] !== 'object' && typeof errorMessage[prop] !== 'function')
+                  .reduce((acc, prop) => ({ ...acc, [prop]: errorMessage[prop] }), {})
+              };
+              cleanError = JSON.stringify(safeProperties);
+            }
+          } else {
+            cleanError = String(errorMessage);
+          }
+        } catch (err) {
+          console.error("Error processing debug information:", err);
+          cleanError = "Error processing debug information";
+        }
+
         const cleanPayload = {
           code: localCode,
-          error: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)
+          error: cleanError
         };
 
         const res = await apiRequest("POST", "/api/code/debug", cleanPayload);
@@ -171,11 +199,12 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         }
       },
       onError: (error: any) => {
-        addDebugLog?.("❌ AI Debug: Failed - " + error.message);
+        const errorMessage = error?.message || "Failed to process debug information";
+        addDebugLog?.("❌ AI Debug: Failed - " + errorMessage);
 
         toast({
           title: "Debug Assistant",
-          description: error.message,
+          description: errorMessage,
           variant: "destructive",
         });
       }
