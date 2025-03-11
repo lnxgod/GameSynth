@@ -69,13 +69,6 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistP
         title: "Features Generated",
         description: `Added ${newFeatures.length} new features to the checklist.`,
       });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error Generating Features",
-        description: error.message,
-        variant: "destructive",
-      });
     }
   });
 
@@ -154,7 +147,7 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistP
             ) : (
               <>
                 <ListPlus className="mr-2 h-4 w-4" />
-                Generate More Features
+                Generate Features List
               </>
             )}
           </Button>

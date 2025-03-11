@@ -11,6 +11,8 @@ import { apiRequest } from "@/lib/queryClient";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
+  onDesignGenerated: (design: any) => void;
+  onFeaturesGenerated: (features: string[]) => void; // Added prop for features
 }
 
 interface GameRequirements {
@@ -60,7 +62,7 @@ const questions = [
   }
 ];
 
-export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProps) {
+export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeaturesGenerated }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [requirements, setRequirements] = useState<GameRequirements>({
@@ -78,6 +80,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
   const [currentFollowUpIndex, setCurrentFollowUpIndex] = useState<number>(-1);
   const [showFollowUp, setShowFollowUp] = useState(false);
+  const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]); //New state for features
   const { toast } = useToast();
 
   const analyzeMutation = useMutation({
@@ -128,7 +131,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/generate-features', {
         gameDesign: finalDesign,
-        currentFeatures: []
+        currentFeatures: generatedFeatures // Pass existing features
       });
       return res.json();
     },
@@ -137,10 +140,8 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
         throw new Error("Invalid response format");
       }
 
-      setFinalDesign(prev => ({
-        ...prev,
-        coreMechanics: [...(prev?.coreMechanics || []), ...data.features]
-      }));
+      setGeneratedFeatures([...generatedFeatures, ...data.features]); // Update generatedFeatures state
+      onFeaturesGenerated([...generatedFeatures, ...data.features]); // Pass to parent component
 
       toast({
         title: "Features Generated",
@@ -182,6 +183,7 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
           description: "Game code has been generated!",
         });
       }
+      onDesignGenerated(data); // Pass design to parent
     },
     onError: (error) => {
       toast({
@@ -191,7 +193,6 @@ export function GameDesignAssistant({ onCodeGenerated }: GameDesignAssistantProp
       });
     }
   });
-
 
   const handleAnswer = (value: string) => {
     const currentQuestion = questions[currentQuestionIndex];
