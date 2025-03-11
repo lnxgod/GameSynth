@@ -31,12 +31,12 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistP
     if (gameDesign) {
       const newFeatures: Feature[] = [
         ...gameDesign.coreMechanics.map((mechanic: string) => ({
-          id: `mechanic-${mechanic}`,
+          id: `mechanic-${uuidv4()}`,
           description: mechanic,
           completed: false
         })),
         ...gameDesign.technicalRequirements.map((req: string) => ({
-          id: `tech-${req}`,
+          id: `tech-${uuidv4()}`,
           description: req,
           completed: false
         }))
@@ -54,15 +54,27 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistP
       return res.json();
     },
     onSuccess: (data) => {
+      if (!data.features || !Array.isArray(data.features)) {
+        throw new Error("Invalid response format");
+      }
+
       const newFeatures = data.features.map((feature: string) => ({
         id: `generated-${uuidv4()}`,
         description: feature,
         completed: false
       }));
+
       setFeatures(prev => [...prev, ...newFeatures]);
       toast({
         title: "Features Generated",
-        description: "New features have been added to the checklist.",
+        description: `Added ${newFeatures.length} new features to the checklist.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error Generating Features",
+        description: error.message,
+        variant: "destructive",
       });
     }
   });

@@ -229,27 +229,36 @@ export async function registerRoutes(app: Express) {
     try {
       const { gameDesign, currentFeatures } = req.body;
 
+      if (!gameDesign) {
+        throw new Error("Game design is required");
+      }
+
+      logApi("Generating features request", { gameDesign, currentFeatures });
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
             content: `You are a game design assistant helping to break down game features into implementation tasks.
-Analyze the game design and suggest additional features that would enhance the game.
+Analyze the game design and suggest specific, implementable features that would enhance the game.
+Focus on concrete features that can be implemented with HTML5 Canvas and JavaScript.
 Format your response as JSON with this structure:
 {
   "features": [
-    "Detailed description of feature 1",
-    "Detailed description of feature 2",
+    "Feature 1: Detailed description",
+    "Feature 2: Detailed description",
+    "Feature 3: Detailed description",
     ...
   ]
 }`
           },
           {
             role: "user",
-            content: `Based on this game design, suggest additional features to implement:
+            content: `Based on this game design, suggest specific features to implement:
 
-Game Description: ${gameDesign.gameDescription}
+Game Description:
+${gameDesign.gameDescription}
 
 Core Mechanics:
 ${gameDesign.coreMechanics.join("\n")}
@@ -261,9 +270,11 @@ Implementation Approach:
 ${gameDesign.implementationApproach}
 
 Current Features:
-${currentFeatures.map(f => f.description).join("\n")}
+${currentFeatures ? currentFeatures.map((f: any) => f.description).join("\n") : "No features yet"}
 
-Please suggest new features that would enhance this game design.`
+Please suggest new concrete, implementable features that would enhance this game design.
+Focus on features that can be implemented using HTML5 Canvas and JavaScript.
+Each feature should be specific and actionable.`
           }
         ],
         response_format: { type: "json_object" },
