@@ -6,6 +6,7 @@ import { DebugLogs } from "@/components/debug-logs";
 import { ApiLogs } from "@/components/api-logs";
 import { GameDesignAssistant } from "@/components/game-design-assistant";
 import { FeatureChecklist } from "@/components/feature-checklist";
+import { AIStatusIndicator } from "@/components/ai-status-indicator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Home() {
@@ -14,6 +15,11 @@ export default function Home() {
   const [gameDesign, setGameDesign] = useState<any>(null);
   const [features, setFeatures] = useState<string[]>([]);
   const [debugContext, setDebugContext] = useState<string>("");
+  const [aiOperation, setAiOperation] = useState<{type: string; active: boolean}>({
+    type: '',
+    active: false
+  });
+
   const codeEditorRef = useRef<{ handleDebug: (errorMessage?: string) => void } | null>(null);
 
   const addDebugLog = (log: string) => {
@@ -26,16 +32,14 @@ export default function Home() {
   };
 
   const handleDebugError = (error: string) => {
-    // Update debug context when an error is encountered
     setDebugContext(error);
+    setAiOperation({ type: 'Analyzing Error...', active: true });
 
-    // Switch to the code editor tab
     const codeEditorTab = document.querySelector('[data-tab="code"]');
     if (codeEditorTab instanceof HTMLElement) {
       codeEditorTab.click();
     }
 
-    // Trigger the debug functionality with the error message
     if (codeEditorRef.current) {
       codeEditorRef.current.handleDebug(error);
     }
@@ -73,11 +77,15 @@ export default function Home() {
               onDesignGenerated={setGameDesign}
               onFeaturesGenerated={setFeatures}
               debugContext={debugContext}
+              onAiOperation={setAiOperation}
             />
           </TabsContent>
 
           <TabsContent value="direct" className="mt-4">
-            <ChatInterface onCodeReceived={setGameCode} />
+            <ChatInterface 
+              onCodeReceived={setGameCode}
+              onAiOperation={setAiOperation}
+            />
           </TabsContent>
         </Tabs>
 
@@ -102,6 +110,7 @@ export default function Home() {
               addDebugLog={addDebugLog}
               gameDesign={gameDesign}
               debugContext={debugContext}
+              onAiOperation={setAiOperation}
             />
           </TabsContent>
 
@@ -110,6 +119,7 @@ export default function Home() {
               gameDesign={gameDesign}
               onCodeUpdate={handleCodeChange}
               initialFeatures={features}
+              onAiOperation={setAiOperation}
             />
           </TabsContent>
 
@@ -125,6 +135,11 @@ export default function Home() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AIStatusIndicator 
+        operation={aiOperation.type}
+        visible={aiOperation.active}
+      />
     </div>
   );
 }

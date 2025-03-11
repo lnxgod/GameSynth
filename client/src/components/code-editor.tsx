@@ -30,10 +30,11 @@ interface CodeEditorProps {
   addDebugLog?: (message: string) => void;
   gameDesign?: any;
   debugContext?: string;
+  onAiOperation?: (op: {type: string; active: boolean}) => void;
 }
 
 export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => void }, CodeEditorProps>(
-  ({ code, onCodeChange, addDebugLog, gameDesign, debugContext }, ref) => {
+  ({ code, onCodeChange, addDebugLog, gameDesign, debugContext, onAiOperation }, ref) => {
     const [localCode, setLocalCode] = useState(code);
     const [savedProjects, setSavedProjects] = useState<ProjectState[]>([]);
     const [saveName, setSaveName] = useState("");
@@ -81,11 +82,12 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
     const chatMutation = useMutation({
       mutationFn: async (message: string) => {
+        onAiOperation?.({type: 'Generating Code...', active: true});
         const res = await apiRequest("POST", "/api/code/chat", {
           code: localCode,
           message,
           gameDesign,
-          debugContext // Include debug context in the chat API request
+          debugContext
         });
         return res.json();
       },
@@ -100,6 +102,15 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
             description: "The game code has been updated based on your request",
           });
         }
+        onAiOperation?.({type: '', active: false});
+      },
+      onError: (error) => {
+        onAiOperation?.({type: '', active: false});
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
       }
     });
 
@@ -140,6 +151,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
     const debugMutation = useMutation({
       mutationFn: async (providedError?: string) => {
+        onAiOperation?.({type: 'Debugging...', active: true});
         const errorMessage = providedError || debugContext || extractGameErrors();
         if (!errorMessage) {
           throw new Error("No error found in game execution");
@@ -147,7 +159,6 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
         addDebugLog?.("🔧 AI Debug: Analyzing game code...");
 
-        // Extract only the necessary error information
         let cleanError;
         try {
           if (typeof errorMessage === 'string') {
@@ -155,11 +166,9 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
           } else if (errorMessage instanceof Error) {
             cleanError = errorMessage.message;
           } else if (typeof errorMessage === 'object') {
-            // Check if it's a DOM element
             if (errorMessage instanceof Element) {
               cleanError = "Error in DOM element interaction";
             } else {
-              // Try to extract basic properties without circular references
               const safeProperties = {
                 message: errorMessage.message || 'Unknown error',
                 type: errorMessage.constructor?.name || typeof errorMessage,
@@ -189,19 +198,18 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         if (data.updatedCode) {
           setLocalCode(data.updatedCode);
           onCodeChange(data.updatedCode);
-
           addDebugLog?.("✅ AI Debug: Fixed - " + data.message);
-
           toast({
             title: "Debug Fixes Applied",
             description: data.message || "Your code has been updated to fix the detected issues",
           });
         }
+        onAiOperation?.({type: '', active: false});
       },
       onError: (error: any) => {
         const errorMessage = error?.message || "Failed to process debug information";
         addDebugLog?.("❌ AI Debug: Failed - " + errorMessage);
-
+        onAiOperation?.({type: '', active: false});
         toast({
           title: "Debug Assistant",
           description: errorMessage,
@@ -303,7 +311,6 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         addDebugLog?.("🔍 AI Debug: Analyzing code...");
         debugMutation.mutate(errorMessage);
       } else {
-        // If no debug context or error message, try to find errors in console
         debugMutation.mutate();
       }
     };
