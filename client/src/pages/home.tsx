@@ -5,6 +5,7 @@ import { CodeEditor } from "@/components/code-editor";
 import { DebugLogs } from "@/components/debug-logs";
 import { ApiLogs } from "@/components/api-logs";
 import { GameDesignAssistant } from "@/components/game-design-assistant";
+import { FeatureChecklist } from "@/components/feature-checklist";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Home() {
@@ -50,6 +51,7 @@ export default function Home() {
           <TabsList className="w-full">
             <TabsTrigger value="preview" className="flex-1">Game Preview</TabsTrigger>
             <TabsTrigger value="code" className="flex-1">Code Editor</TabsTrigger>
+            <TabsTrigger value="features" className="flex-1">Features</TabsTrigger>
             <TabsTrigger value="debug" className="flex-1">Debug Logs</TabsTrigger>
             <TabsTrigger value="api" className="flex-1">API Logs</TabsTrigger>
           </TabsList>
@@ -63,8 +65,11 @@ export default function Home() {
               code={gameCode}
               onCodeChange={handleCodeChange}
               addDebugLog={addDebugLog}
-              gameDesign={gameDesign}
             />
+          </TabsContent>
+
+          <TabsContent value="features" className="mt-4">
+            <FeatureChecklist gameDesign={gameDesign} />
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4">
