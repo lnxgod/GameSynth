@@ -4,15 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2, ListPlus } from "lucide-react";
+import { Loader2, Wand2, ListPlus, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Slider } from "@/components/ui/slider";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
   onDesignGenerated: (design: any) => void;
-  onFeaturesGenerated: (features: string[]) => void; // Added prop for features
+  onFeaturesGenerated: (features: string[]) => void;
 }
 
 interface GameRequirements {
@@ -80,8 +86,13 @@ export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeat
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
   const [currentFollowUpIndex, setCurrentFollowUpIndex] = useState<number>(-1);
   const [showFollowUp, setShowFollowUp] = useState(false);
-  const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]); //New state for features
+  const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const { toast } = useToast();
+
+  const [showAISettings, setShowAISettings] = useState(false);
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(8000);
+
 
   const analyzeMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
@@ -131,7 +142,7 @@ export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeat
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/generate-features', {
         gameDesign: finalDesign,
-        currentFeatures: generatedFeatures // Pass existing features
+        currentFeatures: generatedFeatures
       });
       return res.json();
     },
@@ -140,8 +151,8 @@ export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeat
         throw new Error("Invalid response format");
       }
 
-      setGeneratedFeatures([...generatedFeatures, ...data.features]); // Update generatedFeatures state
-      onFeaturesGenerated([...generatedFeatures, ...data.features]); // Pass to parent component
+      setGeneratedFeatures([...generatedFeatures, ...data.features]);
+      onFeaturesGenerated([...generatedFeatures, ...data.features]);
 
       toast({
         title: "Features Generated",
@@ -171,7 +182,11 @@ export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeat
               technical_considerations: value?.technical_considerations
             }
           ])
-        )
+        ),
+        settings: {
+          temperature,
+          maxTokens
+        }
       });
       return res.json();
     },
@@ -183,7 +198,7 @@ export function GameDesignAssistant({ onCodeGenerated, onDesignGenerated, onFeat
           description: "Game code has been generated!",
         });
       }
-      onDesignGenerated(data); // Pass design to parent
+      onDesignGenerated(data);
     },
     onError: (error) => {
       toast({
@@ -452,6 +467,52 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
           ) : (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Final Review</h3>
+
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" className="w-full">
+                    <Settings2 className="mr-2 h-4 w-4" />
+                    Debug Settings
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">Temperature: {temperature}</label>
+                      <div className="w-64">
+                        <Slider
+                          value={[temperature]}
+                          onValueChange={([value]) => setTemperature(value)}
+                          max={1}
+                          step={0.1}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Lower values make the output more focused and deterministic
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">Max Tokens: {maxTokens}</label>
+                      <div className="w-64">
+                        <Slider
+                          value={[maxTokens]}
+                          onValueChange={([value]) => setMaxTokens(value)}
+                          max={16000}
+                          step={1000}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Controls the maximum length of generated code
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="flex justify-between mt-4 space-x-4">
                 <Button variant="outline" onClick={handleBack}>

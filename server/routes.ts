@@ -294,14 +294,14 @@ Each feature should be specific and actionable.`
 
   app.post("/api/design/generate", async (req, res) => {
     try {
-      const { sessionId, followUpAnswers, analyses } = req.body;
+      const { sessionId, followUpAnswers, analyses, settings } = req.body;
       const history = designConversations.get(sessionId);
 
       if (!history) {
         throw new Error("No design conversation found");
       }
 
-      logApi("Game generation request", { sessionId });
+      logApi("Game generation request", { sessionId, settings });
 
       // Add follow-up answers to the conversation history
       if (followUpAnswers) {
@@ -323,6 +323,9 @@ Each feature should be specific and actionable.`
         });
       }
 
+      // Use provided settings or defaults
+      const temperature = settings?.temperature ?? 0.7;
+      const maxTokens = settings?.maxTokens ?? 16000;
 
       // Compile the conversation into a detailed game specification
       const response = await openai.chat.completions.create({
@@ -339,8 +342,8 @@ Each feature should be specific and actionable.`
             }`
           }
         ],
-        temperature: 0.7,
-        max_tokens: 16000
+        temperature,
+        max_tokens: maxTokens
       });
 
       const content = response.choices[0].message.content || "";
@@ -351,7 +354,7 @@ Each feature should be specific and actionable.`
         response: content
       };
 
-      logApi("Game code generated", { sessionId }, result);
+      logApi("Game code generated", { sessionId, settings }, result);
       res.json(result);
     } catch (error: any) {
       logApi("Error generating game", req.body, { error: error.message });
