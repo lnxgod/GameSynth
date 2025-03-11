@@ -45,14 +45,14 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
 
   // Initialize features from game design
   useEffect(() => {
-    if (gameDesign) {
+    if (gameDesign && gameDesign.coreMechanics && gameDesign.technicalRequirements) {
       const newFeatures: Feature[] = [
-        ...gameDesign.coreMechanics.map((mechanic: string) => ({
+        ...(gameDesign.coreMechanics || []).map((mechanic: string) => ({
           id: `mechanic-${mechanic}`,
           description: mechanic,
           completed: false
         })),
-        ...gameDesign.technicalRequirements.map((req: string) => ({
+        ...(gameDesign.technicalRequirements || []).map((req: string) => ({
           id: `tech-${req}`,
           description: req,
           completed: false
@@ -78,78 +78,6 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
   const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setLocalCode(e.target.value);
     onCodeChange(e.target.value);
-  };
-
-  const toggleFeature = (id: string) => {
-    setFeatures(prev => prev.map(feature =>
-      feature.id === id ? { ...feature, completed: !feature.completed } : feature
-    ));
-  };
-
-  const handleSave = () => {
-    if (!saveName) {
-      toast({
-        title: "Error",
-        description: "Please enter a name for your project",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const projectState: ProjectState = {
-      name: saveName,
-      code: localCode,
-      gameDesign: gameDesign,
-      features: features,
-      timestamp: new Date().toISOString(),
-    };
-
-    const newSavedProjects = [...savedProjects, projectState];
-    setSavedProjects(newSavedProjects);
-    localStorage.setItem("savedProjects", JSON.stringify(newSavedProjects));
-
-    toast({
-      title: "Success",
-      description: `Project "${saveName}" saved successfully`,
-    });
-    setSaveName("");
-  };
-
-  const handleLoad = (project: ProjectState) => {
-    setLocalCode(project.code);
-    onCodeChange(project.code);
-    setFeatures(project.features);
-
-    // Emit event to update game design
-    const event = new CustomEvent('loadGameDesign', { detail: project.gameDesign });
-    window.dispatchEvent(event);
-
-    toast({
-      title: "Success",
-      description: "Project loaded successfully",
-    });
-  };
-
-  const handleReset = () => {
-    if (confirm("Are you sure you want to reset? This will clear the current code.")) {
-      setLocalCode("");
-      onCodeChange("");
-      toast({
-        title: "Reset",
-        description: "Code editor has been reset",
-      });
-    }
-  };
-
-  const handleClearSaved = () => {
-    if (confirm("Are you sure you want to clear all saved projects? This cannot be undone.")) {
-      localStorage.removeItem("savedProjects");
-      setSavedProjects([]);
-      toast({
-        title: "Cleared",
-        description: "All saved projects have been removed",
-      });
-    }
   };
 
   const chatMutation = useMutation({
@@ -179,12 +107,12 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/code/remix", {
         code: localCode,
-        gameDesign
+        features: features.map(f => f.description)
       });
       return res.json();
     },
     onSuccess: (data) => {
-      setRemixSuggestions(data.questions);
+      setRemixSuggestions(data.questions || []);
       setShowRemixSuggestions(true);
       toast({
         title: "Ready to Remix",
@@ -209,6 +137,76 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
       title: "Implementing Improvement",
       description: "Updating game code with selected enhancement...",
     });
+  };
+
+  const handleSave = () => {
+    if (!saveName) {
+      toast({
+        title: "Error",
+        description: "Please enter a name for your project",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const projectState: ProjectState = {
+      name: saveName,
+      code: localCode,
+      gameDesign: gameDesign || {},
+      features: features,
+      timestamp: new Date().toISOString(),
+    };
+
+    const newSavedProjects = [...savedProjects, projectState];
+    setSavedProjects(newSavedProjects);
+    localStorage.setItem("savedProjects", JSON.stringify(newSavedProjects));
+
+    toast({
+      title: "Success",
+      description: `Project "${saveName}" saved successfully`,
+    });
+    setSaveName("");
+  };
+
+  const handleLoad = (project: ProjectState) => {
+    setLocalCode(project.code);
+    onCodeChange(project.code);
+    if (project.features) {
+      setFeatures(project.features);
+    }
+
+    toast({
+      title: "Success",
+      description: "Project loaded successfully",
+    });
+  };
+
+  const handleReset = () => {
+    if (confirm("Are you sure you want to reset? This will clear the current code.")) {
+      setLocalCode("");
+      onCodeChange("");
+      toast({
+        title: "Reset",
+        description: "Code editor has been reset",
+      });
+    }
+  };
+
+  const handleClearSaved = () => {
+    if (confirm("Are you sure you want to clear all saved projects? This cannot be undone.")) {
+      localStorage.removeItem("savedProjects");
+      setSavedProjects([]);
+      toast({
+        title: "Cleared",
+        description: "All saved projects have been removed",
+      });
+    }
+  };
+
+  const toggleFeature = (id: string) => {
+    setFeatures(prev => prev.map(feature =>
+      feature.id === id ? { ...feature, completed: !feature.completed } : feature
+    ));
   };
 
   return (
