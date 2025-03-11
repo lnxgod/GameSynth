@@ -140,7 +140,8 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
     const debugMutation = useMutation({
       mutationFn: async (providedError?: string) => {
-        const errorMessage = providedError || extractGameErrors();
+        // If no error provided and no debug context, check console logs
+        const errorMessage = providedError || debugContext || extractGameErrors();
         if (!errorMessage) {
           throw new Error("No error found in game execution");
         }
@@ -266,25 +267,12 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
     };
 
     const handleDebug = (errorMessage?: string) => {
-      if (errorMessage) {
-        // Open chat window if not already open
-        setShowChat(true);
-
-        // Create a comprehensive debug message including context
-        const debugMessage = debugContext
-          ? `Please help fix this error in my game code:\n${errorMessage}\n\nAdditional Debug Context:\n${debugContext}`
-          : `Please help fix this error in my game code:\n${errorMessage}`;
-
-        // Add error to chat history as user message
-        setChatHistory(prev => [...prev, {
-          role: 'user',
-          content: debugMessage
-        }]);
-
-        // Automatically trigger chat mutation
-        chatMutation.mutate(debugMessage);
-
-        addDebugLog?.("💬 Error sent to AI chat assistant for analysis");
+      if (debugContext || errorMessage) {
+        addDebugLog?.("🔍 AI Debug: Analyzing code...");
+        debugMutation.mutate(errorMessage);
+      } else {
+        // If no debug context or error message, try to find errors in console
+        debugMutation.mutate();
       }
     };
 

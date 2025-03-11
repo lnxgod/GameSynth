@@ -572,6 +572,7 @@ Remember:
 - Focus on common game issues (collisions, animations, input handling)
 - Explain in non-technical terms
 - Always include the full working code
+- Analyze both the error and any additional debug context
 
 Format your response as:
 1. 🎮 What went wrong? (simple explanation)
@@ -621,7 +622,6 @@ Please help fix this issue!`
       });
     }
   });
-
 
   app.post("/api/features", async (req, res) => {
     try {
