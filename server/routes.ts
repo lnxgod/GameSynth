@@ -225,6 +225,61 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  app.post("/api/design/generate-features", async (req, res) => {
+    try {
+      const { gameDesign, currentFeatures } = req.body;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a game design assistant helping to break down game features into implementation tasks.
+Analyze the game design and suggest additional features that would enhance the game.
+Format your response as JSON with this structure:
+{
+  "features": [
+    "Detailed description of feature 1",
+    "Detailed description of feature 2",
+    ...
+  ]
+}`
+          },
+          {
+            role: "user",
+            content: `Based on this game design, suggest additional features to implement:
+
+Game Description: ${gameDesign.gameDescription}
+
+Core Mechanics:
+${gameDesign.coreMechanics.join("\n")}
+
+Technical Requirements:
+${gameDesign.technicalRequirements.join("\n")}
+
+Implementation Approach:
+${gameDesign.implementationApproach}
+
+Current Features:
+${currentFeatures.map(f => f.description).join("\n")}
+
+Please suggest new features that would enhance this game design.`
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7
+      });
+
+      const suggestions = JSON.parse(response.choices[0].message.content || "{}");
+
+      logApi("Feature suggestions generated", { gameDesign }, suggestions);
+      res.json(suggestions);
+    } catch (error: any) {
+      logApi("Error generating feature suggestions", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/design/generate", async (req, res) => {
     try {
       const { sessionId, followUpAnswers, analyses } = req.body;
