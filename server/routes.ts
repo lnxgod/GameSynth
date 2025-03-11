@@ -542,7 +542,67 @@ When providing suggestions:
     }
   });
 
-  // Add these routes after the existing game routes
+  // Added debug endpoint here
+  app.post("/api/code/debug", async (req, res) => {
+    try {
+      const { code, logs } = req.body;
+
+      logApi("Debug request received", { logs });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a game development debugging assistant specialized in HTML5 Canvas games.
+Your task is to:
+1. Analyze the provided error logs and code
+2. Identify the root cause of the errors
+3. Provide fixes while maintaining game functionality
+4. Always return the COMPLETE updated code between +++CODESTART+++ and +++CODESTOP+++ markers
+5. Explain the changes made in clear, simple terms
+
+Focus on common HTML5 Canvas game issues like:
+- Animation frame handling
+- Event listener cleanup
+- Canvas context methods
+- Game loop timing
+- Collision detection accuracy`
+          },
+          {
+            role: "user",
+            content: `Please analyze and fix these errors in the game code:
+
+Error Logs:
+${logs}
+
+Current Code:
+${code}
+
+Please provide a complete fixed version of the code and explain what was wrong.`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 16000
+      });
+
+      const content = response.choices[0].message.content || "";
+      const updatedCode = extractGameCode(content);
+
+      const result = {
+        message: content.replace(/\+\+\+CODESTART\+\+\+[\s\S]*\+\+\+CODESTOP\+\+\+/, '').trim(),
+        updatedCode
+      };
+
+      logApi("Debug fixes generated", { logs }, result);
+      res.json(result);
+    } catch (error: any) {
+      logApi("Error in debug", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+
   app.post("/api/features", async (req, res) => {
     try {
       const feature = insertFeatureSchema.parse(req.body);
@@ -619,6 +679,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       res.status(500).json({ error: error.message });
     }
   });
+
 
 
   const httpServer = createServer(app);

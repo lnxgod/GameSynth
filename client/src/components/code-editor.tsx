@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2 } from "lucide-react";
+import { Save, Download, Trash2, RotateCcw, MessageSquare, Loader2, Wand2, Bug } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
@@ -43,7 +43,6 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
   const [features, setFeatures] = useState<Feature[]>([]);
   const { toast } = useToast();
 
-  // Initialize features from game design
   useEffect(() => {
     if (gameDesign && gameDesign.coreMechanics && gameDesign.technicalRequirements) {
       const newFeatures: Feature[] = [
@@ -62,7 +61,6 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     }
   }, [gameDesign]);
 
-  // Load saved projects from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem("savedProjects");
     if (saved) {
@@ -70,7 +68,6 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     }
   }, []);
 
-  // Update local code when prop changes
   useEffect(() => {
     setLocalCode(code);
   }, [code]);
@@ -117,6 +114,35 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
       toast({
         title: "Ready to Remix",
         description: "Choose an improvement to implement!",
+      });
+    }
+  });
+
+  const debugMutation = useMutation({
+    mutationFn: async (logs: string) => {
+      const res = await apiRequest("POST", "/api/code/debug", {
+        code: localCode,
+        logs,
+        gameDesign
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.updatedCode) {
+        setLocalCode(data.updatedCode);
+        onCodeChange(data.updatedCode);
+        addDebugLog?.("Code updated based on error analysis");
+        toast({
+          title: "Debug Fix Applied",
+          description: data.message || "Code has been updated to fix the detected issues",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Debug Error",
+        description: error.message,
+        variant: "destructive",
       });
     }
   });
@@ -209,6 +235,18 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
     ));
   };
 
+  const handleDebug = () => {
+    const errorLogs = document.querySelector('.error-log')?.textContent || '';
+    if (errorLogs) {
+      debugMutation.mutate(errorLogs);
+    } else {
+      toast({
+        title: "No Errors Found",
+        description: "No error logs detected to analyze",
+      });
+    }
+  };
+
   return (
     <Card className="p-4">
       <div className="space-y-4">
@@ -250,6 +288,24 @@ export function CodeEditor({ code, onCodeChange, addDebugLog, gameDesign }: Code
               <>
                 <Wand2 className="mr-2 h-4 w-4" />
                 REMIX
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleDebug}
+            variant="outline"
+            className="bg-yellow-100 hover:bg-yellow-200 border-yellow-500"
+            disabled={debugMutation.isPending}
+          >
+            {debugMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Fixing...
+              </>
+            ) : (
+              <>
+                <Bug className="mr-2 h-4 w-4" />
+                Auto Debug
               </>
             )}
           </Button>
