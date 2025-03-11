@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>My Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size to match viewport
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Game state variables
+let gameRunning = true;
+let score = 0;
+let lives = 3;
+const bucketWidth = 60;
+const bucketHeight = 20;
+const bombRadius = 8; // Increased bomb radius for better visibility
+const bombSpeedIncrement = 0.1;
+const startingBombSpeed = 2;
+const bombDropInterval = 1500; // Increased interval to slow down bomb dropping
+
+// Bucket position
+const bucket = {
+    x: canvas.width / 2 - bucketWidth / 2,
+    y: canvas.height - bucketHeight - 10,
+    width: bucketWidth,
+    height: bucketHeight
+};
+
+// Bomber position and bombs array
+const bomber = {
+    x: 0,
+    y: 30,
+    direction: 2
+};
+const bombs = [];
+let bombSpeed = startingBombSpeed;
+
+// Timer for dropping bombs
+let lastBombDropTime = 0;
+
+// Handle mouse movement
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    bucket.x = e.clientX - rect.left - bucket.width / 2;
+});
+
+// Create a bomb
+function dropBomb() {
+    bombs.push({ x: bomber.x + 20, y: bomber.y + 10 }); // Adjusted bomb starting position
+}
+
+// Update game state
+function update(timestamp) {
+    // Move bomber
+    bomber.x += bomber.direction;
+    if (bomber.x <= 0 || bomber.x >= canvas.width - 40) {
+        bomber.direction *= -1; // Change direction
+    }
+
+    // Drop bombs at regular intervals
+    if (timestamp - lastBombDropTime > bombDropInterval) {
+        dropBomb();
+        lastBombDropTime = timestamp;
+    }
+
+    // Move bombs
+    for (let i = 0; i < bombs.length; i++) {
+        const bomb = bombs[i];
+        bomb.y += bombSpeed;
+        // Check for collision with the bucket
+        if (bomb.y > bucket.y && bomb.y < bucket.y + bucket.height && bomb.x > bucket.x && bomb.x < bucket.x + bucket.width) {
+            bombs.splice(i, 1); // Remove bomb
+            score += 10; // Increase score
+            bombSpeed += bombSpeedIncrement; // Increase bomb speed
+            i--;
+        }
+        // If bomb hits the bottom of the screen
+        else if (bomb.y > canvas.height) {
+            bombs.splice(i, 1); // Remove bomb
+            lives--;
+            i--;
+            if (lives <= 0) {
+                gameRunning = false; // End game if no lives left
+            }
+        }
+    }
+}
+
+// Render game state
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw bomber
+    ctx.fillStyle = 'red';
+    ctx.fillRect(bomber.x, bomber.y, 40, 10);
+
+    // Draw bucket
+    ctx.fillStyle = 'blue';
+    ctx.fillRect(bucket.x, bucket.y, bucket.width, bucket.height);
+
+    // Draw bombs
+    ctx.fillStyle = 'red'; // Changed bomb color to red
+    for (const bomb of bombs) {
+        ctx.beginPath();
+        ctx.arc(bomb.x, bomb.y, bombRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw score and lives
+    ctx.fillStyle = 'white';
+    ctx.font = '16px "Press Start 2P"';
+    ctx.fillText(`Score: ${score}`, 10, 20);
+    ctx.fillText(`Lives: ${lives}`, canvas.width - 100, 20);
+}
+
+// Game loop
+function gameLoop(timestamp) {
+    if (gameRunning) {
+        update(timestamp);
+        render();
+        requestAnimationFrame(gameLoop);
+    } else {
+        ctx.fillStyle = 'white';
+        ctx.font = '32px "Press Start 2P"';
+        ctx.fillText('Game Over', canvas.width / 2 - 80, canvas.height / 2);
+        ctx.fillText(`Score: ${score}`, canvas.width / 2 - 80, canvas.height / 2 + 40);
+    }
+}
+
+// Start the game loop
+requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

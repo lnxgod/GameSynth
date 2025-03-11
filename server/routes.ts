@@ -773,8 +773,8 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>${appName}</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { width: 100vw; height: 100vh; }
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { width: 100vw; height: 100vh; display: block; }
     </style>
 </head>
 <body>
@@ -783,7 +783,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Set canvas size to match viewport
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -798,49 +797,85 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
       await fs.writeFile(path.join(buildDir, 'index.html'), html);
 
-      // Assuming a config object exists elsewhere,  replace with your actual config
-      const config = {}; // Replace with your actual capacitor.config.json content
+      // Create package.json if it doesn't exist in the build directory
+      const packageJson = {
+        name: packageName.replace(/\./g, '-'),
+        version: "1.0.0",
+        private: true,
+        dependencies: {
+          "@capacitor/android": "latest",
+          "@capacitor/core": "latest"
+        }
+      };
+      await fs.writeFile(
+        path.join(buildDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
 
       // Update capacitor config
       const capacitorConfig = {
-        ...config,
         appId: packageName,
         appName: appName,
+        webDir: ".",
+        server: {
+          androidScheme: "https"
+        },
+        android: {
+          buildOptions: {
+            keystorePath: 'release.keystore',
+            keystoreAlias: 'release',
+          }
+        }
       };
       await fs.writeFile(
         path.join(buildDir, 'capacitor.config.json'),
         JSON.stringify(capacitorConfig, null, 2)
       );
 
-      // Initialize Capacitor project
       const execAsync = promisify(exec);
-      await execAsync('npx cap init "${appName}" "${packageName}" --web-dir="android-build"');
 
-      // Add Android platform
-      await execAsync('npx cap add android');
+      try {
+        // Initialize Capacitor project with proper argument escaping
+        const initCommand = `npx cap init ${JSON.stringify(appName)} ${JSON.stringify(packageName)} --web-dir=.`;
+        await execAsync(initCommand, { cwd: buildDir });
 
-      // Build APK
-      await execAsync('cd android && ./gradlew assembleDebug');
+        // Install dependencies
+        await execAsync('npm install', { cwd: buildDir });
 
-      // Get APK path
-      const apkPath = path.join(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        // Add Android platform
+        await execAsync('npx cap add android', { cwd: buildDir });
 
-      // Create download URL
-      const downloadUrl = `/download/android/${path.basename(apkPath)}`;
+        // Build APK
+        await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
 
-      logApi("Android build completed", { downloadUrl });
+        // Get APK path
+        const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 
-      res.json({ downloadUrl });
+        // Check if APK exists
+        await fs.access(apkPath);
+
+        // Create download URL
+        const downloadUrl = `/download/android/${path.basename(apkPath)}`;
+
+        logApi("Android build completed", { downloadUrl });
+        res.json({ downloadUrl });
+      } catch (buildError: any) {
+        throw new Error(`Build failed: ${buildError.message}`);
+      }
     } catch (error: any) {
       logApi("Error in Android build", req.body, { error: error.message });
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ 
+        error: "Build failed",
+        message: error.message,
+        details: "Please ensure the package name is valid and try again."
+      });
     }
   });
 
   // Add download route
   app.get("/download/android/:filename", (req, res) => {
     const { filename } = req.params;
-    const filePath = path.join(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'debug', filename);
+    const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'debug', filename);
     res.download(filePath);
   });
 
