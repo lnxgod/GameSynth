@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { storage } from "./storage";
 import { insertChatSchema, insertGameSchema } from "@shared/schema";
 import OpenAI from "openai";
+import {insertFeatureSchema} from "@shared/schema"; // Assuming this schema is defined elsewhere
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -535,6 +536,44 @@ When providing suggestions:
     } catch (error: any) {
       logApi("Error generating remix suggestions", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add these routes after the existing game routes
+  app.post("/api/features", async (req, res) => {
+    try {
+      const feature = insertFeatureSchema.parse(req.body);
+      const created = await storage.createFeature(feature);
+      logApi("New feature created", req.body, created);
+      res.json(created);
+    } catch (error: any) {
+      logApi("Error creating feature", req.body, { error: error.message });
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/features", async (req, res) => {
+    try {
+      const gameId = req.query.gameId ? parseInt(req.query.gameId as string) : undefined;
+      const features = await storage.getAllFeatures(gameId);
+      logApi(`Retrieved ${features.length} features`, req.query, { count: features.length });
+      res.json(features);
+    } catch (error: any) {
+      logApi("Error getting features", req.query, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/features/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { completed } = req.body;
+      const updated = await storage.updateFeatureStatus(id, completed);
+      logApi("Feature status updated", { id, completed }, updated);
+      res.json(updated);
+    } catch (error: any) {
+      logApi("Error updating feature", req.body, { error: error.message });
+      res.status(400).json({ error: error.message });
     }
   });
 

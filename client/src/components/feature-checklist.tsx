@@ -4,52 +4,62 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, ListPlus } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
 interface Feature {
-  id: string;
+  id: number;
   description: string;
   completed: boolean;
+  type: 'core' | 'tech' | 'generated' | 'manual';
+  gameId?: number;
 }
 
 interface FeatureChecklistProps {
   gameDesign: any;
   onCodeUpdate?: (code: string) => void;
-  initialFeatures?: string[]; // Add prop for initial features
+  initialFeatures?: string[];
 }
 
 export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [] }: FeatureChecklistProps) {
-  const [features, setFeatures] = useState<Feature[]>([]);
   const [newFeature, setNewFeature] = useState("");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // Initialize features from game design and initial features
-  useEffect(() => {
-    if (gameDesign || initialFeatures.length > 0) {
-      const designFeatures: Feature[] = [
-        ...(gameDesign?.coreMechanics || []).map((mechanic: string) => ({
-          id: `mechanic-${uuidv4()}`,
-          description: mechanic,
-          completed: false
-        })),
-        ...(gameDesign?.technicalRequirements || []).map((req: string) => ({
-          id: `tech-${uuidv4()}`,
-          description: req,
-          completed: false
-        })),
-        ...initialFeatures.map((feature: string) => ({
-          id: `generated-${uuidv4()}`,
-          description: feature,
-          completed: false
-        }))
-      ];
-      setFeatures(designFeatures);
+  const { data: features = [] } = useQuery({
+    queryKey: ['features'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/features');
+      return res.json();
     }
-  }, [gameDesign, initialFeatures]);
+  });
+
+  const createFeatureMutation = useMutation({
+    mutationFn: async (feature: Omit<Feature, 'id'>) => {
+      const res = await apiRequest('POST', '/api/features', feature);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['features'] });
+      toast({
+        title: "Feature Added",
+        description: "New feature has been added to the checklist.",
+      });
+    }
+  });
+
+  const updateFeatureStatusMutation = useMutation({
+    mutationFn: async ({ id, completed }: { id: number; completed: boolean }) => {
+      const res = await apiRequest('PATCH', `/api/features/${id}`, { completed });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['features'] });
+    }
+  });
 
   const generateFeaturesMutation = useMutation({
     mutationFn: async () => {
@@ -60,23 +70,71 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
       return res.json();
     },
     onSuccess: (data) => {
-      if (!data.features || !Array.isArray(data.features)) {
-        throw new Error("Invalid response format");
-      }
+      data.features.forEach((description: string) => {
+        createFeatureMutation.mutate({
+          description,
+          type: 'generated',
+          completed: false
+        });
+      });
 
-      const newFeatures = data.features.map((feature: string) => ({
-        id: `generated-${uuidv4()}`,
-        description: feature,
-        completed: false
-      }));
-
-      setFeatures(prev => [...prev, ...newFeatures]);
       toast({
         title: "Features Generated",
-        description: `Added ${newFeatures.length} new features to the checklist.`,
+        description: `Added ${data.features.length} new features to the checklist.`,
       });
     }
   });
+
+  useEffect(() => {
+    if (gameDesign && features.length === 0) {
+      gameDesign.coreMechanics?.forEach((mechanic: string) => {
+        createFeatureMutation.mutate({
+          description: mechanic,
+          type: 'core',
+          completed: false
+        });
+      });
+
+      gameDesign.technicalRequirements?.forEach((req: string) => {
+        createFeatureMutation.mutate({
+          description: req,
+          type: 'tech',
+          completed: false
+        });
+      });
+
+      initialFeatures.forEach((feature: string) => {
+        createFeatureMutation.mutate({
+          description: feature,
+          type: 'generated',
+          completed: false
+        });
+      });
+    }
+  }, [gameDesign]);
+
+  const handleAddFeature = () => {
+    if (!newFeature.trim()) return;
+
+    createFeatureMutation.mutate({
+      description: newFeature,
+      type: 'manual',
+      completed: false
+    });
+
+    setNewFeature("");
+  };
+
+  const toggleFeature = (id: number, completed: boolean) => {
+    updateFeatureStatusMutation.mutate({ id, completed });
+  };
+
+  const handleImplementFeature = (feature: Feature) => {
+    //  This part remains largely the same, except feature.description is used.  
+    //  Consider refactoring to use a mutation for consistency.
+    implementFeatureMutation.mutate(feature.description);
+  };
+
 
   const implementFeatureMutation = useMutation({
     mutationFn: async (feature: string) => {
@@ -97,32 +155,6 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
     }
   });
 
-  const toggleFeature = (id: string) => {
-    setFeatures(prev => prev.map(feature =>
-      feature.id === id ? { ...feature, completed: !feature.completed } : feature
-    ));
-  };
-
-  const handleImplementFeature = (feature: Feature) => {
-    implementFeatureMutation.mutate(feature.description);
-  };
-
-  const handleAddFeature = () => {
-    if (!newFeature.trim()) return;
-
-    const feature: Feature = {
-      id: `manual-${uuidv4()}`,
-      description: newFeature,
-      completed: false
-    };
-
-    setFeatures(prev => [...prev, feature]);
-    setNewFeature("");
-    toast({
-      title: "Feature Added",
-      description: "New feature has been added to the checklist.",
-    });
-  };
 
   if (!gameDesign) {
     return (
@@ -177,12 +209,12 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
             <div className="space-y-4">
               <div>
                 <h5 className="font-medium mb-2">Core Mechanics</h5>
-                {features.filter(f => f.id.startsWith('mechanic-')).map(feature => (
+                {features.filter(f => f.type === 'core').map(feature => (
                   <div key={feature.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
-                      id={feature.id}
+                      id={feature.id.toString()} // Ensure id is a string
                       checked={feature.completed}
-                      onCheckedChange={() => toggleFeature(feature.id)}
+                      onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
                     />
                     <Button
                       variant="ghost"
@@ -201,12 +233,12 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
 
               <div>
                 <h5 className="font-medium mb-2">Technical Requirements</h5>
-                {features.filter(f => f.id.startsWith('tech-')).map(feature => (
+                {features.filter(f => f.type === 'tech').map(feature => (
                   <div key={feature.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
-                      id={feature.id}
+                      id={feature.id.toString()}
                       checked={feature.completed}
-                      onCheckedChange={() => toggleFeature(feature.id)}
+                      onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
                     />
                     <Button
                       variant="ghost"
@@ -225,12 +257,12 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
 
               <div>
                 <h5 className="font-medium mb-2">Additional Features</h5>
-                {features.filter(f => f.id.startsWith('generated-') || f.id.startsWith('manual-')).map(feature => (
+                {features.filter(f => f.type === 'generated' || f.type === 'manual').map(feature => (
                   <div key={feature.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
-                      id={feature.id}
+                      id={feature.id.toString()}
                       checked={feature.completed}
-                      onCheckedChange={() => toggleFeature(feature.id)}
+                      onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
                     />
                     <Button
                       variant="ghost"
