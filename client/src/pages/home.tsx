@@ -13,7 +13,7 @@ export default function Home() {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [gameDesign, setGameDesign] = useState<any>(null);
   const [features, setFeatures] = useState<string[]>([]);
-  const codeEditorRef = useRef<{ handleDebug: () => void } | null>(null);
+  const codeEditorRef = useRef<{ handleDebug: (errorMessage?: string) => void } | null>(null);
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -31,9 +31,9 @@ export default function Home() {
       codeEditorTab.click();
     }
 
-    // Trigger the debug functionality
+    // Trigger the debug functionality with the error message
     if (codeEditorRef.current) {
-      codeEditorRef.current.handleDebug();
+      codeEditorRef.current.handleDebug(error);
     }
   };
 

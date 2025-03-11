@@ -31,7 +31,7 @@ interface CodeEditorProps {
   gameDesign?: any;
 }
 
-export const CodeEditor = forwardRef<{ handleDebug: () => void }, CodeEditorProps>(
+export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => void }, CodeEditorProps>(
   ({ code, onCodeChange, addDebugLog, gameDesign }, ref) => {
     const [localCode, setLocalCode] = useState(code);
     const [savedProjects, setSavedProjects] = useState<ProjectState[]>([]);
@@ -137,8 +137,8 @@ export const CodeEditor = forwardRef<{ handleDebug: () => void }, CodeEditorProp
     };
 
     const debugMutation = useMutation({
-      mutationFn: async () => {
-        const errorMessage = extractGameErrors();
+      mutationFn: async (providedError?: string) => {
+        const errorMessage = providedError || extractGameErrors();
         if (!errorMessage) {
           throw new Error("No error found in game execution");
         }
@@ -263,9 +263,16 @@ export const CodeEditor = forwardRef<{ handleDebug: () => void }, CodeEditorProp
       ));
     };
 
-    const handleDebug = () => {
+    const handleDebug = (errorMessage?: string) => {
       addDebugLog?.("🔍 AI Debug: Analyzing game code...");
-      debugMutation.mutate();
+
+      if (errorMessage) {
+        // Use the error message from debug logs if provided
+        debugMutation.mutate(errorMessage);
+      } else {
+        // Otherwise use the default error extraction
+        debugMutation.mutate();
+      }
     };
 
     useImperativeHandle(ref, () => ({
