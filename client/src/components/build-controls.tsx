@@ -17,6 +17,9 @@ interface BuildControlsProps {
 export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: BuildControlsProps) {
   const [appName, setAppName] = useState('My Game');
   const [packageName, setPackageName] = useState('com.mygame.app');
+  const [keystorePassword, setKeystorePassword] = useState('');
+  const [keyAlias, setKeyAlias] = useState('release');
+  const [keyPassword, setKeyPassword] = useState('');
   const { toast } = useToast();
 
   // Real-time package name validation
@@ -25,15 +28,20 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
 
   const buildMutation = useMutation({
     mutationFn: async () => {
+      onBuildStart?.();
       const res = await apiRequest("POST", "/api/build/android", {
         gameCode,
         appName,
-        packageName
+        packageName,
+        keystore: {
+          password: keystorePassword,
+          alias: keyAlias,
+          keyPassword: keyPassword
+        }
       });
       return res.json();
     },
     onMutate: () => {
-      onBuildStart?.();
       toast({
         title: "Starting Build",
         description: "Preparing your game for Android...",
@@ -46,12 +54,12 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
           title: "Build Complete",
           description: "Your Android APK is ready for download!",
         });
-        // Open download in new tab
         window.open(data.downloadUrl, '_blank');
       }
     },
     onError: (error: any) => {
       onBuildComplete?.();
+      console.error('Build error:', error);
       toast({
         title: "Build Failed",
         description: error.message,
@@ -59,6 +67,11 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
       });
     },
   });
+
+  const isFormValid = isPackageNameValid && 
+    keystorePassword.length >= 6 && 
+    keyPassword.length >= 6 && 
+    keyAlias.length > 0;
 
   return (
     <Card className="p-4 space-y-4">
@@ -109,11 +122,59 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
             </p>
           </div>
         </div>
+
+        <div className="space-y-4 mt-6 border-t pt-4">
+          <h3 className="text-sm font-medium">Android Signing Configuration</h3>
+
+          <div className="space-y-1">
+            <Label htmlFor="keystorePassword">Keystore Password</Label>
+            <Input
+              id="keystorePassword"
+              type="password"
+              value={keystorePassword}
+              onChange={(e) => setKeystorePassword(e.target.value)}
+              placeholder="At least 6 characters"
+              disabled={buildMutation.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Password for the keystore file (minimum 6 characters)
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="keyAlias">Key Alias</Label>
+            <Input
+              id="keyAlias"
+              value={keyAlias}
+              onChange={(e) => setKeyAlias(e.target.value)}
+              placeholder="release"
+              disabled={buildMutation.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Name to identify your key (default: release)
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="keyPassword">Key Password</Label>
+            <Input
+              id="keyPassword"
+              type="password"
+              value={keyPassword}
+              onChange={(e) => setKeyPassword(e.target.value)}
+              placeholder="At least 6 characters"
+              disabled={buildMutation.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Password for the signing key (minimum 6 characters)
+            </p>
+          </div>
+        </div>
       </div>
 
       <Button
         onClick={() => buildMutation.mutate()}
-        disabled={buildMutation.isPending || !isPackageNameValid}
+        disabled={buildMutation.isPending || !isFormValid}
         className="w-full bg-gradient-to-r from-green-500 to-emerald-700 hover:from-green-600 hover:to-emerald-800"
       >
         {buildMutation.isPending ? (
