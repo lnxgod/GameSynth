@@ -12,6 +12,7 @@ export default function Home() {
   const [gameCode, setGameCode] = useState("");
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [gameDesign, setGameDesign] = useState<any>(null);
+  const [features, setFeatures] = useState<string[]>([]);
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -52,6 +53,7 @@ export default function Home() {
             <GameDesignAssistant
               onCodeGenerated={setGameCode}
               onDesignGenerated={setGameDesign}
+              onFeaturesGenerated={setFeatures}
             />
           </TabsContent>
 
@@ -86,6 +88,7 @@ export default function Home() {
             <FeatureChecklist
               gameDesign={gameDesign}
               onCodeUpdate={handleCodeChange}
+              initialFeatures={features}
             />
           </TabsContent>
 

@@ -19,31 +19,37 @@ interface Feature {
 interface FeatureChecklistProps {
   gameDesign: any;
   onCodeUpdate?: (code: string) => void;
+  initialFeatures?: string[]; // Add prop for initial features
 }
 
-export function FeatureChecklist({ gameDesign, onCodeUpdate }: FeatureChecklistProps) {
+export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [] }: FeatureChecklistProps) {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [newFeature, setNewFeature] = useState("");
   const { toast } = useToast();
 
-  // Initialize features from game design
+  // Initialize features from game design and initial features
   useEffect(() => {
-    if (gameDesign) {
-      const newFeatures: Feature[] = [
-        ...gameDesign.coreMechanics.map((mechanic: string) => ({
+    if (gameDesign || initialFeatures.length > 0) {
+      const designFeatures: Feature[] = [
+        ...(gameDesign?.coreMechanics || []).map((mechanic: string) => ({
           id: `mechanic-${uuidv4()}`,
           description: mechanic,
           completed: false
         })),
-        ...gameDesign.technicalRequirements.map((req: string) => ({
+        ...(gameDesign?.technicalRequirements || []).map((req: string) => ({
           id: `tech-${uuidv4()}`,
           description: req,
           completed: false
+        })),
+        ...initialFeatures.map((feature: string) => ({
+          id: `generated-${uuidv4()}`,
+          description: feature,
+          completed: false
         }))
       ];
-      setFeatures(newFeatures);
+      setFeatures(designFeatures);
     }
-  }, [gameDesign]);
+  }, [gameDesign, initialFeatures]);
 
   const generateFeaturesMutation = useMutation({
     mutationFn: async () => {
