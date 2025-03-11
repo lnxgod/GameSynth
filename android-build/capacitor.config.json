@@ -1,6 +1,6 @@
 {
-  "appId": "com.mygame.myapp2",
-  "appName": "KaboomDeath",
+  "appId": "com.gamechangers.game1",
+  "appName": "My Game pizza",
   "webDir": ".",
   "server": {
     "androidScheme": "https"
@@ -8,7 +8,9 @@
   "android": {
     "buildOptions": {
       "keystorePath": "release.keystore",
-      "keystoreAlias": "release"
+      "keystoreAlias": "release",
+      "keystorePassword": "password123",
+      "keyPassword": "password123"
     }
   }
 }

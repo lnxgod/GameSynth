@@ -29,6 +29,16 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
   const buildMutation = useMutation({
     mutationFn: async () => {
       onBuildStart?.();
+
+      // Log the build parameters for debugging
+      console.log('Build parameters:', {
+        appName,
+        packageName,
+        keyAlias,
+        hasKeystorePassword: !!keystorePassword,
+        hasKeyPassword: !!keyPassword
+      });
+
       const res = await apiRequest("POST", "/api/build/android", {
         gameCode,
         appName,
@@ -62,7 +72,7 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
       console.error('Build error:', error);
       toast({
         title: "Build Failed",
-        description: error.message,
+        description: error.message || "Failed to build Android APK. Please check the console for details.",
         variant: "destructive",
       });
     },
