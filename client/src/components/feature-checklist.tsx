@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, ListPlus } from "lucide-react";
+import { AIHint } from "./ai-hint";
 
 interface Feature {
   id: number;
@@ -117,6 +118,10 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold">Game Features</h3>
+          <AIHint
+            gameDesign={gameDesign}
+            currentFeature={features.find(f => !f.completed)?.description}
+          />
         </div>
 
         <div className="flex gap-2 items-center">

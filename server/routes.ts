@@ -580,6 +580,47 @@ When providing suggestions:
     }
   });
 
+  app.post("/api/hint", async (req, res) => {
+    try {
+      const { context, gameDesign, code, currentFeature } = req.body;
+
+      logApi("Hint request received", { context, currentFeature });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a helpful and playful game development assistant.
+Your task is to provide short, encouraging hints about the current context.
+Keep responses brief (1-2 sentences) and friendly.
+If a feature is being implemented, give specific suggestions.
+Format hints to be encouraging and actionable.`
+          },
+          {
+            role: "user",
+            content: `Generate a helpful hint for this context:
+Context: ${context || 'General game development'}
+Current Feature: ${currentFeature || 'None specified'}
+Game Design: ${gameDesign ? JSON.stringify(gameDesign) : 'Not available'}
+Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 100
+      });
+
+      const hint = response.choices[0].message.content || "Keep up the great work! 🎮";
+
+      logApi("Hint generated", { hint });
+      res.json({ hint });
+    } catch (error: any) {
+      logApi("Error generating hint", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+
   const httpServer = createServer(app);
   return httpServer;
 }
