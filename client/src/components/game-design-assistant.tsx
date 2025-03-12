@@ -110,14 +110,32 @@ export function GameDesignAssistant({
 
   const [showDebugContext, setShowDebugContext] = useState(false);
 
+  // Initialize model state with a default value
   const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-4o');
   const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
-  const [isLoadingParameters, setIsLoadingParameters] = useState(false);
-
   const [parameterValues, setParameterValues] = useState<Record<string, number | string>>({});
-
   const [enabledParameters, setEnabledParameters] = useState<Record<string, boolean>>({});
 
+  // Store model preferences in localStorage
+  useEffect(() => {
+    const savedModel = localStorage.getItem('selectedModel');
+    const savedParameters = localStorage.getItem('modelParameters');
+    const savedValues = localStorage.getItem('parameterValues');
+    const savedEnabled = localStorage.getItem('enabledParameters');
+
+    if (savedModel) setSelectedModel(savedModel);
+    if (savedParameters) setModelParameters(JSON.parse(savedParameters));
+    if (savedValues) setParameterValues(JSON.parse(savedValues));
+    if (savedEnabled) setEnabledParameters(JSON.parse(savedEnabled));
+  }, []);
+
+  // Save model preferences whenever they change
+  useEffect(() => {
+    localStorage.setItem('selectedModel', selectedModel);
+    localStorage.setItem('modelParameters', JSON.stringify(modelParameters));
+    localStorage.setItem('parameterValues', JSON.stringify(parameterValues));
+    localStorage.setItem('enabledParameters', JSON.stringify(enabledParameters));
+  }, [selectedModel, modelParameters, parameterValues, enabledParameters]);
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery<ModelInfo>({
     queryKey: ['models'],
@@ -127,12 +145,21 @@ export function GameDesignAssistant({
       return models;
     },
     retry: 2,
-    staleTime: 3600000 // Cache for 1 hour
+    staleTime: 3600000, // Cache for 1 hour
+    onError: (error) => {
+      console.error('Failed to load models:', error);
+      toast({
+        title: "Error Loading Models",
+        description: "Using default model settings",
+        variant: "destructive",
+      });
+    }
   });
 
   const analyzeModelMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
       const settings = {
+        analysis_model: selectedModel, 
         model: selectedModel,
         ...Object.entries(enabledParameters).reduce((acc, [param, isEnabled]) => {
           if (isEnabled && parameterValues[param] !== undefined) {
@@ -142,12 +169,20 @@ export function GameDesignAssistant({
         }, {})
       };
 
+      console.log('Analysis settings:', settings); 
+
       const res = await apiRequest('POST', '/api/design/analyze', {
         aspect,
         content: requirements[aspect],
         sessionId,
         settings
       });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to analyze design');
+      }
+
       return res.json();
     },
     onSuccess: (data, aspect) => {
@@ -157,6 +192,7 @@ export function GameDesignAssistant({
       }));
     },
     onError: (error: any) => {
+      console.error('Analysis error:', error);
       toast({
         title: "Analysis Error",
         description: error.message || "Failed to analyze design requirements",
@@ -507,7 +543,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     const fetchModelParameters = async () => {
       if (!selectedModel) return;
 
-      setIsLoadingParameters(true);
       try {
         const res = await apiRequest('GET', `/api/model-parameters/${selectedModel}`);
         const params = await res.json();
@@ -530,8 +565,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
           description: "Failed to load model parameters",
           variant: "destructive",
         });
-      } finally {
-        setIsLoadingParameters(false);
       }
     };
 
@@ -540,7 +573,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
 
 
   const renderParameterControls = () => {
-    if (isLoadingParameters) {
+    if (isLoadingParameters || !modelParameters) {
       return (
         <div className="space-y-4">
           <Skeleton className="h-4 w-full" />
@@ -624,6 +657,44 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
       </div>
     );
   };
+
+  const handleModelChange = (value: string) => {
+    setSelectedModel(value);
+    // Reset parameters when model changes
+    setParameterValues({});
+    setEnabledParameters({});
+  };
+
+  useEffect(() => {
+    const fetchModelParameters = async (model: string = selectedModel) => {
+      try {
+        const res = await apiRequest('GET', `/api/model-parameters/${model}`);
+        const params = await res.json();
+
+        const newValues: Record<string, number | string> = {};
+        const newEnabled: Record<string, boolean> = {};
+
+        Object.entries(params).forEach(([param, config]: [string, any]) => {
+          newValues[param] = config.default;
+          newEnabled[param] = false;
+        });
+
+        setModelParameters(params);
+        setParameterValues(newValues);
+        setEnabledParameters(newEnabled);
+
+      } catch (error) {
+        console.error('Failed to fetch model parameters:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load model parameters",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchModelParameters();
+  }, [selectedModel]);
 
   return (
     <Card className="w-full">
@@ -720,7 +791,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                     <label className="text-sm font-medium">Model Selection</label>
                     <Select
                       value={selectedModel}
-                      onValueChange={(value) => setSelectedModel(value as ModelType)}
+                      onValueChange={handleModelChange}
                       disabled={isLoadingModels}
                     >
                       <SelectTrigger>
