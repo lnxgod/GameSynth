@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2, ListPlus } from "lucide-react";
+import { Loader2, Wand2, ListPlus, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -220,6 +220,33 @@ export function GameDesignAssistant({
         });
       }
       onDesignGenerated(data);
+    }
+  });
+
+  const analyzeDevelopmentPlanMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/design/analyze-development-plan', {
+        gameDesign: finalDesign,
+        currentFeatures: generatedFeatures,
+        history: messages
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setGenerationPrompt(data.baseGamePrompt);
+      setGeneratedFeatures(data.developmentSteps);
+      onFeaturesGenerated(data.developmentSteps);
+      toast({
+        title: "Development Plan Generated",
+        description: "Created a structured plan for implementing your game.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate development plan",
+        variant: "destructive",
+      });
     }
   });
 
@@ -444,7 +471,25 @@ Include:
               {finalDesign && (
                 <>
                   <div className="mt-4">
-                    <h3 className="text-lg font-semibold mb-2">Generation Prompt</h3>
+                    <h3 className="text-lg font-semibold mb-2">Development Plan</h3>
+                    <Button
+                      variant="secondary"
+                      onClick={() => analyzeDevelopmentPlanMutation.mutate()}
+                      disabled={analyzeDevelopmentPlanMutation.isPending}
+                      className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white mb-4"
+                    >
+                      {analyzeDevelopmentPlanMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Analyzing Development Steps...
+                        </>
+                      ) : (
+                        <>
+                          <FileSpreadsheet className="mr-2 h-4 w-4" />
+                          Create Development Plan
+                        </>
+                      )}
+                    </Button>
                     <Textarea
                       value={generationPrompt}
                       onChange={(e) => setGenerationPrompt(e.target.value)}
@@ -452,6 +497,21 @@ Include:
                       placeholder="Customize how your game code should be generated..."
                     />
                   </div>
+
+                  {generatedFeatures.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-md font-semibold mb-2">Implementation Steps</h4>
+                      <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+                        <ol className="list-decimal pl-4 space-y-2">
+                          {generatedFeatures.map((feature, index) => (
+                            <li key={index} className="text-sm">
+                              {feature}
+                            </li>
+                          ))}
+                        </ol>
+                      </ScrollArea>
+                    </div>
+                  )}
 
                   <div className="mt-4">
                     <GraphicsGenerator

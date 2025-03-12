@@ -21,7 +21,6 @@ import { createWriteStream } from 'fs';
 import stream from 'stream';
 import express from 'express'; // Import express
 
-
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
 }
@@ -219,7 +218,6 @@ export async function registerRoutes(app: Express) {
   }));
 
   app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets'))); // Added middleware
-
 
 
   app.post("/api/auth/login", async (req, res) => {
@@ -574,7 +572,7 @@ Please suggest the key visual elements needed for this game.`
   });
 
   // Keep existing protected routes
-  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users", "/api/game-designs", "/api/design/analyze-graphics"], isAuthenticated, requirePasswordChange);
+  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users", "/api/game-designs", "/api/design/analyze-graphics", "/api/design/analyze-development-plan"], isAuthenticated, requirePasswordChange);
 
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
@@ -1641,6 +1639,77 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       });
     } catch (error: any) {
       console.error('Model preferences update error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/design/analyze-development-plan", isAuthenticated, async (req, res) => {
+    try {
+      const { gameDesign, currentFeatures, history } = req.body;
+      const userId = (req.session as any).userId;
+      if (!userId) {
+        throw new Error("User not authenticated");
+      }
+
+      logApi("Analyzing development plan", { gameDesign, currentFeatures });
+
+      const requestConfig = {
+        model: "o3-mini-high",
+        messages: [
+          {
+            role: "system",
+            content: `You are a game development project manager helping to break down game implementation into manageable steps.
+Analyze the game design and create:
+1. A base game implementation prompt that covers core functionality
+2. A list of 10 additional features/steps to complete the game
+Format your response as JSON with this structure:
+{
+  "baseGamePrompt": "string (detailed prompt for initial implementation)",
+  "developmentSteps": [
+    "Step 1: Implement X feature with specific details",
+    "Step 2: Add Y functionality including...",
+    ...
+  ]
+}`
+          },
+          {
+            role: "user",
+            content: `Based on this game design, create a development plan:
+Game Description:
+${gameDesign.gameDescription}
+
+Core Mechanics:
+${gameDesign.coreMechanics.join("\n")}
+
+Technical Requirements:
+${gameDesign.technicalRequirements.join("\n")}
+
+Implementation Approach:
+${gameDesign.implementationApproach}
+
+Design Discussion History:
+${history.map(msg => `${msg.role}: ${msg.content}`).join("\n")}
+
+Current Features:
+${currentFeatures ? currentFeatures.join("\n") : "No features implemented yet"}
+
+Please create a structured plan for implementing this game, starting with a solid foundation and then building up additional features.`
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7
+      };
+
+      logApi("Development plan request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
+      const plan = JSON.parse(response.choices[0].message.content || "{}");
+
+      logApi("Development plan generated", null, plan, logOpenAIParams(requestConfig));
+      res.json(plan);
+    } catch (error: any) {
+      console.error('Development plan error:', error);
+      logApi("Error generating development plan", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
   });
