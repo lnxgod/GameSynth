@@ -112,15 +112,9 @@ export function GameDesignAssistant({
   const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
   const [isLoadingParameters, setIsLoadingParameters] = useState(false);
 
-  const [parameterValues, setParameterValues] = useState<Record<string, number | string>>({
-    temperature: 0.7,
-    max_tokens: 8000
-  });
+  const [parameterValues, setParameterValues] = useState<Record<string, number | string>>({});
 
-  const [enabledParameters, setEnabledParameters] = useState<Record<string, boolean>>({
-    temperature: true,
-    max_tokens: true
-  });
+  const [enabledParameters, setEnabledParameters] = useState<Record<string, boolean>>({});
 
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery<ModelInfo>({
@@ -210,26 +204,24 @@ export function GameDesignAssistant({
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      // Build settings object only including enabled parameters
       const settings: Record<string, any> = {
         model: selectedModel
       };
 
-      // Add enabled parameters to settings
       Object.entries(enabledParameters).forEach(([param, isEnabled]) => {
         if (isEnabled && parameterValues[param] !== undefined) {
+          if (param === 'max_tokens' && selectedModel.startsWith('o1')) {
+            return;
+          }
           settings[param] = parameterValues[param];
         }
       });
 
-      // Handle special case for tokens based on model type and checkbox
-      if (selectedModel.startsWith('o1') && useMaxCompletionTokens) {
-        if (enabledParameters.max_tokens) {
-          // If max_tokens is enabled, use it as max_completion_tokens instead
-          settings.max_completion_tokens = parameterValues.max_tokens;
-          delete settings.max_tokens;
-        }
+      if (selectedModel.startsWith('o1') && enabledParameters.max_tokens) {
+        settings.max_completion_tokens = parameterValues.max_tokens;
       }
+
+      console.log('Settings being sent:', settings);
 
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
@@ -482,7 +474,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     );
   };
 
-  // Fetch model parameters when model changes
   useEffect(() => {
     const fetchModelParameters = async () => {
       if (!selectedModel) return;
@@ -492,6 +483,13 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
         const res = await apiRequest('GET', `/api/model-parameters/${selectedModel}`);
         const params = await res.json();
         setModelParameters(params);
+
+        const newValues: Record<string, number | string> = {};
+        Object.entries(params).forEach(([param, config]: [string, any]) => {
+          newValues[param] = config.default;
+        });
+        setParameterValues(newValues);
+
       } catch (error) {
         console.error('Failed to fetch model parameters:', error);
         toast({
@@ -520,8 +518,8 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     }
 
     return (
-      <>
-        {Object.entries(modelParameters).map(([param, config]) => (
+      <div className="space-y-4">
+        {Object.entries(modelParameters).map(([param, config]: [string, any]) => (
           <div key={param} className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -590,23 +588,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
             </div>
           </div>
         ))}
-
-        {selectedModel.startsWith('o1') && (
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="use-max-completion-tokens"
-              checked={useMaxCompletionTokens}
-              onCheckedChange={(checked) => setUseMaxCompletionTokens(checked as boolean)}
-            />
-            <label
-              htmlFor="use-max-completion-tokens"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Use max_completion_tokens instead of max_tokens (O1 models)
-            </label>
-          </div>
-        )}
-      </>
+      </div>
     );
   };
 
@@ -701,7 +683,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
-                  {/* Model Selection */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Model Selection</label>
                     <Select
@@ -733,7 +714,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                     </p>
                   </div>
 
-                  {/* Parameter Controls */}
                   {renderParameterControls()}
                 </CollapsibleContent>
               </Collapsible>
