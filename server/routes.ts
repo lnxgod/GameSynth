@@ -540,7 +540,6 @@ export async function registerRoutes(app: Express) {
   app.post("/api/design/finalize", async (req, res) => {
     try {
       const { sessionId } = req.body;
-      const user = (req as any).user;
       const history = designConversations.get(sessionId);
 
       if (!history) {
@@ -550,7 +549,7 @@ export async function registerRoutes(app: Express) {
       logApi("Generating final design", { sessionId });
 
       const response = await openai.chat.completions.create({
-        model: user.analysis_model || "gpt-4o", // Use analysis model preference
+        model: "o3-mini",
         messages: [
           {
             role: "system",
@@ -563,8 +562,7 @@ export async function registerRoutes(app: Express) {
             }`
           }
         ],
-        response_format: { type: "json_object" },
-        temperature: 0.7
+        reasoning_effort: "medium"
       });
 
       const finalDesign = JSON.parse(response.choices[0].message.content || "{}");
@@ -712,10 +710,6 @@ Each feature should be specific and actionable.`
         if (modelConfig.max_completion_tokens) {
           requestConfig.max_completion_tokens = modelConfig.max_completion_tokens;
         }
-      } else {
-        requestConfig.model = modelConfig.model;
-        requestConfig.max_completion_tokens = 16000;
-        requestConfig.temperature = modelConfig.temperature || 0.7;
       }
 
       const response = await openai.chat.completions.create(requestConfig);
@@ -906,7 +900,7 @@ When providing suggestions:
 3. Format your response as JSON with this structure:
 {
   "questions": [
-    "Suggestion 1: [Brief description of the first improvement]",
+    ""Suggestion 1: [Brief description of the first improvement]",
     "Suggestion 2: [Brief description of the second improvement]",
     "Suggestion 3: [Brief description of the third improvement]"
   ]
@@ -940,7 +934,7 @@ When providing suggestions:
         return res.status(400).json({
           error: "Missing Information",
           message: isNonTechnicalMode
-            ? "I need to see the game running first to help fix any problems. Could you try playing the game and let meknow what's not working?"
+            ? "I need to see the game running first to help fix any problems. Could you try playing the game and let me know what's not working?"
             : "Please run the game first so I can help fix any errors.",
         });
       }
@@ -948,7 +942,7 @@ When providing suggestions:
 
       const systemPrompt = isNonTechnicalMode
         ? `You are a friendly game helper who explains problems in simple terms.
-Help fix game problems usingeveryday language and simple explanations.
+Help fix game problems using everyday language and simple explanations.
 
 When explaining fixes:
 1. Explain what's wrong in simple, friendly terms
