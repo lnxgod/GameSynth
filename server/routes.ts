@@ -871,31 +871,30 @@ Each feature should be specific and actionable.`
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, temperature = 0.7, maxTokens = 16000 } = req.body;
+      const { prompt, modelConfig } = req.body;
       const user = (req as any).user;
 
-      if (maxTokens > 16000) {
-        throw new Error("Max tokens cannot exceed 16,000 due to model limitations");
-      }
+      logApi("Chat request received", { prompt, modelConfig });
 
-      logApi("Chat request received", { prompt, temperature, maxTokens });
-
-      const requestConfig = {
-        model: user.code_gen_model || "gpt-4o",
+      const baseConfig = {
         messages: [
           {
             role: "system",
             content: SYSTEM_PROMPT
           },
           { role: "user", content: prompt }
-        ],
-        temperature,
-        max_tokens: maxTokens
+        ]
       };
+
+      // Use model-specific configuration
+      const requestConfig = getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o", {
+        ...baseConfig,
+        ...modelConfig
+      });
+
       logApi("Chat request", {}, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
-
       const content = response.choices[0].message.content || "";
       console.log('Raw response content:', content);
 
@@ -910,10 +909,7 @@ Each feature should be specific and actionable.`
 
       const result = {
         ...chat,
-        settings: {
-          temperature,
-          maxTokens
-        }
+        code
       };
 
       logApi("Chat response generated", { prompt }, result, logOpenAIParams(requestConfig));
@@ -931,7 +927,7 @@ Each feature should be specific and actionable.`
       res.json(chats);
     } catch (error: any) {
       logApi("Error getting chats", req.query, { error: error.message });
-      res.status(500).json({ error:error.message });
+      res.status(500).json({ error: error.message });
     }
   });
 
