@@ -9,6 +9,7 @@ import ChangePassword from "@/pages/change-password";
 import UserManagement from "@/pages/user-management";
 import { AuthContext, useAuthProvider } from "@/lib/auth";
 import React, { useContext } from 'react';
+import { NavBar } from "@/components/nav-bar";
 
 function ProtectedRoute({ component: Component, requireAdmin, ...rest }: { component: React.ComponentType<any>, requireAdmin?: boolean }) {
   const { auth } = useContext(AuthContext)!;
@@ -32,23 +33,26 @@ function Router() {
   const auth = useContext(AuthContext)!;
 
   return (
-    <Switch>
-      <Route path="/login">
-        {auth.auth.isAuthenticated ? <Redirect to="/" /> : <Login />}
-      </Route>
-      <Route path="/change-password">
-        {!auth.auth.isAuthenticated ? (
-          <Redirect to="/login" />
-        ) : !auth.auth.forcePasswordChange ? (
-          <Redirect to="/" />
-        ) : (
-          <ChangePassword />
-        )}
-      </Route>
-      <Route path="/users" component={() => <ProtectedRoute component={UserManagement} requireAdmin />} />
-      <Route path="/" component={() => <ProtectedRoute component={Home} />} />
-      <Route component={NotFound} />
-    </Switch>
+    <div>
+      {auth.auth.isAuthenticated && <NavBar />}
+      <Switch>
+        <Route path="/login">
+          {auth.auth.isAuthenticated ? <Redirect to="/" /> : <Login />}
+        </Route>
+        <Route path="/change-password">
+          {!auth.auth.isAuthenticated ? (
+            <Redirect to="/login" />
+          ) : !auth.auth.forcePasswordChange ? (
+            <Redirect to="/" />
+          ) : (
+            <ChangePassword />
+          )}
+        </Route>
+        <Route path="/users" component={() => <ProtectedRoute component={UserManagement} requireAdmin />} />
+        <Route path="/" component={() => <ProtectedRoute component={Home} />} />
+        <Route component={NotFound} />
+      </Switch>
+    </div>
   );
 }
 
