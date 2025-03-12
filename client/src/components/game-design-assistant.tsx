@@ -467,13 +467,23 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
 
 
   const renderParameterControls = () => {
-    //This section is removed as per the intention.  No parameters are used.
     return null;
   };
 
 
   const handleModelChange = (value: string) => {
-    //This section is removed as per the intention.  No model change is allowed.
+  };
+
+  const fillDemoValues = () => {
+    setRequirements({
+      gameType: "Arcade",
+      mechanics: "Frogger-style gameplay where player needs to navigate through obstacles. Player can collect power-ups that provide temporary abilities like invincibility or speed boost.",
+      visualStyle: "16-bit retro graphics with bright colors and smooth animations",
+      difficulty: "Medium - Progressive difficulty increase as levels advance",
+      specialFeatures: "Power-up system including speed boost, invincibility, and extra lives. Score multiplier system based on consecutive successful moves."
+    });
+    setCurrentQuestionIndex(questions.length - 1);
+    setShowFinalPrompt(true);
   };
 
   return (
@@ -482,6 +492,13 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
         <div className="space-y-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Game Design Assistant</h2>
+            <Button
+              variant="outline"
+              onClick={fillDemoValues}
+              className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+            >
+              Fill Demo Values
+            </Button>
           </div>
 
           <div className="space-y-4">
@@ -567,7 +584,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
-                  {/* Model selection is removed as per the intention. */}
                   {renderParameterControls()}
                 </CollapsibleContent>
               </Collapsible>
