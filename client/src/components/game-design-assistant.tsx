@@ -218,14 +218,18 @@ export function GameDesignAssistant({
       // Add enabled parameters to settings
       Object.entries(enabledParameters).forEach(([param, isEnabled]) => {
         if (isEnabled && parameterValues[param] !== undefined) {
-          // Handle the special case for tokens
-          if (param === 'max_tokens' && useMaxCompletionTokens && selectedModel.startsWith('o1')) {
-            settings.max_completion_tokens = parameterValues[param];
-          } else {
-            settings[param] = parameterValues[param];
-          }
+          settings[param] = parameterValues[param];
         }
       });
+
+      // Handle special case for tokens based on model type and checkbox
+      if (selectedModel.startsWith('o1') && useMaxCompletionTokens) {
+        if (enabledParameters.max_tokens) {
+          // If max_tokens is enabled, use it as max_completion_tokens instead
+          settings.max_completion_tokens = parameterValues.max_tokens;
+          delete settings.max_tokens;
+        }
+      }
 
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
