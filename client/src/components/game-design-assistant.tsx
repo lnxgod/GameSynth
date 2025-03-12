@@ -104,13 +104,24 @@ export function GameDesignAssistant({
 
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(8000);
-  const [useMaxCompleteTokens, setUseMaxCompleteTokens] = useState(false);
+  const [useMaxCompletionTokens, setUseMaxCompletionTokens] = useState(false);
 
   const [showDebugContext, setShowDebugContext] = useState(false);
 
   const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-4o');
   const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
   const [isLoadingParameters, setIsLoadingParameters] = useState(false);
+
+  const [parameterValues, setParameterValues] = useState<Record<string, number | string>>({
+    temperature: 0.7,
+    max_tokens: 8000
+  });
+
+  const [enabledParameters, setEnabledParameters] = useState<Record<string, boolean>>({
+    temperature: true,
+    max_tokens: true
+  });
+
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery<ModelInfo>({
     queryKey: ['models'],
@@ -199,6 +210,23 @@ export function GameDesignAssistant({
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      // Build settings object only including enabled parameters
+      const settings: Record<string, any> = {
+        model: selectedModel
+      };
+
+      // Add enabled parameters to settings
+      Object.entries(enabledParameters).forEach(([param, isEnabled]) => {
+        if (isEnabled && parameterValues[param] !== undefined) {
+          // Handle the special case for tokens
+          if (param === 'max_tokens' && useMaxCompletionTokens && selectedModel.startsWith('o1')) {
+            settings.max_completion_tokens = parameterValues[param];
+          } else {
+            settings[param] = parameterValues[param];
+          }
+        }
+      });
+
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         followUpAnswers,
@@ -212,14 +240,7 @@ export function GameDesignAssistant({
             }
           ])
         ),
-        settings: {
-          temperature,
-          ...(useMaxCompleteTokens && selectedModel.startsWith('o1')
-            ? { max_completion_tokens: maxTokens }
-            : { max_tokens: maxTokens }
-          ),
-          model: selectedModel
-        }
+        settings
       });
       return res.json();
     },
@@ -483,6 +504,108 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
   }, [selectedModel, toast]);
 
 
+  const renderParameterControls = () => {
+    if (isLoadingParameters) {
+      return (
+        <div className="space-y-4">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {Object.entries(modelParameters).map(([param, config]) => (
+          <div key={param} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={`enable-${param}`}
+                  checked={enabledParameters[param] ?? false}
+                  onCheckedChange={(checked) => {
+                    setEnabledParameters(prev => ({
+                      ...prev,
+                      [param]: checked as boolean
+                    }));
+                  }}
+                />
+                <label
+                  htmlFor={`enable-${param}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {param.split('_').map(word =>
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                  ).join(' ')}
+                </label>
+              </div>
+              {config.type === "float" || config.type === "integer" ? (
+                <div className="w-64">
+                  <Slider
+                    value={[parameterValues[param] as number || config.default]}
+                    onValueChange={([value]) => {
+                      setParameterValues(prev => ({
+                        ...prev,
+                        [param]: value
+                      }));
+                    }}
+                    disabled={!enabledParameters[param]}
+                    min={config.min}
+                    max={config.max}
+                    step={config.type === "float" ? 0.1 : 1}
+                    className="w-full"
+                  />
+                </div>
+              ) : config.type === "enum" ? (
+                <Select
+                  value={parameterValues[param] as string}
+                  onValueChange={(value) => {
+                    setParameterValues(prev => ({
+                      ...prev,
+                      [param]: value
+                    }));
+                  }}
+                  disabled={!enabledParameters[param]}
+                >
+                  <SelectTrigger className="w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {config.values.map((value: string) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
+            <div className="text-xs text-muted-foreground pl-6">
+              {config.description}
+            </div>
+          </div>
+        ))}
+
+        {selectedModel.startsWith('o1') && (
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="use-max-completion-tokens"
+              checked={useMaxCompletionTokens}
+              onCheckedChange={(checked) => setUseMaxCompletionTokens(checked as boolean)}
+            />
+            <label
+              htmlFor="use-max-completion-tokens"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Use max_completion_tokens instead of max_tokens (O1 models)
+            </label>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <Card className="w-full">
       <CardContent className="pt-6">
@@ -606,84 +729,8 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                     </p>
                   </div>
 
-                  {isLoadingParameters ? (
-                    <div className="space-y-4">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-4 w-1/2" />
-                    </div>
-                  ) : (
-                    <>
-                      {Object.entries(modelParameters).map(([param, config]) => (
-                        <div key={param} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <label className="text-sm font-medium">
-                              {param.split('_').map(word =>
-                                word.charAt(0).toUpperCase() + word.slice(1)
-                              ).join(' ')}
-                            </label>
-                            {config.type === "float" || config.type === "integer" ? (
-                              <div className="w-64">
-                                <Slider
-                                  value={[
-                                    param === "temperature" ? temperature :
-                                      param === "max_tokens" ? maxTokens :
-                                        param === "max_completion_tokens" ? maxTokens :
-                                          0
-                                  ]}
-                                  onValueChange={([value]) => {
-                                    if (param === "temperature") setTemperature(value);
-                                    else if (param === "max_tokens" || param === "max_completion_tokens") setMaxTokens(value);
-                                  }}
-                                  min={config.min}
-                                  max={config.max}
-                                  step={config.type === "float" ? 0.1 : 1}
-                                  className="w-full"
-                                />
-                              </div>
-                            ) : config.type === "enum" ? (
-                              <Select
-                                value={param === "response_format" ? "json_object" : undefined}
-                                onValueChange={(value) => {
-                                  // Handle enum parameter changes
-                                }}
-                              >
-                                <SelectTrigger className="w-64">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {config.values.map((value: string) => (
-                                    <SelectItem key={value} value={value}>
-                                      {value}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : null}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {config.description}
-                          </div>
-                        </div>
-                      ))}
-
-                      {selectedModel.startsWith('o1') && (
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="use-max-complete-tokens"
-                            checked={useMaxCompleteTokens}
-                            onCheckedChange={(checked) => setUseMaxCompleteTokens(checked as boolean)}
-                          />
-                          <label
-                            htmlFor="use-max-complete-tokens"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            Use max_completion_tokens for O1 models
-                          </label>
-                        </div>
-                      )}
-                    </>
-                  )}
+                  {/* Parameter Controls */}
+                  {renderParameterControls()}
                 </CollapsibleContent>
               </Collapsible>
 
