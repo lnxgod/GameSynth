@@ -120,11 +120,10 @@ export function GameDesignAssistant({
 
   const analyzeModelMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
-      // Always include model and analysis_model
+      // Simple settings object with just the necessary parameters
       const settings = {
         model: selectedModel,
-        analysis_model: selectedModel,
-        // Include enabled parameters with their values
+        // Include only enabled parameters
         ...Object.entries(enabledParameters)
           .filter(([_, enabled]) => enabled)
           .reduce((acc, [param]) => ({
