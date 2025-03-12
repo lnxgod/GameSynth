@@ -10,6 +10,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ModelConfig, type ModelConfig as ModelConfigType } from "./model-config";
 import { GraphicsGenerator } from "./graphics-generator";
+import { DebugMenu } from "./model-debug-info";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -578,6 +579,13 @@ Include:
                   )}
                 </Button>
               </div>
+              <DebugMenu
+                codeGenModel={modelConfig.model}
+                analysisModel="o3-mini"
+                developmentPlanModel="o1"
+                graphicsModel="o3-mini"
+                currentConfig={modelConfig}
+              />
             </div>
           )}
 
