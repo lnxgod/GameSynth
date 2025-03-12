@@ -733,7 +733,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     gameCode: string;
     appName: string;
     packageName: string;
-    gameType: string;
   }) {
     const execAsync = promisify(exec);
     const buildLogs: string[] = [];
@@ -749,8 +748,9 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       log('Setting up build environment');
       await fs.rm(buildDir, { recursive: true, force: true });
       await fs.mkdir(buildDir, { recursive: true });
+      await fs.mkdir(path.join(buildDir, 'www'), { recursive: true });
 
-      // Create index.html with Ionic components and proper mobile meta tags
+      // Create index.html in www directory
       log('Creating game files');
       const html = `
 <!DOCTYPE html>
@@ -818,9 +818,9 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 </body>
 </html>`;
 
-      await fs.writeFile(path.join(buildDir, 'index.html'), html);
+      await fs.writeFile(path.join(buildDir, 'www', 'index.html'), html);
 
-      // Create package.json with Ionic dependencies
+      // Create package.json with required dependencies
       log('Creating package.json');
       const packageJson = {
         name: options.packageName.replace(/\./g, '-'),
@@ -847,12 +847,12 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         throw error;
       }
 
-      // Create Capacitor config with Ionic settings
+      // Create Capacitor config
       log('Configuring Capacitor');
       const capacitorConfig = {
         appId: options.packageName,
         appName: options.appName,
-        webDir: ".",
+        webDir: "www",
         server: {
           androidScheme: "https",
           cleartext: true
@@ -873,10 +873,10 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         JSON.stringify(capacitorConfig, null, 2)
       );
 
-      // Initialize Capacitor
+      // Initialize Capacitor project
       log('Initializing Capacitor project');
       try {
-        await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir=.`, { cwd: buildDir });
+        await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir="www"`, { cwd: buildDir });
       } catch (error) {
         log('Capacitor init failed', error);
         throw error;
@@ -891,7 +891,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         throw error;
       }
 
-      // Sync web content
+      // Copy web content and sync with Android project
       log('Syncing web content');
       try {
         await execAsync('npx cap sync android', { cwd: buildDir });
@@ -916,23 +916,23 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       } catch (error) {
         log('APK not found at expected location', { path: apkPath });
         throw new Error('APK build failed - output file not found');
-      }
-
-      return {
-        apkPath,
-        logs: buildLogs,
-        downloadUrl: `/download/android/${path.basename(apkPath)}`
-      };
-    } catch (error: any) {
-      log('Build process failed', { error: error.message });
-      throw {
-        message: error.message,
-        logs: buildLogs
-      };
     }
-  }
 
-  // Add this to your routes handler
+    return {
+      apkPath,
+      logs: buildLogs,
+      downloadUrl: `/download/android/${path.basename(apkPath)}`
+    };
+  } catch (error: any) {
+    log('Build process failed', { error: error.message });
+    throw {
+      message: error.message,
+      logs: buildLogs
+    };
+  }
+}
+
+// Add this to your routes handler
   app.post("/api/build/android", async (req, res) => {
     try {
       const { gameCode, appName, packageName, gameType } = req.body;
@@ -955,7 +955,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
           gameCode,
           appName,
           packageName,
-          gameType
         });
 
         res.json({
