@@ -278,7 +278,7 @@ export function GameDesignAssistant({
   const currentQuestion = questions[currentQuestionIndex];
 
   const handleBuildGame = () => {
-    if (!finalDesign) {
+    if (!analyses || Object.keys(analyses).length === 0) {
       toast({
         title: "Error",
         description: "Please analyze the game design first before building.",
@@ -438,7 +438,7 @@ export function GameDesignAssistant({
                 </Button>
                 <Button
                   onClick={handleBuildGame}
-                  disabled={generateMutation.isPending || !finalDesign}
+                  disabled={generateMutation.isPending || Object.keys(analyses).length === 0}
                 >
                   {generateMutation.isPending ? (
                     <>
