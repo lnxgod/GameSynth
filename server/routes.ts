@@ -768,7 +768,7 @@ Each feature should be specific and actionable.`
   // Update the generate endpoint
   app.post("/api/design/generate", async (req, res) => {
     try {
-      const { sessionId, followUpAnswers, analyses, modelConfig } = req.body;
+      const { sessionId, followUpAnswers, analyses, modelConfig, generationPrompt } = req.body;
       const userId = (req.session as any).userId;
       if (!userId) {
         throw new Error("User not authenticated");
@@ -790,26 +790,14 @@ Each feature should be specific and actionable.`
         });
       }
 
-      if (analyses) {
-        Object.entries(analyses).forEach(([aspect, analysisData]) => {
-          if (analysisData && typeof analysisData === 'object') {
-            const details = analysisData.implementation_details || [];
-            const technical = analysisData.technical_considerations || [];
-            const analysis = analysisData.analysis || '';
-
-            history.push({
-              role: 'assistant',
-              content: `Analysis of ${aspect}:\n${analysis}\n\nImplementation details:\n${details.join ? details.join("\n") : ''}\n\nTechnical Considerations:\n${technical.join ? technical.join("\n") : ''}`
-            });
-          }
-        });
+      let gameRequirements = "";
+      if(analyses){
+        gameRequirements = history
+          .filter(msg => msg.role === 'assistant')
+          .map(msg => msg.content)
+          .join('\n\n');
       }
 
-      // Create a comprehensive prompt from the conversation history
-      const gameRequirements = history
-        .filter(msg => msg.role === 'assistant')
-        .map(msg => msg.content)
-        .join('\n\n');
 
       // Configure request based on model type
       const requestConfig: any = {
@@ -820,7 +808,7 @@ Each feature should be specific and actionable.`
           },
           {
             role: "user",
-            content: `Based on these game requirements and our discussion, create a complete HTML5 Canvas game implementation:\n\n${gameRequirements}`
+            content: generationPrompt || `Based on these game requirements and our discussion, create a complete HTML5 Canvas game implementation:\n\n${gameRequirements}`
           }
         ]
       };
@@ -919,7 +907,7 @@ Each feature should be specific and actionable.`
     }
   });
 
-  app.post("/api/games", async (req, res) => {
+  app.post("/api/games", async (req, res) =>{
     try {
       const game = insertGameSchema.parse(req.body);
       const created = await storage.createGame(game);

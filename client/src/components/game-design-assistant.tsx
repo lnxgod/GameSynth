@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +93,7 @@ export function GameDesignAssistant({
     temperature: 0.7,
     reasoning_effort: "medium"
   });
+  const [generationPrompt, setGenerationPrompt] = useState<string>("");
 
   const analyzeModelMutation = useMutation({
     mutationFn: async ({ requirements, sessionId }) => {
@@ -205,7 +206,8 @@ export function GameDesignAssistant({
             }
           ])
         ),
-        modelConfig
+        modelConfig,
+        generationPrompt
       });
       return res.json();
     },
@@ -299,6 +301,35 @@ export function GameDesignAssistant({
     }
     generateMutation.mutate({ modelConfig });
   };
+
+  useEffect(() => {
+    if (finalDesign) {
+      const defaultPrompt = `Based on these game requirements and our discussion, create a complete HTML5 Canvas game implementation:
+
+Game Description:
+${finalDesign.gameDescription}
+
+Core Mechanics:
+${finalDesign.coreMechanics.join("\n")}
+
+Technical Requirements:
+${finalDesign.technicalRequirements.join("\n")}
+
+Implementation Approach:
+${finalDesign.implementationApproach}
+
+Include:
+1. Complete game initialization and setup
+2. Game loop with proper timing
+3. Player controls and movement
+4. Game mechanics implementation
+5. Score tracking and game state management
+6. Clear comments explaining the code
+7. Proper cleanup on game end`;
+
+      setGenerationPrompt(defaultPrompt);
+    }
+  }, [finalDesign]);
 
   return (
     <Card className="w-full">
@@ -411,12 +442,24 @@ export function GameDesignAssistant({
               <ModelConfig onConfigChange={setModelConfig} />
 
               {finalDesign && (
-                <div className="mt-4">
-                  <GraphicsGenerator
-                    gameDesign={finalDesign}
-                    onGraphicsGenerated={onGraphicsGenerated}
-                  />
-                </div>
+                <>
+                  <div className="mt-4">
+                    <h3 className="text-lg font-semibold mb-2">Generation Prompt</h3>
+                    <Textarea
+                      value={generationPrompt}
+                      onChange={(e) => setGenerationPrompt(e.target.value)}
+                      className="min-h-[200px] font-mono text-sm"
+                      placeholder="Customize how your game code should be generated..."
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <GraphicsGenerator
+                      gameDesign={finalDesign}
+                      onGraphicsGenerated={onGraphicsGenerated}
+                    />
+                  </div>
+                </>
               )}
 
               <div className="flex justify-between mt-4 space-x-4">
