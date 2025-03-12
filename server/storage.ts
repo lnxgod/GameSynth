@@ -1,14 +1,8 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
+import { drizzle } from 'drizzle-orm/neon-serverless';
 import { chats, games, features, users, type Chat, type Game, type Feature, type User, type InsertChat, type InsertGame, type InsertFeature, type InsertUser } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from 'drizzle-orm';
-
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-});
-
-const db = drizzle(pool);
+import { db } from './db'; // Import the db instance from db.ts
 
 export interface IStorage {
   // User management
@@ -40,14 +34,14 @@ export class PostgresStorage implements IStorage {
       if (!admin) {
         // Create default admin if doesn't exist
         const hashedPassword = await bcrypt.hash('Password123', 10);
-        await db.insert(users).values({
+        const [newAdmin] = await db.insert(users).values({
           username: 'admin',
           password: hashedPassword,
           role: 'admin',
           forcePasswordChange: true,
           createdAt: new Date()
-        });
-        console.log('Default admin user created successfully');
+        }).returning();
+        console.log('Default admin user created successfully:', newAdmin.username);
       }
     } catch (error) {
       console.error('Failed to ensure default admin:', error);
@@ -85,7 +79,7 @@ export class PostgresStorage implements IStorage {
       })
       .where(eq(users.id, id))
       .returning();
-    console.log('Password updated for user:', user.username); // Add logging
+    console.log('Password updated for user:', user.username);
     return user;
   }
 
