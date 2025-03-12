@@ -88,8 +88,12 @@ export function GameDesignAssistant({
   const analyzeModelMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/analyze', {
-        sessionId,
-        requirements
+        gameType: requirements.gameType,
+        mechanics: requirements.mechanics,
+        visualStyle: requirements.visualStyle,
+        difficulty: requirements.difficulty,
+        specialFeatures: requirements.specialFeatures,
+        sessionId
       });
 
       if (!res.ok) {
@@ -101,21 +105,26 @@ export function GameDesignAssistant({
     },
     onSuccess: (data) => {
       if (data.analysis) {
-        setAnalyses(data.analysis);
-      }
-      if (data.needsMoreInfo) {
-        setFollowUpQuestions(data.additionalQuestions.slice(0, 3));
-        setCurrentFollowUpIndex(0);
-        setShowFollowUp(true);
-        toast({
-          title: "Additional Information Needed",
-          description: "Let's answer some follow-up questions to refine the game design.",
-        });
-      } else {
-        toast({
-          title: "Design Ready",
-          description: "Game design is complete and ready for implementation!",
-        });
+        setAnalyses(prev => ({
+          ...prev,
+          ...data.analysis
+        }));
+
+        if (data.needsMoreInfo) {
+          setFollowUpQuestions(data.additionalQuestions || []);
+          setCurrentFollowUpIndex(0);
+          setShowFollowUp(true);
+          toast({
+            title: "Additional Information Needed",
+            description: "Let's answer some follow-up questions to refine the game design.",
+          });
+        } else {
+          toast({
+            title: "Design Analysis Complete",
+            description: "Game design has been analyzed successfully!",
+          });
+          finalizeMutation.mutate();
+        }
       }
     },
     onError: (error: any) => {
