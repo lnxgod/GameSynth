@@ -367,9 +367,10 @@ Each feature should be specific and actionable.`
       const useMaxCompleteTokens = settings?.useMaxCompleteTokens ?? false;
       const selectedModel = settings?.model || 'gpt-4';
 
-      // Determine whether to use max_complete_tokens based on model type and settings
-      const useCompleteTokens = useMaxCompleteTokens && selectedModel.startsWith('o1');
-      const tokenParam = useCompleteTokens ? { max_complete_tokens: maxTokens } : { max_tokens: maxTokens };
+      // Determine whether to use max_completion_tokens based on model type and settings
+      const tokenParams = useMaxCompleteTokens && selectedModel.startsWith('o1') 
+        ? { max_completion_tokens: maxTokens }
+        : { max_tokens: maxTokens };
 
       // Update the chat completion creation with dynamic token parameter
       const response = await openai.chat.completions.create({
@@ -387,7 +388,7 @@ Each feature should be specific and actionable.`
           }
         ],
         temperature,
-        ...tokenParam
+        ...tokenParams
       });
 
       const content = response.choices[0].message.content || "";
@@ -777,6 +778,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   });
 
 
+
   async function handleAndroidBuild(buildDir: string, options: {
     gameCode: string;
     appName: string;
@@ -902,7 +904,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         },
         plugins: {
           SplashScreen: {
-            launchShowDuration: 0
+            launchShowDuration:0
           }
         },
         android: {
@@ -1084,7 +1086,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
       // Add model-specific parameters
       if (model.startsWith('o1')) {
-        parameters.max_complete_tokens = {
+        parameters.max_completion_tokens = {
           type: "integer",
           min: 1,
           max: modelInfo.context_window || 16000,

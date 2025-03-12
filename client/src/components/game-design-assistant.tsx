@@ -214,8 +214,10 @@ export function GameDesignAssistant({
         ),
         settings: {
           temperature,
-          maxTokens,
-          useMaxCompleteTokens,
+          ...(useMaxCompleteTokens && selectedModel.startsWith('o1')
+            ? { max_completion_tokens: maxTokens }
+            : { max_tokens: maxTokens }
+          ),
           model: selectedModel
         }
       });
@@ -626,11 +628,12 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                                   value={[
                                     param === "temperature" ? temperature :
                                       param === "max_tokens" ? maxTokens :
-                                        0
+                                        param === "max_completion_tokens" ? maxTokens :
+                                          0
                                   ]}
                                   onValueChange={([value]) => {
                                     if (param === "temperature") setTemperature(value);
-                                    else if (param === "max_tokens") setMaxTokens(value);
+                                    else if (param === "max_tokens" || param === "max_completion_tokens") setMaxTokens(value);
                                   }}
                                   min={config.min}
                                   max={config.max}
@@ -675,7 +678,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                             htmlFor="use-max-complete-tokens"
                             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                           >
-                            Use max_complete_tokens for O1 models
+                            Use max_completion_tokens for O1 models
                           </label>
                         </div>
                       )}
