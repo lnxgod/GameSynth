@@ -228,7 +228,9 @@ export async function registerRoutes(app: Express) {
       res.json({
         username: user.username,
         role: user.role,
-        forcePasswordChange: user.forcePasswordChange
+        forcePasswordChange: user.forcePasswordChange,
+        analysis_model: user.analysis_model || "gpt-4o",
+        code_gen_model: user.code_gen_model || "gpt-4o"
       });
     } catch (error: any) {
       console.error('Login error:', error);
@@ -1461,8 +1463,15 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         .where(eq(users.id, user.id))
         .returning();
 
-      res.json(updatedUser);
+      res.json({
+        username: updatedUser.username,
+        role: updatedUser.role,
+        forcePasswordChange: updatedUser.forcePasswordChange,
+        analysis_model: updatedUser.analysis_model || "gpt-4o",
+        code_gen_model: updatedUser.code_gen_model || "gpt-4o"
+      });
     } catch (error: any) {
+      console.error('Model preferences update error:', error);
       res.status(500).json({ error: error.message });
     }
   });

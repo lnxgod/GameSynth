@@ -17,8 +17,13 @@ export const isAuthenticated = async (req: Request, res: Response, next: NextFun
     return res.status(401).json({ error: "User not found" });
   }
 
-  // Add user to request object
-  (req as any).user = user;
+  // Add user to request object with default values for model preferences
+  (req as any).user = {
+    ...user,
+    analysis_model: user.analysis_model || "gpt-4o",
+    code_gen_model: user.code_gen_model || "gpt-4o"
+  };
+
   next();
 };
 
