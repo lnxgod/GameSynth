@@ -505,7 +505,11 @@ Include:
                   <div className="mt-4">
                     <GraphicsGenerator
                       gameDesign={finalDesign}
-                      onGraphicsGenerated={onGraphicsGenerated}
+                      onGraphicsGenerated={(graphics) => {
+                        if (onGraphicsGenerated) {
+                          onGraphicsGenerated(graphics);
+                        }
+                      }}
                     />
                   </div>
                 </>
