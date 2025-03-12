@@ -16,6 +16,8 @@ import { insertUserSchema } from "@shared/schema"; // Import the schema for user
 import { chats, games, features, users } from "@shared/schema"; // Import schema from shared
 import { db } from './db'; // Import the db instance correctly
 import { eq } from 'drizzle-orm';
+import {insertGameDesignSchema} from "@shared/schema"; //Import the schema for game design
+
 
 // Previous imports remain unchanged
 
@@ -360,7 +362,99 @@ export async function registerRoutes(app: Express) {
   });
 
 
-  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users"], isAuthenticated, requirePasswordChange);
+  // Game Design Routes
+  app.post("/api/game-designs", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const designData = insertGameDesignSchema.parse(req.body);
+
+      const savedDesign = await storage.createGameDesign({
+        ...designData,
+        userId: user.id
+      });
+
+      res.json(savedDesign);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/game-designs", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const designs = await storage.getAllGameDesigns(user.id);
+      res.json(designs);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/game-designs/:id", isAuthenticated, async (req, res) => {
+    try {
+      const designId = parseInt(req.params.id);
+      const design = await storage.getGameDesign(designId);
+
+      if (!design) {
+        return res.status(404).json({ error: "Design not found" });
+      }
+
+      // Only allow access to own designs
+      if (design.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      res.json(design);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/game-designs/:id", isAuthenticated, async (req, res) => {
+    try {
+      const designId = parseInt(req.params.id);
+      const existingDesign = await storage.getGameDesign(designId);
+
+      if (!existingDesign) {
+        return res.status(404).json({ error: "Design not found" });
+      }
+
+      // Only allow updating own designs
+      if (existingDesign.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const updateData = insertGameDesignSchema.partial().parse(req.body);
+      const updated = await storage.updateGameDesign(designId, updateData);
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/game-designs/:id", isAuthenticated, async (req, res) => {
+    try {
+      const designId = parseInt(req.params.id);
+      const existingDesign = await storage.getGameDesign(designId);
+
+      if (!existingDesign) {
+        return res.status(404).json({ error: "Design not found" });
+      }
+
+      // Only allow deleting own designs
+      if (existingDesign.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const deleted = await storage.deleteGameDesign(designId);
+      res.json(deleted);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Keep existing protected routes
+  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users", "/api/game-designs"], isAuthenticated, requirePasswordChange);
 
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
@@ -811,8 +905,7 @@ When explaining fixes:
 Remember:
 - Focus on what the game should do vs what it's doing
 - Explain things like you're talking to a friend
-- Keep it simple and clear
-- Always include the complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
+- Keep it simple and clear- Always include the complete fixed code between +++CODESTSTART+++ and +++CODESTOP+++ markers
 
 Format your response as:
 1. 🎮 What's not working? (simple explanation)

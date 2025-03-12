@@ -3,17 +3,24 @@ import { chats, games, features, users, type Chat, type Game, type Feature, type
 import bcrypt from "bcryptjs";
 import { eq } from 'drizzle-orm';
 import { db } from './db'; // Import the db instance from db.ts
+import { type GameDesign, type InsertGameDesign } from '@shared/schema'; // Assuming this import is needed
+
 
 export interface IStorage {
-  // User management
+  // Add new methods to interface
+  createGameDesign(design: InsertGameDesign & { userId: number }): Promise<GameDesign>;
+  getGameDesign(id: number): Promise<GameDesign | undefined>;
+  getAllGameDesigns(userId: number): Promise<GameDesign[]>;
+  updateGameDesign(id: number, design: Partial<InsertGameDesign>): Promise<GameDesign>;
+  deleteGameDesign(id: number): Promise<GameDesign>;
+
+  // Keep existing methods
   createUser(user: InsertUser): Promise<User>;
   getUser(username: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
   updateUserPassword(id: number, password: string): Promise<User>;
   updateUserLastLogin(id: number): Promise<User>;
   ensureDefaultAdmin(): Promise<void>;
-
-  // Existing methods
   createChat(chat: InsertChat): Promise<Chat>;
   getChat(id: number): Promise<Chat | undefined>;
   getAllChats(): Promise<Chat[]>;
@@ -27,6 +34,45 @@ export interface IStorage {
 }
 
 export class PostgresStorage implements IStorage {
+  // Add new methods implementation
+  async createGameDesign(design: InsertGameDesign & { userId: number }): Promise<GameDesign> {
+    const [newDesign] = await db.insert(gameDesigns).values({
+      ...design,
+      updatedAt: new Date(),
+    }).returning();
+    return newDesign;
+  }
+
+  async getGameDesign(id: number): Promise<GameDesign | undefined> {
+    const [design] = await db.select().from(gameDesigns).where(eq(gameDesigns.id, id));
+    return design;
+  }
+
+  async getAllGameDesigns(userId: number): Promise<GameDesign[]> {
+    return await db.select().from(gameDesigns).where(eq(gameDesigns.userId, userId));
+  }
+
+  async updateGameDesign(id: number, design: Partial<InsertGameDesign>): Promise<GameDesign> {
+    const [updated] = await db
+      .update(gameDesigns)
+      .set({
+        ...design,
+        updatedAt: new Date(),
+      })
+      .where(eq(gameDesigns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGameDesign(id: number): Promise<GameDesign> {
+    const [deleted] = await db
+      .delete(gameDesigns)
+      .where(eq(gameDesigns.id, id))
+      .returning();
+    return deleted;
+  }
+
+  // Keep existing methods
   async ensureDefaultAdmin() {
     try {
       // Check if admin user exists
@@ -73,8 +119,8 @@ export class PostgresStorage implements IStorage {
     const hashedPassword = await bcrypt.hash(password, 10);
     const [user] = await db
       .update(users)
-      .set({ 
-        password: hashedPassword, 
+      .set({
+        password: hashedPassword,
         forcePasswordChange: false
       })
       .where(eq(users.id, id))
@@ -147,5 +193,5 @@ export class PostgresStorage implements IStorage {
   }
 }
 
-// Export a single instance
+// Export storage instance
 export const storage = new PostgresStorage();

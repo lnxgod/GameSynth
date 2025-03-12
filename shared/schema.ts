@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
+// Keep existing tables
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -13,7 +14,6 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Keep existing tables
 export const chats = pgTable("chats", {
   id: serial("id").primaryKey(),
   prompt: text("prompt").notNull(),
@@ -39,7 +39,20 @@ export const features = pgTable("features", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
-// Schema for inserting new user
+// Add new table for game designs
+export const gameDesigns = pgTable("game_designs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  analyses: jsonb("analyses").notNull(), // Store all aspect analyses
+  finalDesign: jsonb("final_design").notNull(), // Store the final design document
+  settings: jsonb("settings"), // Store generation settings
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  userId: integer("user_id").references(() => users.id),
+});
+
+// Keep existing schemas
 export const insertUserSchema = createInsertSchema(users)
   .pick({
     username: true,
@@ -50,13 +63,11 @@ export const insertUserSchema = createInsertSchema(users)
     password: z.string().min(8, "Password must be at least 8 characters"),
   });
 
-// Schema for changing password
 export const changePasswordSchema = z.object({
   currentPassword: z.string(),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-// Keep existing schemas
 export const insertChatSchema = createInsertSchema(chats).pick({
   prompt: true,
   response: true,
@@ -77,6 +88,15 @@ export const insertFeatureSchema = createInsertSchema(features).pick({
   completed: true,
 });
 
+// Add new schema for game designs
+export const insertGameDesignSchema = createInsertSchema(gameDesigns).pick({
+  name: true,
+  description: true,
+  analyses: true,
+  finalDesign: true,
+  settings: true,
+});
+
 // Type exports
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -86,3 +106,5 @@ export type InsertGame = z.infer<typeof insertGameSchema>;
 export type Game = typeof games.$inferSelect;
 export type InsertFeature = z.infer<typeof insertFeatureSchema>;
 export type Feature = typeof features.$inferSelect;
+export type InsertGameDesign = z.infer<typeof insertGameDesignSchema>;
+export type GameDesign = typeof gameDesigns.$inferSelect;
