@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -15,6 +15,7 @@ export const games = pgTable("games", {
   name: text("name").notNull(),
   code: text("code").notNull(),
   chatId: integer("chat_id").references(() => chats.id),
+  designSettings: jsonb("design_settings"), // New field to store design assistant data
 });
 
 export const features = pgTable("features", {
@@ -36,6 +37,7 @@ export const insertGameSchema = createInsertSchema(games).pick({
   name: true,
   code: true,
   chatId: true,
+  designSettings: true,
 });
 
 export const insertFeatureSchema = createInsertSchema(features).pick({

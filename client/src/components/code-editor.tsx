@@ -15,6 +15,12 @@ interface ProjectState {
   name: string;
   code: string;
   gameDesign: any;
+  designSettings: {
+    parameterValues: any;
+    enabledParameters: any;
+    selectedModel: any;
+    modelParameters: any;
+  };
   features: Feature[];
   timestamp: string;
 }
@@ -31,7 +37,7 @@ interface CodeEditorProps {
   addDebugLog?: (message: string) => void;
   gameDesign?: any;
   debugContext?: string;
-  onAiOperation?: (op: {type: string; active: boolean}) => void;
+  onAiOperation?: (op: { type: string; active: boolean }) => void;
 }
 
 export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => void }, CodeEditorProps>(
@@ -47,6 +53,11 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
     const [features, setFeatures] = useState<Feature[]>([]);
     const { toast } = useToast();
     const [showBuildControls, setShowBuildControls] = useState(false);
+    const [parameterValues, setParameterValues] = useState<any>(null);
+    const [enabledParameters, setEnabledParameters] = useState<any>(null);
+    const [selectedModel, setSelectedModel] = useState<any>(null);
+    const [modelParameters, setModelParameters] = useState<any>(null);
+
 
     useEffect(() => {
       if (gameDesign && gameDesign.coreMechanics && gameDesign.technicalRequirements) {
@@ -84,7 +95,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
     const chatMutation = useMutation({
       mutationFn: async (message: string) => {
-        onAiOperation?.({type: 'Generating Code...', active: true});
+        onAiOperation?.({ type: 'Generating Code...', active: true });
         const res = await apiRequest("POST", "/api/code/chat", {
           code: localCode,
           message,
@@ -104,10 +115,10 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
             description: "The game code has been updated based on your request",
           });
         }
-        onAiOperation?.({type: '', active: false});
+        onAiOperation?.({ type: '', active: false });
       },
       onError: (error) => {
-        onAiOperation?.({type: '', active: false});
+        onAiOperation?.({ type: '', active: false });
         toast({
           title: "Error",
           description: error.message,
@@ -153,7 +164,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
 
     const debugMutation = useMutation({
       mutationFn: async (providedError?: string) => {
-        onAiOperation?.({type: 'Debugging...', active: true});
+        onAiOperation?.({ type: 'Debugging...', active: true });
         const errorMessage = providedError || debugContext || extractGameErrors();
         if (!errorMessage) {
           throw new Error("No error found in game execution");
@@ -206,12 +217,12 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
             description: data.message || "Your code has been updated to fix the detected issues",
           });
         }
-        onAiOperation?.({type: '', active: false});
+        onAiOperation?.({ type: '', active: false });
       },
       onError: (error: any) => {
         const errorMessage = error?.message || "Failed to process debug information";
         addDebugLog?.("❌ AI Debug: Failed - " + errorMessage);
-        onAiOperation?.({type: '', active: false});
+        onAiOperation?.({ type: '', active: false });
         toast({
           title: "Debug Assistant",
           description: errorMessage,
@@ -248,10 +259,18 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         return;
       }
 
+      const designSettings = {
+        parameterValues,
+        enabledParameters,
+        selectedModel,
+        modelParameters
+      };
+
       const projectState: ProjectState = {
         name: saveName,
         code: localCode,
         gameDesign: gameDesign || {},
+        designSettings,
         features: features,
         timestamp: new Date().toISOString(),
       };
@@ -272,6 +291,13 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
       onCodeChange(project.code);
       if (project.features) {
         setFeatures(project.features);
+      }
+      if (project.designSettings) {
+        const { parameterValues, enabledParameters, selectedModel, modelParameters } = project.designSettings;
+        setParameterValues(parameterValues);
+        setEnabledParameters(enabledParameters);
+        setSelectedModel(selectedModel);
+        setModelParameters(modelParameters);
       }
 
       toast({

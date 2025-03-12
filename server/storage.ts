@@ -55,7 +55,8 @@ export class MemStorage implements IStorage {
     const newGame: Game = {
       ...game,
       id,
-      chatId: game.chatId || null
+      chatId: game.chatId || null,
+      designSettings: game.designSettings || null
     };
     this.games.set(id, newGame);
     return newGame;
