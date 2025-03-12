@@ -11,7 +11,7 @@ interface ModelConfigProps {
 
 export interface ModelConfig {
   model: string;
-  temperature: number;
+  temperature?: number;
   reasoning_effort: "low" | "medium" | "high";
   max_completion_tokens?: number;
 }
@@ -24,7 +24,24 @@ export function ModelConfig({ onConfigChange }: ModelConfigProps) {
   });
 
   const handleChange = (key: keyof ModelConfig, value: any) => {
-    const newConfig = { ...config, [key]: value };
+    const newConfig = { ...config };
+
+    if (key === 'model') {
+      // For O1 model, remove temperature and max_completion_tokens
+      if (value === 'o1') {
+        delete newConfig.temperature;
+        delete newConfig.max_completion_tokens;
+      } else {
+        // For other models, restore default temperature if not present
+        if (!newConfig.temperature) {
+          newConfig.temperature = 0.7;
+        }
+      }
+      newConfig[key] = value;
+    } else {
+      newConfig[key] = value;
+    }
+
     setConfig(newConfig);
     onConfigChange(newConfig);
   };
@@ -55,20 +72,22 @@ export function ModelConfig({ onConfigChange }: ModelConfigProps) {
               </Select>
             </div>
 
-            <div className="flex flex-col space-y-1.5">
-              <Label htmlFor="temperature">Temperature</Label>
-              <Input
-                id="temperature"
-                type="number"
-                min={0}
-                max={2}
-                step={0.1}
-                value={config.temperature}
-                onChange={(e) => handleChange("temperature", parseFloat(e.target.value))}
-              />
-            </div>
+            {config.model !== 'o1' && (
+              <div className="flex flex-col space-y-1.5">
+                <Label htmlFor="temperature">Temperature</Label>
+                <Input
+                  id="temperature"
+                  type="number"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={config.temperature}
+                  onChange={(e) => handleChange("temperature", parseFloat(e.target.value))}
+                />
+              </div>
+            )}
 
-            {config.model.startsWith('o3') && (
+            {config.model.startsWith('o3') || config.model === 'o1' && (
               <>
                 <div className="flex flex-col space-y-1.5">
                   <Label htmlFor="reasoning_effort">Reasoning Effort</Label>
@@ -87,17 +106,19 @@ export function ModelConfig({ onConfigChange }: ModelConfigProps) {
                   </Select>
                 </div>
 
-                <div className="flex flex-col space-y-1.5">
-                  <Label htmlFor="max_completion_tokens">Max Completion Tokens</Label>
-                  <Input
-                    id="max_completion_tokens"
-                    type="number"
-                    min={1}
-                    max={32000}
-                    value={config.max_completion_tokens}
-                    onChange={(e) => handleChange("max_completion_tokens", parseInt(e.target.value))}
-                  />
-                </div>
+                {config.model.startsWith('o3') && (
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="max_completion_tokens">Max Completion Tokens</Label>
+                    <Input
+                      id="max_completion_tokens"
+                      type="number"
+                      min={1}
+                      max={32000}
+                      value={config.max_completion_tokens}
+                      onChange={(e) => handleChange("max_completion_tokens", parseInt(e.target.value))}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>
