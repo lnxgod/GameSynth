@@ -1,3 +1,37 @@
+// Helper function to get model-specific parameters
+const getModelConfig = (model: string, baseConfig: any) => {
+  const config: any = {
+    model,
+    messages: baseConfig.messages
+  };
+
+  // O1 specific configuration - only supports reasoning_effort
+  if (model === 'o1') {
+    if (baseConfig.reasoning_effort) {
+      config.reasoning_effort = baseConfig.reasoning_effort;
+    }
+    // O1 does not support temperature or response_format
+    return config;
+  }
+
+  // O3 models support all parameters
+  if (model.startsWith('o3')) {
+    return {
+      ...config,
+      temperature: baseConfig.temperature,
+      response_format: baseConfig.response_format,
+      reasoning_effort: baseConfig.reasoning_effort
+    };
+  }
+
+  // GPT-4 and other models
+  return {
+    ...config,
+    temperature: baseConfig.temperature,
+    max_tokens: baseConfig.max_tokens
+  };
+};
+
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
@@ -796,9 +830,7 @@ Each feature should be specific and actionable.`
           .join('\n\n');
       }
 
-
-      // Configure request based on model type
-      const requestConfig: any = {
+      const baseConfig = {
         messages: [
           {
             role: "system",
@@ -812,16 +844,14 @@ Each feature should be specific and actionable.`
       };
 
       // Add model-specific configurations
-      if (modelConfig.model.startsWith('o3')) {
-        requestConfig.model = modelConfig.model;
-        requestConfig.reasoning_effort = modelConfig.reasoning_effort || "medium";
-        if (modelConfig.max_completion_tokens) {
-          requestConfig.max_completion_tokens = modelConfig.max_completion_tokens;
-        }
-      }
+      const requestConfig = getModelConfig(modelConfig.model, {
+        ...baseConfig,
+        ...modelConfig
+      });
+
+      logApi("Generate request config:", {}, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
-
       const content = response.choices[0].message.content || "";
       const code = extractGameCode(content);
 
@@ -1653,8 +1683,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
       logApi("Analyzing development plan", { gameDesign, currentFeatures });
 
-      const requestConfig = {
-        model: "o1",
+      const baseConfig = {
         messages: [
           {
             role: "system",
@@ -1696,14 +1725,29 @@ ${currentFeatures ? currentFeatures.join("\n") : "No features implemented yet"}
 Please create a structured plan for implementing this game, starting with a solid foundation and then building up additional features.`
           }
         ],
-        response_format: { type: "json_object" },
-        temperature: 0.7
+        reasoning_effort: "medium"
       };
 
+      const requestConfig = getModelConfig("o1", baseConfig);
       logApi("Development plan request", {}, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
-      const plan = JSON.parse(response.choices[0].message.content || "{}");
+      const resultContent = response.choices[0].message.content || "{}";
+
+      // Since O1 doesn't support response_format, we need to ensure the response is valid JSON
+      let plan;
+      try {
+        plan = JSON.parse(resultContent);
+      } catch (error) {
+        console.error('Failed to parse O1 response as JSON:', resultContent);
+        // Extract JSON-like structure from the response using regex
+        const jsonMatch = resultContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          plan = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('Could not extract valid JSON from model response');
+        }
+      }
 
       logApi("Development plan generated", null, plan, logOpenAIParams(requestConfig));
       res.json(plan);
