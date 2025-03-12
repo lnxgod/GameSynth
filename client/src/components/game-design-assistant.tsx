@@ -8,6 +8,7 @@ import { Loader2, Wand2, ListPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { ModelConfig, type ModelConfig as ModelConfigType } from "./model-config";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -84,6 +85,11 @@ export function GameDesignAssistant({
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const { toast } = useToast();
+  const [modelConfig, setModelConfig] = useState<ModelConfigType>({
+    model: "o3-mini",
+    temperature: 0.7,
+    reasoning_effort: "medium"
+  });
 
   const analyzeModelMutation = useMutation({
     mutationFn: async ({ requirements, sessionId }) => {
@@ -181,7 +187,7 @@ export function GameDesignAssistant({
   });
 
   const generateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({modelConfig}) => {
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         followUpAnswers,
@@ -194,7 +200,8 @@ export function GameDesignAssistant({
               technical_considerations: value?.technical_considerations
             }
           ])
-        )
+        ),
+        modelConfig
       });
       return res.json();
     },
@@ -286,7 +293,7 @@ export function GameDesignAssistant({
       });
       return;
     }
-    generateMutation.mutate();
+    generateMutation.mutate({ modelConfig });
   };
 
   return (
@@ -396,6 +403,8 @@ export function GameDesignAssistant({
           ) : (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Final Review</h3>
+
+              <ModelConfig onConfigChange={setModelConfig} />
 
               <div className="flex justify-between mt-4 space-x-4">
                 <Button variant="outline" onClick={handleBack}>

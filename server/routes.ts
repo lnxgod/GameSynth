@@ -651,9 +651,10 @@ Each feature should be specific and actionable.`
     }
   });
 
+  // Update the generate endpoint
   app.post("/api/design/generate", async (req, res) => {
     try {
-      const { sessionId, followUpAnswers, analyses } = req.body;
+      const { sessionId, followUpAnswers, analyses, modelConfig } = req.body;
       const userId = (req.session as any).userId;
       if (!userId) {
         throw new Error("User not authenticated");
@@ -664,7 +665,7 @@ Each feature should be specific and actionable.`
         throw new Error("No design conversation found");
       }
 
-      logApi("Game generation request", { sessionId });
+      logApi("Game generation request", { sessionId, modelConfig });
 
       if (followUpAnswers) {
         Object.entries(followUpAnswers).forEach(([question, answer]) => {
@@ -690,8 +691,8 @@ Each feature should be specific and actionable.`
         .map(msg => msg.content)
         .join('\n\n');
 
-      const response = await openai.chat.completions.create({
-        model: "o3-mini",
+      // Configure request based on model type
+      const requestConfig: any = {
         messages: [
           {
             role: "system",
@@ -702,10 +703,22 @@ Each feature should be specific and actionable.`
             content: `Based on these game requirements and our discussion, create a complete HTML5 Canvas game implementation:\n\n${gameRequirements}`
           }
         ],
-        reasoning_effort: "medium",
-        temperature: 0.7,
-        max_tokens: 16000
-      });
+        temperature: modelConfig.temperature || 0.7
+      };
+
+      // Add model-specific configurations
+      if (modelConfig.model.startsWith('o3')) {
+        requestConfig.model = modelConfig.model;
+        requestConfig.reasoning_effort = modelConfig.reasoning_effort || "medium";
+        if (modelConfig.max_completion_tokens) {
+          requestConfig.max_completion_tokens = modelConfig.max_completion_tokens;
+        }
+      } else {
+        requestConfig.model = modelConfig.model;
+        requestConfig.max_completion_tokens = 16000; //Using max_completion_tokens for all models except o3
+      }
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const code = extractGameCode(content);
