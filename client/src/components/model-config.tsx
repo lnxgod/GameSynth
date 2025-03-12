@@ -49,7 +49,7 @@ export function ModelConfig({ onConfigChange }: ModelConfigProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="o3-mini">O3 Mini</SelectItem>
-                  <SelectItem value="o3-mini-high">O3 Mini High</SelectItem>
+                  <SelectItem value="o1">O1</SelectItem>
                   <SelectItem value="gpt-4o">GPT-4 Optimized</SelectItem>
                 </SelectContent>
               </Select>

@@ -1654,7 +1654,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       logApi("Analyzing development plan", { gameDesign, currentFeatures });
 
       const requestConfig = {
-        model: "o3-mini-high",
+        model: "o1",
         messages: [
           {
             role: "system",
