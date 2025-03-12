@@ -470,7 +470,7 @@ export async function registerRoutes(app: Express) {
       logApi(`Analyzing ${aspect}`, { aspect, content });
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.analysis_model || "gpt-4o", // Use analysis model preference
         messages: [
           {
             role: "system",
@@ -513,7 +513,7 @@ export async function registerRoutes(app: Express) {
       logApi("Generating final design", { sessionId });
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.analysis_model || "gpt-4o", // Use analysis model preference
         messages: [
           {
             role: "system",
@@ -560,7 +560,7 @@ export async function registerRoutes(app: Express) {
       logApi("Generating features request", { gameDesign, currentFeatures });
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.analysis_model || "gpt-4o", // Use analysis model preference
         messages: [
           {
             role: "system",
@@ -656,7 +656,7 @@ Each feature should be specific and actionable.`
 
       // Update the chat completion creation with dynamic token parameter
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || selectedModel,
+        model: user.code_gen_model || selectedModel, // Use code generation model preference
         messages: [
           {
             role: "system",
@@ -701,7 +701,7 @@ Each feature should be specific and actionable.`
       logApi("Chat request received", { prompt, temperature, maxTokens });
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
         messages: [
           {
             role: "system",
@@ -805,7 +805,7 @@ When modifying code:
 8. DO NOT include HTML, just the JavaScript game code`;
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
         messages: [
           {
             role: "system",
@@ -844,7 +844,7 @@ When modifying code:
       const user = (req as any).user;
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
         messages: [
           {
             role: "system",
@@ -889,7 +889,7 @@ When providing suggestions:
         return res.status(400).json({
           error: "Missing Information",
           message: isNonTechnicalMode
-            ? "I need to see the game running first to help fix any problems. Could you try playing the game and let me know what's not working?"
+            ? "I need to see the game running first to help fix any problems. Could you try playing the game and let meknow what's not working?"
             : "Please run the game first so I can help fix any errors.",
         });
       }
@@ -935,7 +935,7 @@ Format your response as:
 3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`;
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
         messages: [
           {
             role: "system",
@@ -1028,7 +1028,7 @@ Please help fix this issue!`
       logApi("Hint request received", { context, currentFeature });
 
       const response = await openai.chat.completions.create({
-        model: user.modelPreference || "gpt-4o",
+        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
         messages: [
           {
             role: "system",
@@ -1443,6 +1443,27 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       res.json(safeUser);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Update route to handle separate model preferences
+  app.patch("/api/users/model-preferences", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { analysisModel, codeGenModel } = req.body;
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({ 
+          analysis_model: analysisModel,
+          code_gen_model: codeGenModel
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

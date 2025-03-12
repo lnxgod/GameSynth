@@ -10,7 +10,7 @@ import { AIStatusIndicator } from "@/components/ai-status-indicator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ModelSelector } from "@/components/model-selector";
+import { ConfigMenu } from "@/components/config-menu";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState("");
@@ -68,19 +68,16 @@ export default function Home() {
         <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
           AI Game Creator
         </h1>
-        <div className="flex items-center space-x-4">
-          <ModelSelector />
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="non-technical-mode"
-              checked={isNonTechnicalMode}
-              onCheckedChange={setIsNonTechnicalMode}
-              className="data-[state=checked]:bg-primary"
-            />
-            <Label htmlFor="non-technical-mode" className="text-sm">
-              {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
-            </Label>
-          </div>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="non-technical-mode"
+            checked={isNonTechnicalMode}
+            onCheckedChange={setIsNonTechnicalMode}
+            className="data-[state=checked]:bg-primary"
+          />
+          <Label htmlFor="non-technical-mode" className="text-sm">
+            {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
+          </Label>
         </div>
       </div>
 
@@ -116,6 +113,7 @@ export default function Home() {
             <TabsTrigger value="preview" className="flex-1">Game Preview</TabsTrigger>
             <TabsTrigger value="code" className="flex-1" data-tab="code">Code Editor</TabsTrigger>
             <TabsTrigger value="features" className="flex-1">Features</TabsTrigger>
+            <TabsTrigger value="config" className="flex-1">Config</TabsTrigger>
             <TabsTrigger value="debug" className="flex-1">Debug Logs</TabsTrigger>
             <TabsTrigger value="api" className="flex-1">API Logs</TabsTrigger>
           </TabsList>
@@ -145,6 +143,10 @@ export default function Home() {
               onAiOperation={setAiOperation}
               isNonTechnicalMode={isNonTechnicalMode}
             />
+          </TabsContent>
+
+          <TabsContent value="config" className="mt-4">
+            <ConfigMenu />
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4">
