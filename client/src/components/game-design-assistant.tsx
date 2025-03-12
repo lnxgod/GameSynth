@@ -277,6 +277,18 @@ export function GameDesignAssistant({
 
   const currentQuestion = questions[currentQuestionIndex];
 
+  const handleBuildGame = () => {
+    if (!finalDesign) {
+      toast({
+        title: "Error",
+        description: "Please analyze the game design first before building.",
+        variant: "destructive"
+      });
+      return;
+    }
+    generateMutation.mutate();
+  };
+
   return (
     <Card className="w-full">
       <CardContent className="pt-6">
@@ -425,8 +437,8 @@ export function GameDesignAssistant({
                   )}
                 </Button>
                 <Button
-                  onClick={() => generateMutation.mutate()}
-                  disabled={generateMutation.isPending}
+                  onClick={handleBuildGame}
+                  disabled={generateMutation.isPending || !finalDesign}
                 >
                   {generateMutation.isPending ? (
                     <>

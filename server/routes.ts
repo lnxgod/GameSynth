@@ -653,15 +653,26 @@ Each feature should be specific and actionable.`
 
   app.post("/api/design/generate", async (req, res) => {
     try {
-      const { sessionId, followUpAnswers, analyses, settings } = req.body;
-      const user = (req as any).user;
-      const history = designConversations.get(sessionId);
+      const { sessionId, followUpAnswers, analyses } = req.body;
+      const userId = (req.session as any).userId;
+      if (!userId) {
+        throw new Error("User not authenticated");
+      }
 
+      // Get user preferences
+      let userPreferences;
+      try {
+        userPreferences = await storage.getUserById(userId);
+      } catch (error) {
+        console.error('Failed to get user preferences:', error);
+      }
+
+      const history = designConversations.get(sessionId);
       if (!history) {
         throw new Error("No design conversation found");
       }
 
-      logApi("Game generation request", { sessionId, settings });
+      logApi("Game generation request", { sessionId });
 
       if (followUpAnswers) {
         Object.entries(followUpAnswers).forEach(([question, answer]) => {
@@ -681,19 +692,8 @@ Each feature should be specific and actionable.`
         });
       }
 
-      const temperature = settings?.temperature ?? 0.7;
-      const maxTokens = settings?.maxTokens ?? 16000;
-      const useMaxCompleteTokens = settings?.useMaxCompleteTokens ?? false;
-      const selectedModel = settings?.model || 'gpt-4';
-
-      // Determine whether to use max_completion_tokens based on model type and settings
-      const tokenParams = useMaxCompleteTokens && selectedModel.startsWith('o1')
-        ? { max_completion_tokens: maxTokens }
-        : { max_tokens: maxTokens };
-
-      // Update the chat completion creation with dynamic token parameter
       const response = await openai.chat.completions.create({
-        model: user.code_gen_model || selectedModel, // Use code generation model preference
+        model: userPreferences?.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -706,8 +706,8 @@ Each feature should be specific and actionable.`
             }`
           }
         ],
-        temperature,
-        ...tokenParams
+        temperature: 0.7,
+        max_tokens: 16000
       });
 
       const content = response.choices[0].message.content || "";
@@ -718,7 +718,7 @@ Each feature should be specific and actionable.`
         response: content
       };
 
-      logApi("Game code generated", { sessionId, settings }, result);
+      logApi("Game code generated", { sessionId }, result);
       res.json(result);
     } catch (error: any) {
       logApi("Error generating game", req.body, { error: error.message });
@@ -900,7 +900,7 @@ When providing suggestions:
           },
           {
             role: "user",
-            content: `Please analyze this game code and suggest 3 improvements that help implement these remaining features: ${features?.join(", ")}\n\n${code}`
+            content: `Please analyze this game code and suggest 3 improvements that help implement theseremaining features: ${features?.join(", ")}\n\n${code}`
           }
         ],
         response_format: { type: "json_object" },
