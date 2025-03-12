@@ -1,5 +1,14 @@
+import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
 import { chats, games, features, users, type Chat, type Game, type Feature, type User, type InsertChat, type InsertGame, type InsertFeature, type InsertUser } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import { eq } from 'drizzle-orm';
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const db = drizzle(pool);
 
 export interface IStorage {
   // User management
@@ -8,6 +17,7 @@ export interface IStorage {
   getUserById(id: number): Promise<User | undefined>;
   updateUserPassword(id: number, password: string): Promise<User>;
   updateUserLastLogin(id: number): Promise<User>;
+  ensureDefaultAdmin(): Promise<void>;
 
   // Existing methods
   createChat(chat: InsertChat): Promise<Chat>;
@@ -22,174 +32,126 @@ export interface IStorage {
   updateFeatureStatus(id: number, completed: boolean): Promise<Feature>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private chats: Map<number, Chat>;
-  private games: Map<number, Game>;
-  private features: Map<number, Feature>;
-  private userId: number;
-  private chatId: number;
-  private gameId: number;
-  private featureId: number;
-  private usernameIndex: Map<string, number>;
-
-  constructor() {
-    this.users = new Map();
-    this.chats = new Map();
-    this.games = new Map();
-    this.features = new Map();
-    this.userId = 1;
-    this.chatId = 1;
-    this.gameId = 1;
-    this.featureId = 1;
-    this.usernameIndex = new Map();
-
-    // Create default admin user
-    this.createDefaultAdmin().catch(console.error);
-  }
-
-  private async createDefaultAdmin() {
-    const hashedPassword = await bcrypt.hash('Password123', 10);
-    const admin: User = {
-      id: this.userId++,
-      username: 'admin',
-      password: hashedPassword,
-      role: 'admin',
-      forcePasswordChange: true,
-      lastLogin: null,
-      createdAt: new Date()
-    };
-    this.users.set(admin.id, admin);
-    this.usernameIndex.set(admin.username, admin.id);
+export class PostgresStorage implements IStorage {
+  async ensureDefaultAdmin() {
+    try {
+      // Check if admin user exists
+      const admin = await this.getUser('admin');
+      if (!admin) {
+        // Create default admin if doesn't exist
+        const hashedPassword = await bcrypt.hash('Password123', 10);
+        await db.insert(users).values({
+          username: 'admin',
+          password: hashedPassword,
+          role: 'admin',
+          forcePasswordChange: true,
+          createdAt: new Date()
+        });
+        console.log('Default admin user created successfully');
+      }
+    } catch (error) {
+      console.error('Failed to ensure default admin:', error);
+      throw error;
+    }
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const id = this.userId++;
     const hashedPassword = await bcrypt.hash(user.password, 10);
-    const newUser: User = {
+    const [newUser] = await db.insert(users).values({
       ...user,
-      id,
       password: hashedPassword,
       forcePasswordChange: true,
-      lastLogin: null,
-      createdAt: new Date()
-    };
-    this.users.set(id, newUser);
-    this.usernameIndex.set(user.username, id);
+    }).returning();
     return newUser;
   }
 
   async getUser(username: string): Promise<User | undefined> {
-    const id = this.usernameIndex.get(username);
-    return id ? this.users.get(id) : undefined;
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async getUserById(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async updateUserPassword(id: number, password: string): Promise<User> {
-    const user = this.users.get(id);
-    if (!user) {
-      throw new Error("User not found");
-    }
     const hashedPassword = await bcrypt.hash(password, 10);
-    const updatedUser: User = {
-      ...user,
-      password: hashedPassword,
-      forcePasswordChange: false
-    };
-    this.users.set(id, updatedUser);
-    return updatedUser;
+    const [user] = await db
+      .update(users)
+      .set({ 
+        password: hashedPassword, 
+        forcePasswordChange: false
+      })
+      .where(eq(users.id, id))
+      .returning();
+    console.log('Password updated for user:', user.username); // Add logging
+    return user;
   }
 
   async updateUserLastLogin(id: number): Promise<User> {
-    const user = this.users.get(id);
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const updatedUser: User = {
-      ...user,
-      lastLogin: new Date()
-    };
-    this.users.set(id, updatedUser);
-    return updatedUser;
+    const [user] = await db
+      .update(users)
+      .set({ lastLogin: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
   }
 
-  // Existing methods remain unchanged
   async createChat(chat: InsertChat): Promise<Chat> {
-    const id = this.chatId++;
-    const newChat: Chat = {
-      ...chat,
-      id,
-      timestamp: new Date(),
-      code: chat.code || null
-    };
-    this.chats.set(id, newChat);
+    const [newChat] = await db.insert(chats).values(chat).returning();
     return newChat;
   }
 
   async getChat(id: number): Promise<Chat | undefined> {
-    return this.chats.get(id);
+    const [chat] = await db.select().from(chats).where(eq(chats.id, id));
+    return chat;
   }
 
   async getAllChats(): Promise<Chat[]> {
-    return Array.from(this.chats.values());
+    return await db.select().from(chats);
   }
 
   async createGame(game: InsertGame): Promise<Game> {
-    const id = this.gameId++;
-    const newGame: Game = {
-      ...game,
-      id,
-      chatId: game.chatId || null,
-      designSettings: game.designSettings || null
-    };
-    this.games.set(id, newGame);
+    const [newGame] = await db.insert(games).values(game).returning();
     return newGame;
   }
 
   async getGame(id: number): Promise<Game | undefined> {
-    return this.games.get(id);
+    const [game] = await db.select().from(games).where(eq(games.id, id));
+    return game;
   }
 
   async getAllGames(): Promise<Game[]> {
-    return Array.from(this.games.values());
+    return await db.select().from(games);
   }
 
   async createFeature(feature: InsertFeature): Promise<Feature> {
-    const id = this.featureId++;
-    const newFeature: Feature = {
-      ...feature,
-      id,
-      timestamp: new Date(),
-      completed: feature.completed || false
-    };
-    this.features.set(id, newFeature);
+    const [newFeature] = await db.insert(features).values(feature).returning();
     return newFeature;
   }
 
   async getFeature(id: number): Promise<Feature | undefined> {
-    return this.features.get(id);
+    const [feature] = await db.select().from(features).where(eq(features.id, id));
+    return feature;
   }
 
   async getAllFeatures(gameId?: number): Promise<Feature[]> {
-    const features = Array.from(this.features.values());
     if (gameId) {
-      return features.filter(f => f.gameId === gameId);
+      return await db.select().from(features).where(eq(features.gameId, gameId));
     }
-    return features;
+    return await db.select().from(features);
   }
 
   async updateFeatureStatus(id: number, completed: boolean): Promise<Feature> {
-    const feature = this.features.get(id);
-    if (!feature) {
-      throw new Error("Feature not found");
-    }
-    const updatedFeature = { ...feature, completed };
-    this.features.set(id, updatedFeature);
-    return updatedFeature;
+    const [feature] = await db
+      .update(features)
+      .set({ completed })
+      .where(eq(features.id, id))
+      .returning();
+    return feature;
   }
 }
 
-export const storage = new MemStorage();
+// Export a single instance
+export const storage = new PostgresStorage();

@@ -181,6 +181,15 @@ When providing code:
 let addDebugLog: ((message: string) => void) | undefined; //Added to handle debug logging
 
 export async function registerRoutes(app: Express) {
+  // Ensure database is initialized
+  try {
+    await storage.ensureDefaultAdmin();
+    console.log('Database initialized with admin user');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    throw error;
+  }
+
   app.use(session({
     secret: 'your-secret-key',
     resave: false,
