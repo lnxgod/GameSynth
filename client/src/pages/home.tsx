@@ -31,6 +31,8 @@ export default function Home() {
 
   const handleCodeChange = (newCode: string) => {
     setGameCode(newCode);
+    // Save to localStorage whenever code changes
+    localStorage.setItem('currentGameCode', newCode);
     addDebugLog("Code updated in editor");
   };
 
