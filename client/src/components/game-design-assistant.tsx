@@ -1,25 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2, ListPlus, Settings2, Bug } from "lucide-react";
+import { Loader2, Wand2, ListPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-
-// Update the ModelType definition to be more flexible
-type ModelType = string;
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -97,28 +85,12 @@ export function GameDesignAssistant({
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const { toast } = useToast();
 
-  const [showDebugContext, setShowDebugContext] = useState(false);
-
-  // Default model for code generation
-  const [selectedModel] = useState<string>('o3-mini-high');
-
-  const { data: availableModels } = useQuery({
-    queryKey: ['models'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', '/api/models');
-      return res.json();
-    }
-  });
-
   const analyzeModelMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
       const res = await apiRequest('POST', '/api/design/analyze', {
         aspect,
         content: requirements[aspect],
-        sessionId,
-        settings: {
-          model: 'gpt-4o'  // Always use gpt-4o for analysis
-        }
+        sessionId
       });
 
       if (!res.ok) {
@@ -180,23 +152,11 @@ export function GameDesignAssistant({
       return res.json();
     },
     onSuccess: (data) => {
-      if (!data.features || !Array.isArray(data.features)) {
-        throw new Error("Invalid response format");
-      }
-
       setGeneratedFeatures([...generatedFeatures, ...data.features]);
       onFeaturesGenerated([...generatedFeatures, ...data.features]);
-
       toast({
         title: "Features Generated",
         description: `Added ${data.features.length} new features to the game design.`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error Generating Features",
-        description: error.message,
-        variant: "destructive",
       });
     }
   });
@@ -215,10 +175,7 @@ export function GameDesignAssistant({
               technical_considerations: value?.technical_considerations
             }
           ])
-        ),
-        settings: {
-          model: selectedModel // Use selected model for code generation
-        }
+        )
       });
       return res.json();
     },
@@ -231,13 +188,6 @@ export function GameDesignAssistant({
         });
       }
       onDesignGenerated(data);
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
     }
   });
 
@@ -302,178 +252,6 @@ export function GameDesignAssistant({
     }
   };
 
-  const currentQuestion = questions[currentQuestionIndex];
-
-  const renderDesignDoc = () => {
-    if (!finalDesign) return null;
-
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Game Design Document</h3>
-        <div className="space-y-4">
-          <div>
-            <div className="font-semibold">Initial Requirements:</div>
-            <ul className="list-disc pl-4">
-              <li>Game Type: {requirements.gameType}</li>
-              <li>Mechanics: {requirements.mechanics}</li>
-              <li>Visual Style: {requirements.visualStyle}</li>
-              <li>Difficulty: {requirements.difficulty}</li>
-              <li>Special Features: {requirements.specialFeatures}</li>
-            </ul>
-          </div>
-
-          <div>
-            <div className="font-semibold">Technical Analysis:</div>
-            {Object.entries(analyses).map(([aspect, analysis]) => (
-              <div key={aspect} className="mt-2">
-                <div className="font-medium capitalize">{aspect}:</div>
-                <div className="text-sm text-muted-foreground">{analysis?.analysis}</div>
-                <ul className="list-disc pl-4 text-sm mt-1">
-                  {analysis?.implementation_details.map((detail, i) => (
-                    <li key={i}>{detail}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          {Object.keys(followUpAnswers).length > 0 && (
-            <div>
-              <div className="font-semibold">Follow-up Details:</div>
-              <ul className="list-disc pl-4">
-                {Object.entries(followUpAnswers).map(([question, answer], index) => (
-                  <li key={index}>
-                    <span className="font-medium">{question}</span>: {answer}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderAIPrompt = () => {
-    if (!finalDesign) return null;
-
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">AI Generation Prompt</h3>
-        <ScrollArea className="h-[200px] w-full rounded-md border p-4">
-          <pre className="whitespace-pre-wrap font-mono text-sm">
-            {`Creating HTML5 Canvas game with the following specifications:
-Game Description:
-${finalDesign.gameDescription}
-
-Core Mechanics:
-${finalDesign.coreMechanics.join("\n")}
-
-Technical Requirements:
-${finalDesign.technicalRequirements.join("\n")}
-
-Implementation Approach:
-${finalDesign.implementationApproach}
-
-Additional Specifications:
-${Object.entries(analyses).map(([aspect, analysis]) =>
-  `${aspect.toUpperCase()}:
-  - Analysis: ${analysis?.analysis}
-  - Implementation: ${analysis?.implementation_details.join(", ")}
-  - Technical: ${analysis?.technical_considerations.join(", ")}`
-).join("\n\n")}
-
-Follow-up Details:
-${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")}`}
-          </pre>
-        </ScrollArea>
-      </div>
-    );
-  };
-
-  const renderCurrentPrompt = () => {
-    if (finalDesign) {
-      return (
-        <>
-          {renderDesignDoc()}
-          {renderAIPrompt()}
-        </>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {Object.entries(requirements).map(([aspect, value]) => {
-          const analysis = analyses[aspect as keyof GameRequirements];
-          return (
-            <div key={aspect} className="space-y-2">
-              <div className="font-semibold capitalize">{aspect}:</div>
-              <div>{value}</div>
-              {analysis && (
-                <>
-                  <div className="text-sm text-muted-foreground">{analysis.analysis}</div>
-                  {analysis.implementation_details.length > 0 && (
-                    <ul className="list-disc pl-4 text-sm">
-                      {analysis.implementation_details.map((detail, index) => (
-                        <li key={index}>{detail}</li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderDebugContext = () => {
-    if (!debugContext) return null;
-
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Debug Context</h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDebugContext(!showDebugContext)}
-          >
-            {showDebugContext ? "Hide Context" : "Show Context"}
-          </Button>
-        </div>
-
-        {showDebugContext && (
-          <Card className="p-4">
-            <ScrollArea className="h-[200px] w-full rounded-md border p-4">
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <Bug className="h-5 w-5 mt-1 text-yellow-500" />
-                  <div>
-                    <div className="font-medium">Current Debug Information:</div>
-                    <pre className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {debugContext}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-          </Card>
-        )}
-      </div>
-    );
-  };
-
-
-  const renderParameterControls = () => {
-    return null;
-  };
-
-
-  const handleModelChange = (value: string) => {
-  };
-
   const fillDemoValues = () => {
     setRequirements({
       gameType: "Arcade",
@@ -485,6 +263,8 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     setCurrentQuestionIndex(questions.length - 1);
     setShowFinalPrompt(true);
   };
+
+  const currentQuestion = questions[currentQuestionIndex];
 
   return (
     <Card className="w-full">
@@ -502,13 +282,31 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Current Design</h3>
             <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-              {renderCurrentPrompt()}
+              {Object.entries(requirements).map(([aspect, value]) => {
+                const analysis = analyses[aspect as keyof GameRequirements];
+                return (
+                  <div key={aspect} className="space-y-2">
+                    <div className="font-semibold capitalize">{aspect}:</div>
+                    <div>{value}</div>
+                    {analysis && (
+                      <>
+                        <div className="text-sm text-muted-foreground">{analysis.analysis}</div>
+                        {analysis.implementation_details.length > 0 && (
+                          <ul className="list-disc pl-4 text-sm">
+                            {analysis.implementation_details.map((detail, index) => (
+                              <li key={index}>{detail}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </ScrollArea>
           </div>
 
-          {renderDebugContext()}
 
           {!showFinalPrompt && !showFollowUp ? (
             <div className="space-y-4">
@@ -575,18 +373,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
           ) : (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Final Review</h3>
-
-              <Collapsible>
-                <CollapsibleTrigger asChild>
-                  <Button variant="outline" className="w-full">
-                    <Settings2 className="mr-2 h-4 w-4" />
-                    Generation Settings
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
-                  {renderParameterControls()}
-                </CollapsibleContent>
-              </Collapsible>
 
               <div className="flex justify-between mt-4 space-x-4">
                 <Button variant="outline" onClick={handleBack}>
@@ -657,14 +443,14 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                       key={index}
                       className={`flex ${
                         message.role === 'assistant' ? 'justify-start' : 'justify-end'
-                        }`}
+                      }`}
                     >
                       <div
                         className={`max-w-[80%] rounded-lg p-3 ${
                           message.role === 'assistant'
                             ? 'bg-muted'
                             : 'bg-primary text-primary-foreground'
-                          }`}
+                        }`}
                       >
                         {message.content}
                       </div>
