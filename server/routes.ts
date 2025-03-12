@@ -1,3 +1,38 @@
+// Helper function to format model parameters for logging
+const logOpenAIParams = (config: any) => {
+  return {
+    model: config.model,
+    reasoning_effort: config.reasoning_effort,
+    max_completion_tokens: config.max_completion_tokens,
+    temperature: config.temperature,
+    response_format: config.response_format
+  };
+};
+
+function logApi(message: string, request?: any, response?: any, openAIConfig?: any) {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = {
+    timestamp,
+    message,
+    request: request ? JSON.stringify(request, null, 2) : undefined,
+    response: response ? JSON.stringify(response, null, 2) : undefined,
+    openAIConfig: openAIConfig ? JSON.stringify(openAIConfig, null, 2) : undefined
+  };
+
+  apiLogs.push(logEntry);
+
+  // Keep log size manageable
+  if (apiLogs.length > 100) {
+    apiLogs.shift();
+  }
+
+  // Log to console for debugging
+  console.log(`[${timestamp}] ${message}`);
+  if (openAIConfig) {
+    console.log('Model Configuration:', openAIConfig);
+  }
+}
+
 // Helper function to get model-specific parameters
 const getModelConfig = (model: string, baseConfig: any) => {
   const config: any = {
@@ -131,103 +166,6 @@ const apiLogs: Array<{
   response?: any;
   openAIConfig?: any;
 }> = [];
-
-const logOpenAIParams = (config: any) => {
-  return {
-    model: config.model,
-    reasoning_effort: config.reasoning_effort,
-    max_completion_tokens: config.max_completion_tokens,
-    temperature: config.temperature,
-    response_format: config.response_format
-  };
-};
-
-function logApi(message: string, request?: any, response?: any, openAIConfig?: any) {
-  const timestamp = new Date().toLocaleTimeString();
-  apiLogs.push({
-    timestamp,
-    message,
-    request: request ? JSON.stringify(request, null, 2) : undefined,
-    response: response ? JSON.stringify(response, null, 2) : undefined,
-    openAIConfig: openAIConfig ? JSON.stringify(openAIConfig, null, 2) : undefined
-  });
-  if (apiLogs.length > 100) {
-    apiLogs.shift();
-  }
-}
-
-const designConversations = new Map<string, Array<{
-  role: 'assistant' | 'user';
-  content: string;
-}>>();
-
-function extractGameCode(content: string): string | null {
-  try {
-    console.log('Starting code extraction...');
-
-    const startMarker = '+++CODESTART+++';
-    const endMarker = '+++CODESTOP+++';
-
-    const startIndex = content.indexOf(startMarker);
-    const endIndex = content.indexOf(endMarker);
-
-    if (startIndex === -1) {
-      console.log('ERROR: No CODESTART marker found in response');
-      return null;
-    }
-
-    if (endIndex === -1) {
-      console.log('ERROR: No CODESTOP marker found in response');
-      console.log('Raw content:', content);
-      return null;
-    }
-
-    let code = content
-      .substring(startIndex + startMarker.length, endIndex)
-      .trim();
-
-    if (code.includes('<script>')) {
-      const scriptStart = code.indexOf('<script>') + 8;
-      const scriptEnd = code.indexOf('</script>');
-      if (scriptEnd > scriptStart) {
-        code = code.substring(scriptStart, scriptEnd).trim();
-      }
-    }
-
-    code = code.replace(/<!DOCTYPE.*?>/, '');
-    code = code.replace(/<html>.*?<body>/s, '');
-    code = code.replace(/<\/body>.*?<\/html>/s, '');
-
-    code = code.replace(/const canvas\s*=\s*document\.getElementById[^;]+;/, '');
-    code = code.replace(/const ctx\s*=\s*canvas\.getContext[^;]+;/, '');
-
-    code = code.replace(/^```javascript\n/, '');
-    code = code.replace(/^```\n/, '');
-    code = code.replace(/\n```$/, '');
-
-    if (!code) {
-      console.log('ERROR: Empty code block found');
-      return null;
-    }
-
-    console.log('Extracted code:', code);
-    return code;
-
-  } catch (error) {
-    console.error('Code extraction failed:', error);
-    return null;
-  }
-}
-
-const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
-When providing code:
-1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
-2. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
-3. Include clear comments explaining the game mechanics
-4. Return fully working, self-contained game code that handles its own game loop
-5. Use requestAnimationFrame for animation
-6. Handle cleanup properly when the game stops`;
-
 
 let addDebugLog: ((message: string) => void) | undefined; //Added to handle debug logging
 
@@ -874,7 +812,7 @@ Each feature should be specific and actionable.`
       const { prompt, modelConfig } = req.body;
       const user = (req as any).user;
 
-      logApi("Chat request received", { prompt, modelConfig });
+      logApi("Chat request received", { prompt }, null, { requestedModel: modelConfig?.model });
 
       const baseConfig = {
         messages: [
@@ -892,7 +830,7 @@ Each feature should be specific and actionable.`
         ...modelConfig
       });
 
-      logApi("Chat request", {}, null, logOpenAIParams(requestConfig));
+      logApi("Chat request configuration", null, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
       const content = response.choices[0].message.content || "";
@@ -912,7 +850,7 @@ Each feature should be specific and actionable.`
         code
       };
 
-      logApi("Chat response generated", { prompt }, result, logOpenAIParams(requestConfig));
+      logApi("Chat response generated", null, { codeLength: code?.length }, logOpenAIParams(requestConfig));
       res.json(result);
     } catch(error: any) {
       logApi("Error in chat", req.body, { error: error.message });
@@ -968,7 +906,7 @@ Explain things in simple terms as if talking to someone new to programming.
 When explaining code or changes:
 1. Use everyday analogies and simple examples
 2. Avoid technical jargon - when you must use it, explain it simply
-3. Focus on what the code does, not how it works internally
+3. Focus on what the code does, nothow it works internally
 4. Use friendly, encouraging language
 5. Break down complex concepts into simple steps
 6. Always wrap the code between +++CODESTART+++ and +++CODESTOP+++ markers
@@ -1735,7 +1673,7 @@ Please create a structured plan for implementing this game, starting with a soli
       };
 
       const requestConfig = getModelConfig("o1", baseConfig);
-      logApi("Development plan request", {}, null, logOpenAIParams(requestConfig));
+      logApi("Development plan request", null, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
       const resultContent = response.choices[0].message.content || "{}";
