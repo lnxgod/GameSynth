@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MyGame</title>
+    <title>My Game</title>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@ionic/core/dist/ionic/ionic.esm.js"></script>
     <script nomodule src="https://cdn.jsdelivr.net/npm/@ionic/core/dist/ionic/ionic.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ionic/core/css/ionic.bundle.css"/>
@@ -59,203 +58,128 @@
         resizeCanvas();
 
         // Game code
-        
-        
+        // Game state variables
+let gameRunning = true;
+let score = 0;
+let lives = 3;
+const bucketWidth = 60;
+const bucketHeight = 20;
+const bombRadius = 8; // Increased bomb radius for better visibility
+const bombSpeedIncrement = 0.1;
+const startingBombSpeed = 2;
+const bombDropInterval = 1500; // Increased interval to slow down bomb dropping
 
-        // Game settings
-        const paddleWidth = 100;
-        const paddleHeight = 10;
-        const maxBombs = 3;
-        const bombRadius = 6; // Fixed syntax error here
-        const powerupRadius = 8;
+// Bucket position
+const bucket = {
+    x: canvas.width / 2 - bucketWidth / 2,
+    y: canvas.height - bucketHeight - 10,
+    width: bucketWidth,
+    height: bucketHeight
+};
 
-        // Game state
-        let paddleX = (canvas.width - paddleWidth) / 2;
-        let bombs = [];
-        let powerups = [];
-        let rightPressed = false;
-        let leftPressed = false;
-        let score = 0;
-        let lives = 3;
-        let shieldActive = false;
-        let gameOver = false;
+// Bomber position and bombs array
+const bomber = {
+    x: 0,
+    y: 30,
+    direction: 2
+};
+const bombs = [];
+let bombSpeed = startingBombSpeed;
 
-        // Initialize game
-        function initGame() {
-            bombs = [];
-            powerups = [];
-            score = 0;
-            lives = 3;
-            shieldActive = false;
-            gameOver = false;
-            generateBomb();
-            update();
+// Timer for dropping bombs
+let lastBombDropTime = 0;
+
+// Handle mouse movement
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    bucket.x = e.clientX - rect.left - bucket.width / 2;
+});
+
+// Create a bomb
+function dropBomb() {
+    bombs.push({ x: bomber.x + 20, y: bomber.y + 10 }); // Adjusted bomb starting position
+}
+
+// Update game state
+function update(timestamp) {
+    // Move bomber
+    bomber.x += bomber.direction;
+    if (bomber.x <= 0 || bomber.x >= canvas.width - 40) {
+        bomber.direction *= -1; // Change direction
+    }
+
+    // Drop bombs at regular intervals
+    if (timestamp - lastBombDropTime > bombDropInterval) {
+        dropBomb();
+        lastBombDropTime = timestamp;
+    }
+
+    // Move bombs
+    for (let i = 0; i < bombs.length; i++) {
+        const bomb = bombs[i];
+        bomb.y += bombSpeed;
+        // Check for collision with the bucket
+        if (bomb.y > bucket.y && bomb.y < bucket.y + bucket.height && bomb.x > bucket.x && bomb.x < bucket.x + bucket.width) {
+            bombs.splice(i, 1); // Remove bomb
+            score += 10; // Increase score
+            bombSpeed += bombSpeedIncrement; // Increase bomb speed
+            i--;
         }
-
-        // Event listeners
-        document.addEventListener('keydown', keyDownHandler, false);
-        document.addEventListener('keyup', keyUpHandler, false);
-
-        function keyDownHandler(e) {
-            if (e.key === 'Right' || e.key === 'ArrowRight') {
-                rightPressed = true;
-            } else if (e.key === 'Left' || e.key === 'ArrowLeft') {
-                leftPressed = true;
+        // If bomb hits the bottom of the screen
+        else if (bomb.y > canvas.height) {
+            bombs.splice(i, 1); // Remove bomb
+            lives--;
+            i--;
+            if (lives <= 0) {
+                gameRunning = false; // End game if no lives left
             }
         }
+    }
+}
 
-        function keyUpHandler(e) {
-            if (e.key === 'Right' || e.key === 'ArrowRight') {
-                rightPressed = false;
-            } else if (e.key === 'Left' || e.key === 'ArrowLeft') {
-                leftPressed = false;
-            }
-        }
+// Render game state
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Generate a bomb object
-        function generateBomb() {
-            const x = Math.random() * (canvas.width - bombRadius * 2) + bombRadius;
-            const y = 50;
-            const speed = 2 + Math.random() * 3;
-            bombs.push({ x, y, speed });
-        }
+    // Draw bomber
+    ctx.fillStyle = 'red';
+    ctx.fillRect(bomber.x, bomber.y, 40, 10);
 
-        // Generate a power-up object
-        function generatePowerup() {
-            const x = Math.random() * (canvas.width - powerupRadius * 2) + powerupRadius;
-            const y = 50;
-            powerups.push({ x, y });
-        }
+    // Draw bucket
+    ctx.fillStyle = 'blue';
+    ctx.fillRect(bucket.x, bucket.y, bucket.width, bucket.height);
 
-        // Draw paddle
-        function drawPaddle() {
-            ctx.beginPath();
-            ctx.rect(paddleX, canvas.height - paddleHeight - 10, paddleWidth, paddleHeight);
-            ctx.fillStyle = shieldActive ? 'cyan' : 'lime';
-            ctx.fill();
-            ctx.closePath();
-        }
+    // Draw bombs
+    ctx.fillStyle = 'red'; // Changed bomb color to red
+    for (const bomb of bombs) {
+        ctx.beginPath();
+        ctx.arc(bomb.x, bomb.y, bombRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
 
-        // Draw bombs
-        function drawBombs() {
-            bombs.forEach((bomb) => {
-                ctx.beginPath();
-                ctx.arc(bomb.x, bomb.y, bombRadius, 0, Math.PI * 2);
-                ctx.fillStyle = 'red';
-                ctx.fill();
-                ctx.closePath();
-            });
-        }
+    // Draw score and lives
+    ctx.fillStyle = 'white';
+    ctx.font = '16px "Press Start 2P"';
+    ctx.fillText(`Score: ${score}`, 10, 20);
+    ctx.fillText(`Lives: ${lives}`, canvas.width - 100, 20);
+}
 
-        // Draw power-ups
-        function drawPowerups() {
-            powerups.forEach((powerup) => {
-                ctx.beginPath();
-                ctx.arc(powerup.x, powerup.y, powerupRadius, 0, Math.PI * 2);
-                ctx.fillStyle = 'gold';
-                ctx.fill();
-                ctx.closePath();
-            });
-        }
+// Game loop
+function gameLoop(timestamp) {
+    if (gameRunning) {
+        update(timestamp);
+        render();
+        requestAnimationFrame(gameLoop);
+    } else {
+        ctx.fillStyle = 'white';
+        ctx.font = '32px "Press Start 2P"';
+        ctx.fillText('Game Over', canvas.width / 2 - 80, canvas.height / 2);
+        ctx.fillText(`Score: ${score}`, canvas.width / 2 - 80, canvas.height / 2 + 40);
+    }
+}
 
-        // Draw score
-        function drawScore() {
-            ctx.font = '16px Arial';
-            ctx.fillStyle = 'white';
-            ctx.fillText('Score: ' + score, 8, 20);
-        }
-
-        // Draw lives
-        function drawLives() {
-            ctx.font = '16px Arial';
-            ctx.fillStyle = 'white';
-            ctx.fillText('Lives: ' + lives, canvas.width - 65, 20);
-        }
-
-        // Move paddle
-        function movePaddle() {
-            if (rightPressed && paddleX < canvas.width - paddleWidth) {
-                paddleX += 7;
-            } else if (leftPressed && paddleX > 0) {
-                paddleX -= 7;
-            }
-        }
-
-        // Update bomb positions
-        function updateBombs() {
-            bombs.forEach((bomb, index) => {
-                bomb.y += bomb.speed;
-                if (bomb.y + bombRadius > canvas.height - paddleHeight - 10 &&
-                    bomb.x > paddleX && bomb.x < paddleX + paddleWidth) {
-                    // Bomb caught by paddle
-                    bombs.splice(index, 1);
-                    score++;
-                    if (score % 5 === 0) generatePowerup(); // Generate power-up every 5 points
-                } else if (bomb.y - bombRadius > canvas.height) {
-                    // Bomb missed
-                    bombs.splice(index, 1);
-                    if (!shieldActive) {
-                        lives--;
-                    }
-                    if (lives <= 0) {
-                        gameOver = true;
-                    }
-                }
-            });
-
-            // Add new bombs if needed
-            if (bombs.length < maxBombs) {
-                generateBomb();
-            }
-        }
-
-        // Update power-up positions
-        function updatePowerups() {
-            powerups.forEach((powerup, index) => {
-                powerup.y += 2;
-                if (powerup.y + powerupRadius > canvas.height - paddleHeight - 10 &&
-                    powerup.x > paddleX && powerup.x < paddleX + paddleWidth) {
-                    // Power-up collected
-                    powerups.splice(index, 1);
-                    activateShield();
-                } else if (powerup.y - powerupRadius > canvas.height) {
-                    // Power-up missed
-                    powerups.splice(index, 1);
-                }
-            });
-        }
-
-        // Activate shield power-up
-        function activateShield() {
-            shieldActive = true;
-            setTimeout(() => {
-                shieldActive = false;
-            }, 5000); // Shield lasts 5 seconds
-        }
-
-        // Main game loop
-        function update() {
-            if (gameOver) {
-                ctx.font = '48px Arial';
-                ctx.fillStyle = 'red';
-                ctx.fillText('Game Over', canvas.width / 2 - 120, canvas.height / 2);
-                return;
-            }
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawPaddle();
-            drawBombs();
-            drawPowerups();
-            drawScore();
-            drawLives();
-            movePaddle();
-            updateBombs();
-            updatePowerups();
-            requestAnimationFrame(update);
-        }
-
-        // Initialize the game
-        initGame();
+// Start the game loop
+requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>

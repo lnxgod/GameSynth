@@ -1,6 +1,6 @@
 {
-  "appId": "com.gamechangersai.gamedemo",
-  "appName": "MyGame",
+  "appId": "com.mygame.app",
+  "appName": "My Game",
   "webDir": "www",
   "server": {
     "androidScheme": "https",

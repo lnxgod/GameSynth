@@ -1,4 +1,4 @@
-package com.gamechangersai.gamedemo;
+package com.mygame.app;
 
 import com.getcapacitor.BridgeActivity;
 

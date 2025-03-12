@@ -9,6 +9,15 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 
+// Add at the top with other constants
+const AVAILABLE_MODELS = {
+  'gpt-4o': 'GPT-4 Optimized (Latest)',
+  'gpt-4': 'GPT-4 (Standard)',
+  'gpt-3.5-turbo': 'GPT-3.5 Turbo (Faster)'
+} as const;
+
+const DEFAULT_MODEL = 'gpt-4o';
+
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
 }
@@ -326,8 +335,9 @@ Each feature should be specific and actionable.`
       const temperature = settings?.temperature ?? 0.7;
       const maxTokens = settings?.maxTokens ?? 16000;
 
+      // Update the chat completion creation
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: settings?.model || DEFAULT_MODEL,
         messages: [
           {
             role: "system",
@@ -995,6 +1005,11 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     const { filename } = req.params;
     const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'debug', filename);
     res.download(filePath);
+  });
+
+  // Add a new endpoint to get available models
+  app.get("/api/models", (req, res) => {
+    res.json(AVAILABLE_MODELS);
   });
 
   const httpServer = createServer(app);

@@ -6,14 +6,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Wand2, ListPlus, Settings2, Bug } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+
+// Add model types
+type ModelType = 'gpt-4o' | 'gpt-4' | 'gpt-3.5-turbo';
+type ModelInfo = Record<ModelType, string>;
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -100,6 +105,15 @@ export function GameDesignAssistant({
 
   const [showDebugContext, setShowDebugContext] = useState(false);
 
+  const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-4o');
+
+  const { data: availableModels } = useQuery<ModelInfo>({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/models');
+      return res.json();
+    }
+  });
 
   const analyzeMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
@@ -192,7 +206,8 @@ export function GameDesignAssistant({
         ),
         settings: {
           temperature,
-          maxTokens
+          maxTokens,
+          model: selectedModel
         }
       });
       return res.json();
@@ -518,10 +533,33 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" className="w-full">
                     <Settings2 className="mr-2 h-4 w-4" />
-                    Debug Settings
+                    Generation Settings
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
+                  {/* Model Selection */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Model Selection</label>
+                    <Select
+                      value={selectedModel}
+                      onValueChange={(value) => setSelectedModel(value as ModelType)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableModels && Object.entries(availableModels).map(([id, name]) => (
+                          <SelectItem key={id} value={id}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Select the AI model to use for code generation
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <label className="text-sm font-medium">Temperature: {temperature}</label>
