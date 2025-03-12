@@ -86,13 +86,9 @@ export function GameDesignAssistant({
   const { toast } = useToast();
 
   const analyzeModelMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ requirements, sessionId }) => {
       const res = await apiRequest('POST', '/api/design/analyze', {
-        gameType: requirements.gameType,
-        mechanics: requirements.mechanics,
-        visualStyle: requirements.visualStyle,
-        difficulty: requirements.difficulty,
-        specialFeatures: requirements.specialFeatures,
+        requirements,
         sessionId
       });
 
@@ -126,6 +122,7 @@ export function GameDesignAssistant({
           finalizeMutation.mutate();
         }
       }
+      onAiOperation?.({ type: '', active: false });
     },
     onError: (error: any) => {
       console.error('Analysis error:', error);
@@ -134,6 +131,7 @@ export function GameDesignAssistant({
         description: error.message || "Failed to analyze design requirements",
         variant: "destructive",
       });
+      onAiOperation?.({ type: '', active: false });
     }
   });
 
@@ -257,7 +255,12 @@ export function GameDesignAssistant({
   };
 
   const handleThink = () => {
-    analyzeModelMutation.mutate();
+    onAiOperation?.({ type: 'Analyzing Game Design...', active: true });
+
+    analyzeModelMutation.mutate({
+      requirements,
+      sessionId
+    });
   };
 
   const fillDemoValues = () => {

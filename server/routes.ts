@@ -70,7 +70,9 @@ Format your response as JSON with the following structure:
 {
   "analysis": "Detailed analysis of this game aspect",
   "implementation_details": ["List of specific features or mechanics to implement"],
-  "technical_considerations": ["Technical aspects to consider"]
+  "technical_considerations": ["Technical aspects to consider"],
+  "needs_clarification": boolean,
+  "clarifying_questions": ["List of clarifying questions"]
 }
 `;
 
@@ -461,7 +463,7 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/design/analyze", async (req, res) => {
     try {
-      const { aspect, content, sessionId } = req.body;
+      const { requirements, sessionId } = req.body;
       const user = (req as any).user;
 
       if (!designConversations.has(sessionId)) {
@@ -469,33 +471,48 @@ export async function registerRoutes(app: Express) {
       }
       const history = designConversations.get(sessionId)!;
 
-      logApi(`Analyzing ${aspect}`, { aspect, content });
+      logApi(`Analyzing game requirements`, { requirements });
 
-      const response = await openai.chat.completions.create({
-        model: user.analysis_model || "gpt-4o", // Use analysis model preference
-        messages: [
-          {
-            role: "system",
-            content: DESIGN_ASSISTANT_PROMPT
-          },
-          {
-            role: "user",
-            content: `Analyze this ${aspect} requirement for an HTML5 Canvas game: ${content}`
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.7
+      // Process all aspects in parallel
+      const analysisPromises = Object.entries(requirements).map(async ([aspect, content]) => {
+        const response = await openai.chat.completions.create({
+          model: user.analysis_model || "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: DESIGN_ASSISTANT_PROMPT
+            },
+            {
+              role: "user",
+              content: `Analyze this ${aspect} requirement for an HTML5 Canvas game: ${content}`
+            }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.7
+        });
+
+        const analysis = JSON.parse(response.choices[0].message.content || "{}");
+
+        history.push({
+          role: 'assistant',
+          content: `Analysis of ${aspect}:\n${analysis.analysis}\n\nImplementation details:\n${analysis.implementation_details.join("\n")}`
+        });
+
+        return [aspect, analysis];
       });
 
-      const analysis = JSON.parse(response.choices[0].message.content || "{}");
+      const analysisResults = await Promise.all(analysisPromises);
+      const combinedAnalysis = Object.fromEntries(analysisResults);
 
-      history.push({
-        role: 'assistant',
-        content: `Analysis of ${aspect}:\n${analysis.analysis}\n\nImplementation details:\n${analysis.implementation_details.join("\n")}`
+      logApi(`Analysis complete for all aspects`, { combinedAnalysis });
+      res.json({ 
+        analysis: combinedAnalysis,
+        needsMoreInfo: analysisResults.some(([_, analysis]) => analysis.needs_clarification),
+        additionalQuestions: analysisResults
+          .filter(([_, analysis]) => analysis.needs_clarification)
+          .map(([_, analysis]) => analysis.clarifying_questions)
+          .flat()
       });
-
-      logApi(`Analysis complete for ${aspect}`, { analysis });
-      res.json(analysis);
     } catch (error: any) {
       logApi("Error in analysis", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
@@ -874,8 +891,7 @@ When providing suggestions:
 
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
-      logApi("Remix suggestions generated", { code }, suggestions);
-      res.json(suggestions);
+      logApi("Remix suggestions generated", { code }, suggestions);res.json(suggestions);
     } catch (error: any) {
       logApi("Error generating remix suggestions", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
