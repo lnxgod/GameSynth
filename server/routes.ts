@@ -916,29 +916,29 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       } catch (error) {
         log('APK not found at expected location', { path: apkPath });
         throw new Error('APK build failed - output file not found');
+      }
+
+      return {
+        apkPath,
+        logs: buildLogs,
+        downloadUrl: `/download/android/${path.basename(apkPath)}`
+      };
+    } catch (error: any) {
+      log('Build process failed', { error: error.message });
+      throw {
+        message: error.message,
+        logs: buildLogs
+      };
     }
-
-    return {
-      apkPath,
-      logs: buildLogs,
-      downloadUrl: `/download/android/${path.basename(apkPath)}`
-    };
-  } catch (error: any) {
-    log('Build process failed', { error: error.message });
-    throw {
-      message: error.message,
-      logs: buildLogs
-    };
   }
-}
 
-// Add this to your routes handler
+  // Add this to your routes handler
   app.post("/api/build/android", async (req, res) => {
     try {
-      const { gameCode, appName, packageName, gameType } = req.body;
+      const { gameCode, appName, packageName } = req.body;
 
-      if (!gameCode || !appName || !packageName || !gameType) {
-        throw new Error("Missing required build information");
+      if (!gameCode || !appName || !packageName) {
+        throw new Error("Missing required build information. Please provide game code, app name and package name.");
       }
 
       const packageNameRegex = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
@@ -954,7 +954,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         const result = await handleAndroidBuild(buildDir, {
           gameCode,
           appName,
-          packageName,
+          packageName
         });
 
         res.json({
