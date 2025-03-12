@@ -221,6 +221,7 @@ export async function registerRoutes(app: Express) {
   app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets'))); // Added middleware
 
 
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = req.body;
@@ -791,10 +792,16 @@ Each feature should be specific and actionable.`
 
       if (analyses) {
         Object.entries(analyses).forEach(([aspect, analysisData]) => {
-          history.push({
-            role: 'assistant',
-            content: `Analysis of ${aspect}:\n${analysisData.analysis}\n\nImplementation details:\n${analysisData.implementation_details.join("\n")}\n\nTechnical Considerations:\n${analysisData.technical_considerations.join("\n")}`
-          });
+          if (analysisData && typeof analysisData === 'object') {
+            const details = analysisData.implementation_details || [];
+            const technical = analysisData.technical_considerations || [];
+            const analysis = analysisData.analysis || '';
+
+            history.push({
+              role: 'assistant',
+              content: `Analysis of ${aspect}:\n${analysis}\n\nImplementation details:\n${details.join ? details.join("\n") : ''}\n\nTechnical Considerations:\n${technical.join ? technical.join("\n") : ''}`
+            });
+          }
         });
       }
 
@@ -895,7 +902,7 @@ Each feature should be specific and actionable.`
 
       logApi("Chat response generated", { prompt }, result, logOpenAIParams(requestConfig));
       res.json(result);
-    } catch (error: any) {
+    } catch(error: any) {
       logApi("Error in chat", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
@@ -1021,7 +1028,7 @@ When providing suggestions:
 3. Format your responseas JSON with this structure:
 {
   "questions": [
-    ""Suggestion 1: [Brief description of the first improvement]",
+    "Suggestion 1: [Brief description of the first improvement]",
     "Suggestion 2: [Brief description of the second improvement]",
     "Suggestion 3: [Brief description of the third improvement]"
   ]
@@ -1079,7 +1086,6 @@ Remember:
 - Focus on what the game should do vs what it's doing
 - Explain things like you're talking to a friend
 - Keep it simple and clear- Always include the complete fixed code between +++CODES
-
 TART+++ and +++CODESTOP+++ markers
 
 Format your response as:
