@@ -29,6 +29,12 @@ interface GameRequirements {
   specialFeatures: string;
 }
 
+interface AnalyzedAspect {
+  analysis: string;
+  implementation_details: string[];
+  technical_considerations: string[];
+}
+
 const questions = [
   {
     id: 'gameType',
@@ -97,19 +103,12 @@ export function GameDesignAssistant({
   const [generationPrompt, setGenerationPrompt] = useState<string>("");
   const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
 
-
   const analyzeModelMutation = useMutation({
-    mutationFn: async ({ requirements, sessionId }) => {
+    mutationFn: async ({ requirements, sessionId }: { requirements: GameRequirements; sessionId: string }) => {
       const res = await apiRequest('POST', '/api/design/analyze', {
         requirements,
         sessionId
       });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Failed to analyze design');
-      }
-
       return res.json();
     },
     onSuccess: (data) => {
@@ -135,15 +134,6 @@ export function GameDesignAssistant({
           finalizeMutation.mutate();
         }
       }
-      onAiOperation?.({ type: '', active: false });
-    },
-    onError: (error: any) => {
-      console.error('Analysis error:', error);
-      toast({
-        title: "Analysis Error",
-        description: error.message || "Failed to analyze design requirements",
-        variant: "destructive",
-      });
       onAiOperation?.({ type: '', active: false });
     }
   });
@@ -195,7 +185,7 @@ export function GameDesignAssistant({
   });
 
   const generateMutation = useMutation({
-    mutationFn: async ({modelConfig}) => {
+    mutationFn: async ({ modelConfig }: { modelConfig: ModelConfigType }) => {
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         followUpAnswers,
@@ -299,7 +289,6 @@ export function GameDesignAssistant({
 
   const handleThink = () => {
     onAiOperation?.({ type: 'Analyzing Game Design...', active: true });
-
     analyzeModelMutation.mutate({
       requirements,
       sessionId
@@ -317,8 +306,6 @@ export function GameDesignAssistant({
     setCurrentQuestionIndex(questions.length - 1);
     setShowFinalPrompt(true);
   };
-
-  const currentQuestion = questions[currentQuestionIndex];
 
   const handleBuildGame = () => {
     if (!analyses || Object.keys(analyses).length === 0) {
@@ -361,31 +348,6 @@ Include:
     }
   }, [finalDesign]);
 
-  // Update the hint request code
-  const generateHintMutation = useMutation({
-    mutationFn: async (context: string) => {
-      const res = await apiRequest('POST', '/api/hint', {
-        context,
-        currentFeature: generatedFeatures[currentFeatureIndex],
-        modelConfig // Pass the current model configuration
-      });
-      return res.json();
-    }
-  });
-
-  // Update the code chat request
-  const codeChatMutation = useMutation({
-    mutationFn: async ({ message, isNonTechnicalMode }: { message: string, isNonTechnicalMode: boolean }) => {
-      const res = await apiRequest('POST', '/api/code/chat', {
-        message,
-        isNonTechnicalMode,
-        modelConfig // Pass the current model configuration
-      });
-      return res.json();
-    }
-  });
-
-
   return (
     <Card className="w-full">
       <CardContent className="pt-6">
@@ -427,22 +389,21 @@ Include:
             </ScrollArea>
           </div>
 
-
           {!showFinalPrompt && !showFollowUp ? (
             <div className="space-y-4">
-              <div className="text-lg mb-2">{currentQuestion.question}</div>
+              <div className="text-lg mb-2">{questions[currentQuestionIndex].question}</div>
 
-              {currentQuestion.type === 'textarea' ? (
+              {questions[currentQuestionIndex].type === 'textarea' ? (
                 <Textarea
-                  placeholder={currentQuestion.placeholder}
-                  value={requirements[currentQuestion.id as keyof GameRequirements]}
+                  placeholder={questions[currentQuestionIndex].placeholder}
+                  value={requirements[questions[currentQuestionIndex].id as keyof GameRequirements]}
                   onChange={(e) => handleAnswer(e.target.value)}
                   className="min-h-[100px]"
                 />
               ) : (
                 <Input
-                  placeholder={currentQuestion.placeholder}
-                  value={requirements[currentQuestion.id as keyof GameRequirements]}
+                  placeholder={questions[currentQuestionIndex].placeholder}
+                  value={requirements[questions[currentQuestionIndex].id as keyof GameRequirements]}
                   onChange={(e) => handleAnswer(e.target.value)}
                 />
               )}
@@ -457,7 +418,7 @@ Include:
                 </Button>
                 <Button
                   onClick={handleNext}
-                  disabled={!requirements[currentQuestion.id as keyof GameRequirements].trim()}
+                  disabled={!requirements[questions[currentQuestionIndex].id as keyof GameRequirements].trim()}
                 >
                   {currentQuestionIndex === questions.length - 1 ? "Review" : "Next"}
                 </Button>
@@ -606,6 +567,7 @@ Include:
                   )}
                 </Button>
               </div>
+
               <DebugMenu
                 codeGenModel={modelConfig.model}
                 analysisModel="o3-mini"
@@ -647,10 +609,4 @@ Include:
       </CardContent>
     </Card>
   );
-}
-
-interface AnalyzedAspect {
-  analysis: string;
-  implementation_details: string[];
-  technical_considerations: string[];
 }
