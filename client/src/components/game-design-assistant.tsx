@@ -27,6 +27,7 @@ interface GameDesignAssistantProps {
   onDesignGenerated: (design: any) => void;
   onFeaturesGenerated: (features: string[]) => void;
   debugContext?: string;
+  onAiOperation?: (operation: string, data: any) => void;
 }
 
 interface GameRequirements {
@@ -80,7 +81,8 @@ export function GameDesignAssistant({
   onCodeGenerated,
   onDesignGenerated,
   onFeaturesGenerated,
-  debugContext
+  debugContext,
+  onAiOperation
 }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -128,12 +130,23 @@ export function GameDesignAssistant({
     staleTime: 3600000 // Cache for 1 hour
   });
 
-  const analyzeMutation = useMutation({
+  const analyzeModelMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
+      const settings = {
+        model: selectedModel,
+        ...Object.entries(enabledParameters).reduce((acc, [param, isEnabled]) => {
+          if (isEnabled && parameterValues[param] !== undefined) {
+            return { ...acc, [param]: parameterValues[param] };
+          }
+          return acc;
+        }, {})
+      };
+
       const res = await apiRequest('POST', '/api/design/analyze', {
         aspect,
         content: requirements[aspect],
-        sessionId
+        sessionId,
+        settings
       });
       return res.json();
     },
@@ -142,6 +155,13 @@ export function GameDesignAssistant({
         ...prev,
         [aspect]: data
       }));
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Analysis Error",
+        description: error.message || "Failed to analyze design requirements",
+        variant: "destructive",
+      });
     }
   });
 
@@ -304,11 +324,20 @@ export function GameDesignAssistant({
   };
 
   const handleThink = async () => {
-    for (const question of questions) {
-      const aspect = question.id as keyof GameRequirements;
-      await analyzeMutation.mutateAsync(aspect);
+    try {
+      for (const question of questions) {
+        const aspect = question.id as keyof GameRequirements;
+        await analyzeModelMutation.mutateAsync(aspect);
+      }
+      await finalizeMutation.mutateAsync();
+    } catch (error) {
+      console.error("Error during analysis:", error);
+      toast({
+        title: "Error",
+        description: "Failed to analyze game design. Please try again.",
+        variant: "destructive",
+      });
     }
-    await finalizeMutation.mutateAsync();
   };
 
   const currentQuestion = questions[currentQuestionIndex];
@@ -484,11 +513,15 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
         const params = await res.json();
         setModelParameters(params);
 
+        // Initialize parameter values and enabled state
         const newValues: Record<string, number | string> = {};
+        const newEnabled: Record<string, boolean> = {};
         Object.entries(params).forEach(([param, config]: [string, any]) => {
           newValues[param] = config.default;
+          newEnabled[param] = false; // Default to disabled
         });
         setParameterValues(newValues);
+        setEnabledParameters(newEnabled);
 
       } catch (error) {
         console.error('Failed to fetch model parameters:', error);
@@ -503,7 +536,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     };
 
     fetchModelParameters();
-  }, [selectedModel, toast]);
+  }, [selectedModel]);
 
 
   const renderParameterControls = () => {
@@ -725,9 +758,9 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                 <Button
                   variant="secondary"
                   onClick={handleThink}
-                  disabled={analyzeMutation.isPending || finalizeMutation.isPending}
+                  disabled={analyzeModelMutation.isPending || finalizeMutation.isPending}
                 >
-                  {analyzeMutation.isPending || finalizeMutation.isPending ? (
+                  {analyzeModelMutation.isPending || finalizeMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Analyzing...
