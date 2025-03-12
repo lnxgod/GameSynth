@@ -97,18 +97,10 @@ export function GameDesignAssistant({
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const { toast } = useToast();
 
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(8000);
-  const [useMaxCompletionTokens, setUseMaxCompletionTokens] = useState(false);
-
   const [showDebugContext, setShowDebugContext] = useState(false);
 
-  // Simplified model state management
-  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
-  const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
-  const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
-  const [enabledParameters, setEnabledParameters] = useState<Record<string, boolean>>({});
-
+  // Default model for code generation
+  const [selectedModel] = useState<string>('o3-mini-high');
 
   const { data: availableModels } = useQuery({
     queryKey: ['models'],
@@ -120,23 +112,13 @@ export function GameDesignAssistant({
 
   const analyzeModelMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
-      // Simple settings object with just the necessary parameters
-      const settings = {
-        model: selectedModel,
-        // Include only enabled parameters
-        ...Object.entries(enabledParameters)
-          .filter(([_, enabled]) => enabled)
-          .reduce((acc, [param]) => ({
-            ...acc,
-            [param]: parameterValues[param]
-          }), {})
-      };
-
       const res = await apiRequest('POST', '/api/design/analyze', {
         aspect,
         content: requirements[aspect],
         sessionId,
-        settings
+        settings: {
+          model: 'gpt-4o'  // Always use gpt-4o for analysis
+        }
       });
 
       if (!res.ok) {
@@ -221,25 +203,6 @@ export function GameDesignAssistant({
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const settings: Record<string, any> = {
-        model: selectedModel
-      };
-
-      Object.entries(enabledParameters).forEach(([param, isEnabled]) => {
-        if (isEnabled && parameterValues[param] !== undefined) {
-          if (param === 'max_tokens' && selectedModel.startsWith('o1')) {
-            return;
-          }
-          settings[param] = parameterValues[param];
-        }
-      });
-
-      if (selectedModel.startsWith('o1') && enabledParameters.max_tokens) {
-        settings.max_completion_tokens = parameterValues.max_tokens;
-      }
-
-      console.log('Settings being sent:', settings);
-
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         followUpAnswers,
@@ -253,7 +216,9 @@ export function GameDesignAssistant({
             }
           ])
         ),
-        settings
+        settings: {
+          model: selectedModel // Use selected model for code generation
+        }
       });
       return res.json();
     },
@@ -500,125 +465,15 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     );
   };
 
-  useEffect(() => {
-    const loadModelParameters = async () => {
-      try {
-        const res = await apiRequest('GET', `/api/model-parameters/${selectedModel}`);
-        if (!res.ok) {
-          throw new Error('Failed to fetch model parameters');
-        }
-
-        const params = await res.json();
-        setModelParameters(params);
-
-        // Initialize with default values and all parameters disabled
-        const newValues: Record<string, number> = {};
-        const newEnabled: Record<string, boolean> = {};
-
-        Object.entries(params).forEach(([param, config]: [string, any]) => {
-          newValues[param] = config.default || 0;
-          newEnabled[param] = false;
-        });
-
-        setParameterValues(newValues);
-        setEnabledParameters(newEnabled);
-      } catch (error) {
-        console.error('Failed to load model parameters:', error);
-      }
-    };
-
-    loadModelParameters();
-  }, [selectedModel]);
-
 
   const renderParameterControls = () => {
-    if (!modelParameters) {
-      return (
-        <div className="space-y-4">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {Object.entries(modelParameters).map(([param, config]: [string, any]) => (
-          <div key={param} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id={`enable-${param}`}
-                  checked={enabledParameters[param] || false}
-                  onCheckedChange={(checked) => {
-                    setEnabledParameters(prev => ({
-                      ...prev,
-                      [param]: checked as boolean
-                    }));
-                  }}
-                />
-                <label
-                  htmlFor={`enable-${param}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  {param.split('_').map(word =>
-                    word.charAt(0).toUpperCase() + word.slice(1)
-                  ).join(' ')}
-                </label>
-              </div>
-              {config.type === "float" || config.type === "integer" ? (
-                <div className="w-64">
-                  <Slider
-                    value={[parameterValues[param] as number || config.default]}
-                    onValueChange={([value]) => {
-                      setParameterValues(prev => ({
-                        ...prev,
-                        [param]: value
-                      }));
-                    }}
-                    disabled={!enabledParameters[param]}
-                    min={config.min}
-                    max={config.max}
-                    step={config.type === "float" ? 0.1 : 1}
-                    className="w-full"
-                  />
-                </div>
-              ) : config.type === "enum" ? (
-                <Select
-                  value={parameterValues[param] as string}
-                  onValueChange={(value) => {
-                    setParameterValues(prev => ({
-                      ...prev,
-                      [param]: value
-                    }));
-                  }}
-                  disabled={!enabledParameters[param]}
-                >
-                  <SelectTrigger className="w-64">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {config.values.map((value: string) => (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-            </div>
-            <div className="text-xs text-muted-foreground pl-6">
-              {config.description}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    //This section is removed as per the intention.  No parameters are used.
+    return null;
   };
 
+
   const handleModelChange = (value: string) => {
-    setSelectedModel(value);
+    //This section is removed as per the intention.  No model change is allowed.
   };
 
   return (
@@ -712,29 +567,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Model Selection</label>
-                    <Select
-                      value={selectedModel}
-                      onValueChange={handleModelChange}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableModels && Object.entries(availableModels).map(([id, name]) => (
-                          <SelectItem key={id} value={id}>
-                            {name as string}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {availableModels ? "Select the AI model to use for code generation" :
-                        "Error loading models, using defaults"}
-                    </p>
-                  </div>
-
+                  {/* Model selection is removed as per the intention. */}
                   {renderParameterControls()}
                 </CollapsibleContent>
               </Collapsible>
