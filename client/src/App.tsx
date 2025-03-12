@@ -6,10 +6,11 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
 import ChangePassword from "@/pages/change-password";
+import UserManagement from "@/pages/user-management";
 import { AuthContext, useAuthProvider } from "@/lib/auth";
 import React, { useContext } from 'react';
 
-function ProtectedRoute({ component: Component, ...rest }: { component: React.ComponentType<any> }) {
+function ProtectedRoute({ component: Component, requireAdmin, ...rest }: { component: React.ComponentType<any>, requireAdmin?: boolean }) {
   const { auth } = useContext(AuthContext)!;
 
   if (!auth.isAuthenticated) {
@@ -18,6 +19,10 @@ function ProtectedRoute({ component: Component, ...rest }: { component: React.Co
 
   if (auth.forcePasswordChange) {
     return <Redirect to="/change-password" />;
+  }
+
+  if (requireAdmin && auth.role !== 'admin') {
+    return <Redirect to="/" />;
   }
 
   return <Component {...rest} />;
@@ -40,6 +45,7 @@ function Router() {
           <ChangePassword />
         )}
       </Route>
+      <Route path="/users" component={() => <ProtectedRoute component={UserManagement} requireAdmin />} />
       <Route path="/" component={() => <ProtectedRoute component={Home} />} />
       <Route component={NotFound} />
     </Switch>

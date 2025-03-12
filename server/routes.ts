@@ -6,12 +6,14 @@ import OpenAI from "openai";
 import {insertFeatureSchema} from "@shared/schema"; 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import path from 'path';
-import fs from 'fs/promises';
+import path from "path";
+import fs from "fs/promises";
 import session from "express-session";
 import { isAuthenticated, requirePasswordChange } from "./middleware/auth";
 import { changePasswordSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import { insertUserSchema } from "@shared/schema"; // Import the schema for user creation
+
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -1179,6 +1181,27 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     } catch (error: any) {
       logApi("Error fetching model parameters", { model: req.params.model }, { error: error.message });
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add this to the existing routes in registerRoutes function
+  app.post("/api/users", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+
+      // Check if the requester is an admin
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Only administrators can create users" });
+      }
+
+      const newUser = insertUserSchema.parse(req.body);
+      const created = await storage.createUser(newUser);
+
+      // Remove sensitive information before sending response
+      const { password, ...safeUser } = created;
+      res.json(safeUser);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
     }
   });
 
