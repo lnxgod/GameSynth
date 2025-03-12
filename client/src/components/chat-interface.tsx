@@ -17,6 +17,8 @@ import { DebugMenu } from "./model-debug-info";
 
 interface ChatInterfaceProps {
   onCodeReceived: (code: string) => void;
+  onAiOperation: (op: { type: string; active: boolean }) => void;
+  isNonTechnicalMode: boolean;
 }
 
 const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
@@ -28,7 +30,7 @@ When providing code:
 5. Use requestAnimationFrame for animation
 6. Handle cleanup properly when the game stops`;
 
-export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
+export function ChatInterface({ onCodeReceived, onAiOperation, isNonTechnicalMode }: ChatInterfaceProps) {
   const [prompt, setPrompt] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfigType>({

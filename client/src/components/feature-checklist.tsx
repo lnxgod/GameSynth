@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, ListPlus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { AIHint } from "./ai-hint";
 
 interface Feature {
@@ -22,14 +22,29 @@ interface FeatureChecklistProps {
   gameDesign: any;
   onCodeUpdate?: (code: string) => void;
   initialFeatures?: string[];
+  onAiOperation: (op: { type: string; active: boolean }) => void;
+  isNonTechnicalMode: boolean;
 }
 
-export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [] }: FeatureChecklistProps) {
+export function FeatureChecklist({ 
+  gameDesign, 
+  onCodeUpdate, 
+  initialFeatures = [], 
+  onAiOperation,
+  isNonTechnicalMode 
+}: FeatureChecklistProps) {
   const [newFeature, setNewFeature] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Initialize features from initialFeatures prop
+  const { data: features = [] } = useQuery<Feature[]>({
+    queryKey: ['features'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/features');
+      return res.json();
+    }
+  });
+
   useEffect(() => {
     if (initialFeatures.length > 0) {
       initialFeatures.forEach((feature: string) => {
@@ -41,14 +56,6 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
       });
     }
   }, [initialFeatures]);
-
-  const { data: features = [] } = useQuery({
-    queryKey: ['features'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', '/api/features');
-      return res.json();
-    }
-  });
 
   const createFeatureMutation = useMutation({
     mutationFn: async (feature: Omit<Feature, 'id'>) => {
@@ -120,7 +127,7 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
           <h3 className="text-lg font-semibold">Game Features</h3>
           <AIHint
             gameDesign={gameDesign}
-            currentFeature={features.find(f => !f.completed)?.description}
+            currentFeature={features.find((f: Feature) => !f.completed)?.description}
           />
         </div>
 
@@ -142,7 +149,7 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
             <div className="space-y-4">
               <div>
                 <h5 className="font-medium mb-2">Generated Features</h5>
-                {features.filter(f => f.type === 'generated').map(feature => (
+                {features.filter((f: Feature) => f.type === 'generated').map((feature: Feature) => (
                   <div key={feature.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
                       id={feature.id.toString()}
@@ -164,10 +171,10 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
                 ))}
               </div>
 
-              {features.filter(f => f.type === 'manual').length > 0 && (
+              {features.filter((f: Feature) => f.type === 'manual').length > 0 && (
                 <div>
                   <h5 className="font-medium mb-2">Custom Features</h5>
-                  {features.filter(f => f.type === 'manual').map(feature => (
+                  {features.filter((f: Feature) => f.type === 'manual').map((feature: Feature) => (
                     <div key={feature.id} className="flex items-center space-x-2 mb-2">
                       <Checkbox
                         id={feature.id.toString()}
