@@ -18,9 +18,6 @@ interface BuildControlsProps {
 export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: BuildControlsProps) {
   const [appName, setAppName] = useState('My Game');
   const [packageName, setPackageName] = useState('com.mygame.app');
-  const [keystorePassword, setKeystorePassword] = useState('');
-  const [keyAlias, setKeyAlias] = useState('release');
-  const [keyPassword, setKeyPassword] = useState('');
   const [buildLogs, setBuildLogs] = useState<string[]>([]);
   const { toast } = useToast();
 
@@ -33,32 +30,18 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
       onBuildStart?.();
       setBuildLogs([]);
 
-      // Log the build parameters for debugging
-      console.log('Build parameters:', {
+      console.log('Starting build with:', {
         appName,
         packageName,
-        keyAlias,
-        hasKeystorePassword: !!keystorePassword,
-        hasKeyPassword: !!keyPassword
+        hasGameCode: !!gameCode
       });
 
       const res = await apiRequest("POST", "/api/build/android", {
         gameCode,
         appName,
-        packageName,
-        keystore: {
-          password: keystorePassword,
-          alias: keyAlias,
-          keyPassword: keyPassword
-        }
+        packageName
       });
       return res.json();
-    },
-    onMutate: () => {
-      toast({
-        title: "Starting Build",
-        description: "Preparing your game for Android...",
-      });
     },
     onSuccess: (data) => {
       onBuildComplete?.();
@@ -81,22 +64,17 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
       }
       toast({
         title: "Build Failed",
-        description: error.message || "Failed to build Android APK. Please check the build logs for details.",
+        description: error.message || "Failed to build Android APK. Check the build logs below.",
         variant: "destructive",
       });
     },
   });
 
-  const isFormValid = isPackageNameValid && 
-    keystorePassword.length >= 6 && 
-    keyPassword.length >= 6 && 
-    keyAlias.length > 0;
-
   return (
     <Card className="p-4 space-y-4">
-      <h2 className="text-lg font-semibold">Build Android App</h2>
+      <h2 className="text-lg font-semibold">Build Android Debug APK</h2>
 
-      <div className="space-y-2">
+      <div className="space-y-4">
         <div className="space-y-1">
           <Label htmlFor="appName">App Name</Label>
           <Input
@@ -106,6 +84,9 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
             placeholder="My Awesome Game"
             disabled={buildMutation.isPending}
           />
+          <p className="text-xs text-muted-foreground">
+            The name that will appear on the Android device
+          </p>
         </div>
 
         <div className="space-y-1">
@@ -122,80 +103,30 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
             value={packageName}
             onChange={(e) => setPackageName(e.target.value)}
             placeholder="com.mygame.app"
-            pattern="[a-z][a-z0-9_]*(\.[a-z0-9_]+)+"
             disabled={buildMutation.isPending}
             className={packageName && (isPackageNameValid ? 'border-green-500' : 'border-red-500')}
           />
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">
-              Package name must:
+              Package name must be in reverse domain format:
             </p>
-            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
-              <li>Start with a lowercase letter</li>
-              <li>Contain at least two segments (e.g., com.example)</li>
-              <li>Only use lowercase letters, numbers, and underscores</li>
-              <li>Each segment must start with a letter</li>
+            <ul className="text-xs text-muted-foreground list-disc list-inside">
+              <li>Start with lowercase letter</li>
+              <li>Use only letters, numbers, and dots</li>
+              <li>At least two segments (e.g., com.example)</li>
             </ul>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground italic">
               Example: com.mygame.app
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4 mt-6 border-t pt-4">
-          <h3 className="text-sm font-medium">Android Signing Configuration</h3>
-
-          <div className="space-y-1">
-            <Label htmlFor="keystorePassword">Keystore Password</Label>
-            <Input
-              id="keystorePassword"
-              type="password"
-              value={keystorePassword}
-              onChange={(e) => setKeystorePassword(e.target.value)}
-              placeholder="At least 6 characters"
-              disabled={buildMutation.isPending}
-            />
-            <p className="text-xs text-muted-foreground">
-              Password for the keystore file (minimum 6 characters)
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="keyAlias">Key Alias</Label>
-            <Input
-              id="keyAlias"
-              value={keyAlias}
-              onChange={(e) => setKeyAlias(e.target.value)}
-              placeholder="release"
-              disabled={buildMutation.isPending}
-            />
-            <p className="text-xs text-muted-foreground">
-              Name to identify your key (default: release)
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="keyPassword">Key Password</Label>
-            <Input
-              id="keyPassword"
-              type="password"
-              value={keyPassword}
-              onChange={(e) => setKeyPassword(e.target.value)}
-              placeholder="At least 6 characters"
-              disabled={buildMutation.isPending}
-            />
-            <p className="text-xs text-muted-foreground">
-              Password for the signing key (minimum 6 characters)
             </p>
           </div>
         </div>
       </div>
 
       {buildLogs.length > 0 && (
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2">
           <h3 className="text-sm font-medium">Build Logs</h3>
           <ScrollArea className="h-40 w-full rounded-md border bg-muted p-4">
-            <pre className="text-xs">
+            <pre className="text-xs whitespace-pre-wrap">
               {buildLogs.join('\n')}
             </pre>
           </ScrollArea>
@@ -204,7 +135,7 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
 
       <Button
         onClick={() => buildMutation.mutate()}
-        disabled={buildMutation.isPending || !isFormValid}
+        disabled={buildMutation.isPending || !isPackageNameValid}
         className="w-full bg-gradient-to-r from-green-500 to-emerald-700 hover:from-green-600 hover:to-emerald-800"
       >
         {buildMutation.isPending ? (
@@ -215,7 +146,7 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
         ) : (
           <>
             <Smartphone className="mr-2 h-4 w-4" />
-            Build Android APK
+            Build Debug APK
           </>
         )}
       </Button>

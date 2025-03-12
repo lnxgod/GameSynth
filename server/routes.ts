@@ -733,11 +733,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     gameCode: string;
     appName: string;
     packageName: string;
-    keystore: {
-      password: string;
-      alias: string;
-      keyPassword: string;
-    };
   }) {
     const execAsync = promisify(exec);
     const buildLogs: string[] = [];
@@ -749,10 +744,13 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
 
     try {
-      log('Creating build directory');
+      // Create fresh build directory
+      log('Setting up build environment');
+      await fs.rm(buildDir, { recursive: true, force: true });
       await fs.mkdir(buildDir, { recursive: true });
 
-      log('Creating index.html');
+      // Create index.html
+      log('Creating game files');
       const html = `
 <!DOCTYPE html>
 <html>
@@ -770,14 +768,12 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
-
         ${options.gameCode}
     </script>
 </body>
@@ -785,36 +781,36 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
       await fs.writeFile(path.join(buildDir, 'index.html'), html);
 
+      // Create minimal package.json
       log('Creating package.json');
       const packageJson = {
         name: options.packageName.replace(/\./g, '-'),
         version: "1.0.0",
-        private: true,
-        dependencies: {
-          "@capacitor/android": "latest",
-          "@capacitor/core": "latest"
-        }
+        private: true
       };
       await fs.writeFile(
         path.join(buildDir, 'package.json'),
         JSON.stringify(packageJson, null, 2)
       );
 
-      log('Creating capacitor.config.json');
+      // Initialize npm project and install dependencies
+      log('Installing capacitor dependencies');
+      try {
+        await execAsync('npm init -y', { cwd: buildDir });
+        await execAsync('npm install @capacitor/core @capacitor/cli @capacitor/android', { cwd: buildDir });
+      } catch (error) {
+        log('Failed to install dependencies', error);
+        throw error;
+      }
+
+      // Create capacitor config
+      log('Configuring Capacitor');
       const capacitorConfig = {
         appId: options.packageName,
         appName: options.appName,
         webDir: ".",
         server: {
           androidScheme: "https"
-        },
-        android: {
-          buildOptions: {
-            keystorePath: 'release.keystore',
-            keystoreAlias: options.keystore.alias,
-            keystorePassword: options.keystore.password,
-            keyPassword: options.keystore.keyPassword,
-          }
         }
       };
       await fs.writeFile(
@@ -822,56 +818,41 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         JSON.stringify(capacitorConfig, null, 2)
       );
 
+      // Initialize Capacitor project
+      log('Initializing Capacitor project');
       try {
-        log('Initializing Capacitor project');
-        const initCommand = `npx cap init "${options.appName}" "${options.packageName}" --web-dir=.`;
-        const initResult = await execAsync(initCommand, { cwd: buildDir });
-        log('Capacitor init completed', { stdout: initResult.stdout, stderr: initResult.stderr });
-      } catch (error: any) {
-        log('Capacitor init failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
-        throw new Error(`Capacitor initialization failed: ${error.stderr || error.message}`);
+        await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir=.`, { cwd: buildDir });
+      } catch (error) {
+        log('Capacitor init failed', error);
+        throw error;
       }
 
+      // Add Android platform
+      log('Adding Android platform');
       try {
-        log('Installing dependencies');
-        const installResult = await execAsync('npm install', { cwd: buildDir });
-        log('Dependencies installed', { stdout: installResult.stdout, stderr: installResult.stderr });
-      } catch (error: any) {
-        log('Dependencies installation failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
-        throw new Error(`Dependencies installation failed: ${error.stderr || error.message}`);
+        await execAsync('npx cap add android', { cwd: buildDir });
+      } catch (error) {
+        log('Failed to add Android platform', error);
+        throw error;
       }
 
+      // Build debug APK
+      log('Building debug APK');
       try {
-        log('Adding Android platform');
-        const platformResult = await execAsync('npx cap add android', { cwd: buildDir });
-        log('Android platform added', { stdout: platformResult.stdout, stderr: platformResult.stderr });
-      } catch (error: any) {
-        log('Adding Android platform failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
-        throw new Error(`Adding Android platform failed: ${error.stderr || error.message}`);
+        await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
+      } catch (error) {
+        log('Failed to build APK', error);
+        throw error;
       }
 
+      const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
       try {
-        log('Generating keystore');
-        const keytoolCommand = `keytool -genkey -v -keystore release.keystore -alias ${options.keystore.alias} -keyalg RSA -keysize 2048 -validity 10000 -storepass ${options.keystore.password} -keypass ${options.keystore.keyPassword} -dname "CN=Android Debug,O=Android,C=US"`;
-        const keystoreResult = await execAsync(keytoolCommand, { cwd: buildDir });
-        log('Keystore generated', { stdout: keystoreResult.stdout, stderr: keystoreResult.stderr });
-      } catch (error: any) {
-        log('Keystore generation failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
-        throw new Error(`Keystore generation failed: ${error.stderr || error.message}`);
+        await fs.access(apkPath);
+        log('APK built successfully at:', apkPath);
+      } catch (error) {
+        log('APK not found at expected location', { path: apkPath });
+        throw new Error('APK build failed - output file not found');
       }
-
-      try {
-        log('Building release APK');
-        const buildResult = await execAsync('cd android && ./gradlew assembleRelease', { cwd: buildDir });
-        log('APK build completed', { stdout: buildResult.stdout, stderr: buildResult.stderr });
-      } catch (error: any) {
-        log('APK build failed', { error: error.message, stdout: error.stdout, stderr: error.stderr });
-        throw new Error(`APK build failed: ${error.stderr || error.message}`);
-      }
-
-      const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-      await fs.access(apkPath);
-      log('APK file verified at:', apkPath);
 
       return {
         apkPath,
@@ -879,7 +860,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         downloadUrl: `/download/android/${path.basename(apkPath)}`
       };
     } catch (error: any) {
-      log('Build process failed', { error: error.message, logs: buildLogs });
+      log('Build process failed', { error: error.message });
       throw {
         message: error.message,
         logs: buildLogs
@@ -889,70 +870,53 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
   app.post("/api/build/android", async (req, res) => {
     try {
-      const { gameCode, appName, packageName, keystore } = req.body;
+      const { gameCode, appName, packageName } = req.body;
 
       if (!gameCode || !appName || !packageName) {
         throw new Error("Missing required build information");
       }
 
-      const packageNameRegex = /^[a-z][az0-9_]*(\.[a-z][a-z0-9_]*)+$/;
-    if (!packageNameRegex.test(packageName)) {
-      throw new Error(
-        "Invalid package name format. Package name must:\n" +
-        "- Start with a lowercase letter\n" +
-        "- Contain at least two segments (e.g., com.example)\n" +
-        "- Only use lowercase letters, numbers, and underscores\n" +
-        "- Each segment must start with a letter\n" +
-        "Example: com.mygame.app"
-      );
-    }
+      const packageNameRegex = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+      if (!packageNameRegex.test(packageName)) {
+        throw new Error(
+          "Invalid package name format. Must be like 'com.example.game'"
+        );
+      }
 
-    if (!keystore?.password || keystore.password.length < 6) {
-      throw new Error("Keystore password must be at least 6 characters");
-    }
-    if (!keystore?.alias) {
-      throw new Error("Key alias is required");
-    }
-    if (!keystore?.keyPassword || keystore.keyPassword.length < 6) {
-      throw new Error("Key password must be at least 6 characters");
-    }
+      const buildDir = path.join(process.cwd(), 'android-build');
 
-    const buildDir = path.join(process.cwd(), 'android-build');
+      try {
+        const result = await handleAndroidBuild(buildDir, {
+          gameCode,
+          appName,
+          packageName
+        });
 
-    try {
-      const result = await handleAndroidBuild(buildDir, {
-        gameCode,
-        appName,
-        packageName,
-        keystore
-      });
-
-      res.json({
-        downloadUrl: result.downloadUrl,
-        logs: result.logs
-      });
-    } catch (buildError: any) {
-      res.status(500).json({
-        error: "Build failed",
-        message: buildError.message,
-        logs: buildError.logs,
-        details: "Check the build logs for more information"
+        res.json({
+          downloadUrl: result.downloadUrl,
+          logs: result.logs
+        });
+      } catch (buildError: any) {
+        res.status(500).json({
+          error: "Build failed",
+          message: buildError.message,
+          logs: buildError.logs
+        });
+      }
+    } catch (error: any) {
+      res.status(400).json({
+        error: "Invalid build configuration",
+        message: error.message
       });
     }
-  } catch (error: any) {
-    res.status(400).json({
-      error: "Invalid build configuration",
-      message: error.message
-    });
-  }
-});
+  });
 
-app.get("/download/android/:filename", (req, res) => {
-  const { filename } = req.params;
-  const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'release', filename);
-  res.download(filePath);
-});
+  app.get("/download/android/:filename", (req, res) => {
+    const { filename } = req.params;
+    const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'debug', filename);
+    res.download(filePath);
+  });
 
-const httpServer = createServer(app);
-return httpServer;
+  const httpServer = createServer(app);
+  return httpServer;
 }
