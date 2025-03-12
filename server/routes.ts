@@ -738,133 +738,450 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     const buildLogs: string[] = [];
 
     function log(message: string, details?: any) {
-      const logMessage = details ? `${message}: ${JSON.stringify(details)}` : message;
-      buildLogs.push(logMessage);
-      console.log(logMessage);
+        const logMessage = details ? `${message}: ${JSON.stringify(details)}` : message;
+        buildLogs.push(logMessage);
+        console.log(logMessage);
     }
 
     try {
-      // Create fresh build directory
-      log('Setting up build environment');
-      await fs.rm(buildDir, { recursive: true, force: true });
-      await fs.mkdir(buildDir, { recursive: true });
+        // Create fresh build directory
+        log('Setting up build environment');
+        await fs.rm(buildDir, { recursive: true, force: true });
+        await fs.mkdir(buildDir, { recursive: true });
 
-      // Create index.html
-      log('Creating game files');
-      const html = `
+        // Create index.html with proper mobile meta tags and CSP
+        log('Creating game files');
+        const html = `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: gap: https://ssl.gstatic.com; style-src 'self' 'unsafe-inline'; media-src *">
     <title>${options.appName}</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
-        canvas { width: 100vw; height: 100vh; display: block; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        body { position: fixed; touch-action: none; }
+        canvas { 
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100vw;
+            max-height: 100vh;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <script>
+        // Handle mobile events
+        document.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        // Setup canvas
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const scale = Math.min(windowWidth / 800, windowHeight / 600);
+
+            canvas.width = 800;
+            canvas.height = 600;
+            canvas.style.width = (800 * scale) + 'px';
+            canvas.style.height = (600 * scale) + 'px';
         }
+
         window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', resizeCanvas);
         resizeCanvas();
+
+        // Game code
         ${options.gameCode}
     </script>
 </body>
 </html>`;
 
-      await fs.writeFile(path.join(buildDir, 'index.html'), html);
+        await fs.writeFile(path.join(buildDir, 'index.html'), html);
 
-      // Create minimal package.json
-      log('Creating package.json');
-      const packageJson = {
-        name: options.packageName.replace(/\./g, '-'),
-        version: "1.0.0",
-        private: true
-      };
-      await fs.writeFile(
-        path.join(buildDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
+        // Create minimal package.json
+        log('Creating package.json');
+        const packageJson = {
+            name: options.packageName.replace(/\./g, '-'),
+            version: "1.0.0",
+            private: true
+        };
+        await fs.writeFile(
+            path.join(buildDir, 'package.json'),
+            JSON.stringify(packageJson, null, 2)
+        );
 
-      // Initialize npm project and install dependencies
-      log('Installing capacitor dependencies');
-      try {
-        await execAsync('npm init -y', { cwd: buildDir });
-        await execAsync('npm install @capacitor/core @capacitor/cli @capacitor/android', { cwd: buildDir });
-      } catch (error) {
-        log('Failed to install dependencies', error);
-        throw error;
-      }
-
-      // Create capacitor config
-      log('Configuring Capacitor');
-      const capacitorConfig = {
-        appId: options.packageName,
-        appName: options.appName,
-        webDir: ".",
-        server: {
-          androidScheme: "https"
+        // Initialize npm project and install dependencies
+        log('Installing Capacitor dependencies');
+        try {
+            await execAsync('npm init -y', { cwd: buildDir });
+            await execAsync('npm install @capacitor/core @capacitor/cli @capacitor/android', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to install dependencies', error);
+            throw error;
         }
-      };
-      await fs.writeFile(
-        path.join(buildDir, 'capacitor.config.json'),
-        JSON.stringify(capacitorConfig, null, 2)
-      );
 
-      // Initialize Capacitor project
-      log('Initializing Capacitor project');
-      try {
-        await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir=.`, { cwd: buildDir });
-      } catch (error) {
-        log('Capacitor init failed', error);
-        throw error;
-      }
+        // Create capacitor config with optimized settings
+        log('Configuring Capacitor');
+        const capacitorConfig = {
+            appId: options.packageName,
+            appName: options.appName,
+            webDir: ".",
+            server: {
+                androidScheme: "https",
+                cleartext: true
+            },
+            android: {
+                allowMixedContent: true,
+                captureInput: true,
+                initialFocus: true,
+                webContentsDebuggingEnabled: true
+            }
+        };
+        await fs.writeFile(
+            path.join(buildDir, 'capacitor.config.json'),
+            JSON.stringify(capacitorConfig, null, 2)
+        );
 
-      // Add Android platform
-      log('Adding Android platform');
-      try {
-        await execAsync('npx cap add android', { cwd: buildDir });
-      } catch (error) {
-        log('Failed to add Android platform', error);
-        throw error;
-      }
+        // Initialize Capacitor project
+        log('Initializing Capacitor project');
+        try {
+            await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir=.`, { cwd: buildDir });
+        } catch (error) {
+            log('Capacitor init failed', error);
+            throw error;
+        }
 
-      // Build debug APK
-      log('Building debug APK');
-      try {
-        await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
-      } catch (error) {
-        log('Failed to build APK', error);
-        throw error;
-      }
+        // Add Android platform
+        log('Adding Android platform');
+        try {
+            await execAsync('npx cap add android', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to add Android platform', error);
+            throw error;
+        }
 
-      const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-      try {
-        await fs.access(apkPath);
-        log('APK built successfully at:', apkPath);
-      } catch (error) {
-        log('APK not found at expected location', { path: apkPath });
-        throw new Error('APK build failed - output file not found');
-      }
+        // Sync web content with Android project
+        log('Syncing web content');
+        try {
+            await execAsync('npx cap sync android', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to sync content', error);
+            throw error;
+        }
 
-      return {
-        apkPath,
-        logs: buildLogs,
-        downloadUrl: `/download/android/${path.basename(apkPath)}`
-      };
+        // Build debug APK
+        log('Building debug APK');
+        try {
+            await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to build APK', error);
+            throw error;
+        }
+
+        const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        try {
+            await fs.access(apkPath);
+            log('APK built successfully at:', apkPath);
+        } catch (error) {
+            log('APK not found at expected location', { path: apkPath });
+            throw new Error('APK build failed - output file not found');
+        }
+
+        return {
+            apkPath,
+            logs: buildLogs,
+            downloadUrl: `/download/android/${path.basename(apkPath)}`
+        };
     } catch (error: any) {
-      log('Build process failed', { error: error.message });
-      throw {
-        message: error.message,
-        logs: buildLogs
-      };
+        log('Build process failed', { error: error.message });
+        throw {
+            message: error.message,
+            logs: buildLogs
+        };
+    }
+  }
+
+  app.post("/api/build/android", async (req, res) => {
+    try {
+      const { gameCode, appName, packageName } = req.body;
+
+      if (!gameCode || !appName || !packageName) {
+        throw new Error("Missing required build information");
+      }
+
+      const packageNameRegex = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+      if (!packageNameRegex.test(packageName)) {
+        throw new Error(
+          "Invalid package name format. Must be like 'com.example.game'"
+        );
+      }
+
+      const buildDir = path.join(process.cwd(), 'android-build');
+
+      try {
+        const result = await handleAndroidBuild(buildDir, {
+          gameCode,
+          appName,
+          packageName
+        });
+
+        res.json({
+          downloadUrl: result.downloadUrl,
+          logs: result.logs
+        });
+      } catch (buildError: any) {
+        res.status(500).json({
+          error: "Build failed",
+          message: buildError.message,
+          logs: buildError.logs
+        });
+      }
+    } catch (error: any) {
+      res.status(400).json({
+        error: "Invalid build configuration",
+        message: error.message
+      });
+    }
+  });
+
+  app.get("/download/android/:filename", (req, res) => {
+    const { filename } = req.params;
+    const filePath = path.join(process.cwd(), 'android-build', 'android', 'app', 'build', 'outputs', 'apk', 'debug', filename);
+    res.download(filePath);
+  });
+
+  app.post("/api/hint", async (req, res) => {
+    try {
+      const { context, gameDesign, code, currentFeature } = req.body;
+
+      logApi("Hint request received", { context, currentFeature });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a helpful and playful game development assistant.
+Your task is to provide short, encouraging hints about the current context.
+Keep responses brief (1-2 sentences) and friendly.
+If a feature is being implemented, give specific suggestions.
+Format hints to be encouraging and actionable.`
+          },
+          {
+            role: "user",
+            content: `Generate a helpful hint for this context:
+Context: ${context || 'General game development'}
+Current Feature: ${currentFeature || 'None specified'}
+Game Design: ${gameDesign ? JSON.stringify(gameDesign) : 'Not available'}
+Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 100
+      });
+
+      const hint = response.choices[0].message.content || "Keep up the great work! 🎮";
+
+      logApi("Hint generated", { hint });
+      res.json({ hint });
+    } catch (error: any) {
+      logApi("Error generating hint", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+
+  async function handleAndroidBuild(buildDir: string, options: {
+    gameCode: string;
+    appName: string;
+    packageName: string;
+  }) {
+    const execAsync = promisify(exec);
+    const buildLogs: string[] = [];
+
+    function log(message: string, details?: any) {
+        const logMessage = details ? `${message}: ${JSON.stringify(details)}` : message;
+        buildLogs.push(logMessage);
+        console.log(logMessage);
+    }
+
+    try {
+        // Create fresh build directory
+        log('Setting up build environment');
+        await fs.rm(buildDir, { recursive: true, force: true });
+        await fs.mkdir(buildDir, { recursive: true });
+
+        // Create index.html with proper mobile meta tags and CSP
+        log('Creating game files');
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: gap: https://ssl.gstatic.com; style-src 'self' 'unsafe-inline'; media-src *">
+    <title>${options.appName}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        body { position: fixed; touch-action: none; }
+        canvas { 
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        // Handle mobile events
+        document.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        // Setup canvas
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const scale = Math.min(windowWidth / 800, windowHeight / 600);
+
+            canvas.width = 800;
+            canvas.height = 600;
+            canvas.style.width = (800 * scale) + 'px';
+            canvas.style.height = (600 * scale) + 'px';
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', resizeCanvas);
+        resizeCanvas();
+
+        // Game code
+        ${options.gameCode}
+    </script>
+</body>
+</html>`;
+
+        await fs.writeFile(path.join(buildDir, 'index.html'), html);
+
+        // Create minimal package.json
+        log('Creating package.json');
+        const packageJson = {
+            name: options.packageName.replace(/\./g, '-'),
+            version: "1.0.0",
+            private: true
+        };
+        await fs.writeFile(
+            path.join(buildDir, 'package.json'),
+            JSON.stringify(packageJson, null, 2)
+        );
+
+        // Initialize npm project and install dependencies
+        log('Installing Capacitor dependencies');
+        try {
+            await execAsync('npm init -y', { cwd: buildDir });
+            await execAsync('npm install @capacitor/core @capacitor/cli @capacitor/android', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to install dependencies', error);
+            throw error;
+        }
+
+        // Create capacitor config with optimized settings
+        log('Configuring Capacitor');
+        const capacitorConfig = {
+            appId: options.packageName,
+            appName: options.appName,
+            webDir: ".",
+            server: {
+                androidScheme: "https",
+                cleartext: true
+            },
+            android: {
+                allowMixedContent: true,
+                captureInput: true,
+                initialFocus: true,
+                webContentsDebuggingEnabled: true
+            }
+        };
+        await fs.writeFile(
+            path.join(buildDir, 'capacitor.config.json'),
+            JSON.stringify(capacitorConfig, null, 2)
+        );
+
+        // Initialize Capacitor project
+        log('Initializing Capacitor project');
+        try {
+            await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir=.`, { cwd: buildDir });
+        } catch (error) {
+            log('Capacitor init failed', error);
+            throw error;
+        }
+
+        // Add Android platform
+        log('Adding Android platform');
+        try {
+            await execAsync('npx cap add android', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to add Android platform', error);
+            throw error;
+        }
+
+        // Sync web content with Android project
+        log('Syncing web content');
+        try {
+            await execAsync('npx cap sync android', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to sync content', error);
+            throw error;
+        }
+
+        // Build debug APK
+        log('Building debug APK');
+        try {
+            await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
+        } catch (error) {
+            log('Failed to build APK', error);
+            throw error;
+        }
+
+        const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        try {
+            await fs.access(apkPath);
+            log('APK built successfully at:', apkPath);
+        } catch (error) {
+            log('APK not found at expected location', { path: apkPath });
+            throw new Error('APK build failed - output file not found');
+        }
+
+        return {
+            apkPath,
+            logs: buildLogs,
+            downloadUrl: `/download/android/${path.basename(apkPath)}`
+        };
+    } catch (error: any) {
+        log('Build process failed', { error: error.message });
+        throw {
+            message: error.message,
+            logs: buildLogs
+        };
     }
   }
 

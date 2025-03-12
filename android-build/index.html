@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>kaboom2</title>
+    <title>My Game</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
         canvas { width: 100vw; height: 100vh; display: block; }
@@ -15,136 +15,181 @@
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+        
+        
 
-        // Game state variables
-let gameRunning = true;
-let score = 0;
-let lives = 3;
-const bucketWidth = 60;
-const bucketHeight = 20;
-const bombRadius = 8; // Increased bomb radius for better visibility
-const bombSpeedIncrement = 0.1;
-const startingBombSpeed = 2;
-const bombDropInterval = 1500; // Increased interval to slow down bomb dropping
+        let paddle = {
+            x: canvas.width / 2 - 40,
+            y: canvas.height - 30,
+            width: 80,
+            height: 10,
+            speed: 6,
+            dx: 0
+        };
 
-// Bucket position
-const bucket = {
-    x: canvas.width / 2 - bucketWidth / 2,
-    y: canvas.height - bucketHeight - 10,
-    width: bucketWidth,
-    height: bucketHeight
-};
+        let bombs = [];
+        let bombSpeed = 2;
+        let bombInterval = 2000;
+        let lastBombTime = 0;
 
-// Bomber position and bombs array
-const bomber = {
-    x: 0,
-    y: 30,
-    direction: 2
-};
-const bombs = [];
-let bombSpeed = startingBombSpeed;
+        let shields = [];
+        let shieldActive = false;
+        let shieldDuration = 0;
 
-// Timer for dropping bombs
-let lastBombDropTime = 0;
+        let score = 0;
+        let lives = 3;
+        let gameOver = false;
 
-// Handle mouse movement
-canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    bucket.x = e.clientX - rect.left - bucket.width / 2;
-});
-
-// Create a bomb
-function dropBomb() {
-    bombs.push({ x: bomber.x + 20, y: bomber.y + 10 }); // Adjusted bomb starting position
-}
-
-// Update game state
-function update(timestamp) {
-    // Move bomber
-    bomber.x += bomber.direction;
-    if (bomber.x <= 0 || bomber.x >= canvas.width - 40) {
-        bomber.direction *= -1; // Change direction
-    }
-
-    // Drop bombs at regular intervals
-    if (timestamp - lastBombDropTime > bombDropInterval) {
-        dropBomb();
-        lastBombDropTime = timestamp;
-    }
-
-    // Move bombs
-    for (let i = 0; i < bombs.length; i++) {
-        const bomb = bombs[i];
-        bomb.y += bombSpeed;
-        // Check for collision with the bucket
-        if (bomb.y > bucket.y && bomb.y < bucket.y + bucket.height && bomb.x > bucket.x && bomb.x < bucket.x + bucket.width) {
-            bombs.splice(i, 1); // Remove bomb
-            score += 10; // Increase score
-            bombSpeed += bombSpeedIncrement; // Increase bomb speed
-            i--;
+        // Draw paddle
+        function drawPaddle() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
         }
-        // If bomb hits the bottom of the screen
-        else if (bomb.y > canvas.height) {
-            bombs.splice(i, 1); // Remove bomb
-            lives--;
-            i--;
-            if (lives <= 0) {
-                gameRunning = false; // End game if no lives left
+
+        // Draw bombs
+        function drawBombs() {
+            ctx.fillStyle = 'red';
+            bombs.forEach(bomb => {
+                ctx.beginPath();
+                ctx.arc(bomb.x, bomb.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // Draw shields
+        function drawShields() {
+            if(shieldActive) {
+                ctx.strokeStyle = 'cyan';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(paddle.x - 5, paddle.y - 5, paddle.width + 10, paddle.height + 10);
             }
         }
-    }
-}
 
-// Render game state
-function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw score and lives
+        function drawScore() {
+            ctx.font = '16px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Score: ${score}`, 8, 20);
+            ctx.fillText(`Lives: ${lives}`, canvas.width - 70, 20);
+        }
 
-    // Draw bomber
-    ctx.fillStyle = 'red';
-    ctx.fillRect(bomber.x, bomber.y, 40, 10);
+        // Create a new bomb
+        function createBomb() {
+            const x = Math.random() * (canvas.width - 10) + 5;
+            bombs.push({ x, y: 0 });
+        }
 
-    // Draw bucket
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(bucket.x, bucket.y, bucket.width, bucket.height);
+        // Create a shield power-up
+        function createShield() {
+            const x = Math.random() * (canvas.width - 20) + 10;
+            shields.push({ x, y: 0 });
+        }
 
-    // Draw bombs
-    ctx.fillStyle = 'red'; // Changed bomb color to red
-    for (const bomb of bombs) {
-        ctx.beginPath();
-        ctx.arc(bomb.x, bomb.y, bombRadius, 0, Math.PI * 2);
-        ctx.fill();
-    }
+        // Update the game objects
+        function update(deltaTime) {
+            if (!gameOver) {
+                // Move paddle
+                paddle.x += paddle.dx;
+                if (paddle.x < 0) paddle.x = 0;
+                if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
 
-    // Draw score and lives
-    ctx.fillStyle = 'white';
-    ctx.font = '16px "Press Start 2P"';
-    ctx.fillText(`Score: ${score}`, 10, 20);
-    ctx.fillText(`Lives: ${lives}`, canvas.width - 100, 20);
-}
+                // Move bombs
+                bombs.forEach(bomb => {
+                    bomb.y += bombSpeed;
+                    if (bomb.y > canvas.height) {
+                        if (!shieldActive) {
+                            lives--;
+                            if (lives <= 0) gameOver = true;
+                        }
+                        bombs.shift();
+                    }
+                });
 
-// Game loop
-function gameLoop(timestamp) {
-    if (gameRunning) {
-        update(timestamp);
-        render();
+                // Check bomb collisions with paddle
+                bombs.forEach((bomb, index) => {
+                    if (bomb.x > paddle.x && bomb.x < paddle.x + paddle.width && bomb.y > paddle.y && bomb.y < paddle.y + paddle.height) {
+                        score++;
+                        bombs.splice(index, 1);
+                        if (score % 5 === 0) createShield(); // Create a shield every 5 points
+                    }
+                });
+
+                // Move shields
+                shields.forEach((shield, index) => {
+                    shield.y += bombSpeed;
+                    if (shield.y > canvas.height) {
+                        shields.shift();
+                    }
+                });
+
+                // Check shield collisions with paddle
+                shields.forEach((shield, index) => {
+                    if (shield.x > paddle.x && shield.x < paddle.x + paddle.width && shield.y > paddle.y && shield.y < paddle.y + paddle.height) {
+                        shieldActive = true;
+                        shieldDuration = 3000; // Shield active for 3 seconds
+                        shields.splice(index, 1);
+                    }
+                });
+
+                // Update shield duration
+                if (shieldActive) {
+                    shieldDuration -= deltaTime;
+                    if (shieldDuration <= 0) {
+                        shieldActive = false;
+                    }
+                }
+
+                // Increase difficulty over time
+                bombSpeed += 0.001;
+                if (Date.now() - lastBombTime > bombInterval) {
+                    createBomb();
+                    lastBombTime = Date.now();
+                }
+            }
+        }
+
+        // Render the game
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPaddle();
+            drawBombs();
+            drawShields();
+            drawScore();
+        }
+
+        // Main game loop
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+
+            update(deltaTime);
+            render();
+
+            if (!gameOver) {
+                requestAnimationFrame(gameLoop);
+            } else {
+                ctx.fillStyle = 'red';
+                ctx.font = '24px Arial';
+                ctx.fillText('Game Over!', canvas.width / 2 - 60, canvas.height / 2);
+            }
+        }
+
+        // Touch event to move paddle
+        canvas.addEventListener('touchmove', (event) => {
+            const touch = event.touches[0];
+            const touchX = touch.clientX - canvas.offsetLeft;
+            paddle.x = touchX - paddle.width / 2;
+        });
+
+        // Initialize game
+        let lastTimestamp = 0;
         requestAnimationFrame(gameLoop);
-    } else {
-        ctx.fillStyle = 'white';
-        ctx.font = '32px "Press Start 2P"';
-        ctx.fillText('Game Over', canvas.width / 2 - 80, canvas.height / 2);
-        ctx.fillText(`Score: ${score}`, canvas.width / 2 - 80, canvas.height / 2 + 40);
-    }
-}
-
-// Start the game loop
-requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>

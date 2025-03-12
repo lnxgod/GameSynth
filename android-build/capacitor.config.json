@@ -1,16 +1,8 @@
 {
-  "appId": "com.game.kaboom",
-  "appName": "kaboom2",
+  "appId": "com.mygame.app",
+  "appName": "My Game",
   "webDir": ".",
   "server": {
     "androidScheme": "https"
-  },
-  "android": {
-    "buildOptions": {
-      "keystorePath": "release.keystore",
-      "keystoreAlias": "release",
-      "keystorePassword": "asdfasdf",
-      "keyPassword": "asdfasdf"
-    }
   }
 }
