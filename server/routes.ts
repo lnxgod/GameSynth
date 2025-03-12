@@ -659,14 +659,6 @@ Each feature should be specific and actionable.`
         throw new Error("User not authenticated");
       }
 
-      // Get user preferences
-      let userPreferences;
-      try {
-        userPreferences = await storage.getUserById(userId);
-      } catch (error) {
-        console.error('Failed to get user preferences:', error);
-      }
-
       const history = designConversations.get(sessionId);
       if (!history) {
         throw new Error("No design conversation found");
@@ -692,8 +684,14 @@ Each feature should be specific and actionable.`
         });
       }
 
+      // Create a comprehensive prompt from the conversation history
+      const gameRequirements = history
+        .filter(msg => msg.role === 'assistant')
+        .map(msg => msg.content)
+        .join('\n\n');
+
       const response = await openai.chat.completions.create({
-        model: userPreferences?.code_gen_model || "gpt-4o",
+        model: "o3-mini",
         messages: [
           {
             role: "system",
@@ -701,11 +699,10 @@ Each feature should be specific and actionable.`
           },
           {
             role: "user",
-            content: `Based on all our discussions, including follow-up details and analyses, create a complete HTML5 Canvas game implementation. Here's the full conversation:\n\n${
-              history.map(msg => `${msg.role}: ${msg.content}`).join('\n')
-            }`
+            content: `Based on these game requirements and our discussion, create a complete HTML5 Canvas game implementation:\n\n${gameRequirements}`
           }
         ],
+        reasoning_effort: "medium",
         temperature: 0.7,
         max_tokens: 16000
       });
@@ -721,6 +718,7 @@ Each feature should be specific and actionable.`
       logApi("Game code generated", { sessionId }, result);
       res.json(result);
     } catch (error: any) {
+      console.error('Game generation error:', error);
       logApi("Error generating game", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
@@ -900,7 +898,7 @@ When providing suggestions:
           },
           {
             role: "user",
-            content: `Please analyze this game code and suggest 3 improvements that help implement theseremaining features: ${features?.join(", ")}\n\n${code}`
+            content: `Please analyze this game code and suggest 3 improvements that help implement these remaining features: ${features?.join(", ")}\n\n${code}`
           }
         ],
         response_format: { type: "json_object" },
@@ -909,7 +907,8 @@ When providing suggestions:
 
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
-      logApi("Remix suggestions generated", { code }, suggestions);res.json(suggestions);
+      logApi("Remix suggestions generated", { code }, suggestions);
+      res.json(suggestions);
     } catch (error: any) {
       logApi("Error generating remix suggestions", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
