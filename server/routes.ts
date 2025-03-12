@@ -889,15 +889,18 @@ When modifying code:
   app.post("/api/code/remix", async (req, res) => {
     try {
       const { code, features } = req.body;
-      const user = (req as any).user;
+      const userId = (req.session as any).userId;
+      if (!userId) {
+        throw new Error("User not authenticated");
+      }
 
       const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+        model: "o3-mini",
         messages: [
           {
             role: "system",
             content: `You are a game development assistant specialized in improving HTML5 Canvas games.
-When providingsuggestions:
+When providing suggestions:
 1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}
 3. Format your response as JSON with this structure:
@@ -914,8 +917,7 @@ When providingsuggestions:
             content: `Please analyze this game code and suggest 3 improvements that help implement these remaining features: ${features?.join(", ")}\n\n${code}`
           }
         ],
-        response_format: { type: "json_object" },
-        temperature: 0.7
+        reasoning_effort: "medium"
       });
 
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
@@ -923,6 +925,7 @@ When providingsuggestions:
       logApi("Remix suggestions generated", { code }, suggestions);
       res.json(suggestions);
     } catch (error: any) {
+      console.error('Error generating remix suggestions:', error);
       logApi("Error generating remix suggestions", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
