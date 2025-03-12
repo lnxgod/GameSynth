@@ -464,7 +464,24 @@ export async function registerRoutes(app: Express) {
   app.post("/api/design/analyze", async (req, res) => {
     try {
       const { requirements, sessionId } = req.body;
-      const user = (req as any).user;
+      if (!requirements || !sessionId) {
+        throw new Error("Missing required parameters");
+      }
+
+      // Get user from session
+      const userId = (req.session as any).userId;
+      if (!userId) {
+        throw new Error("User not authenticated");
+      }
+
+      // Get user preferences, using default model if not set
+      let userPreferences;
+      try {
+        userPreferences = await storage.getUserById(userId);
+      } catch (error) {
+        console.error('Failed to get user preferences:', error);
+      }
+      const analysisModel = userPreferences?.analysis_model || "gpt-3.5-turbo";
 
       if (!designConversations.has(sessionId)) {
         designConversations.set(sessionId, []);
@@ -476,7 +493,7 @@ export async function registerRoutes(app: Express) {
       // Process all aspects in parallel
       const analysisPromises = Object.entries(requirements).map(async ([aspect, content]) => {
         const response = await openai.chat.completions.create({
-          model: user.analysis_model || "gpt-4o",
+          model: analysisModel,
           messages: [
             {
               role: "system",
@@ -514,6 +531,7 @@ export async function registerRoutes(app: Express) {
           .flat()
       });
     } catch (error: any) {
+      console.error('Analysis error:', error);
       logApi("Error in analysis", req.body, { error: error.message });
       res.status(500).json({ error: error.message });
     }
