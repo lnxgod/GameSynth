@@ -1,7 +1,7 @@
 {
   "appId": "com.mygame.app",
   "appName": "My Game",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https",
     "cleartext": true

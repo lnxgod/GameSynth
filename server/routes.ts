@@ -133,6 +133,8 @@ When providing code:
 6. Handle cleanup properly when the game stops`;
 
 
+let addDebugLog: ((message: string) => void) | undefined; //Added to handle debug logging
+
 export async function registerRoutes(app: Express) {
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
@@ -741,6 +743,8 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       const logMessage = details ? `${message}: ${JSON.stringify(details)}` : message;
       buildLogs.push(logMessage);
       console.log(logMessage);
+      // Add to debug logs
+      addDebugLog?.(`🔧 Android Build: ${logMessage}`);
     }
 
     try {
@@ -842,9 +846,10 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       log('Installing dependencies');
       try {
         await execAsync('npm install', { cwd: buildDir });
-      } catch (error) {
-        log('Failed to install dependencies', error);
-        throw error;
+      } catch (error: any) {
+        const errorMsg = `Failed to install dependencies: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
+        log('Dependencies installation failed', { error: errorMsg });
+        throw new Error(errorMsg);
       }
 
       // Create Capacitor config
@@ -876,37 +881,44 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       // Initialize Capacitor project
       log('Initializing Capacitor project');
       try {
-        await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir="www"`, { cwd: buildDir });
-      } catch (error) {
-        log('Capacitor init failed', error);
-        throw error;
+        const initResult = await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir="www"`, { cwd: buildDir });
+        log('Capacitor init output', { stdout: initResult.stdout, stderr: initResult.stderr });
+      } catch (error: any) {
+        const errorMsg = `Capacitor initialization failed: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
+        log('Capacitor init failed', { error: errorMsg });
+        throw new Error(errorMsg);
       }
 
       // Add Android platform
       log('Adding Android platform');
       try {
-        await execAsync('npx cap add android', { cwd: buildDir });
-      } catch (error) {
-        log('Failed to add Android platform', error);
-        throw error;
+        const platformResult = await execAsync('npx cap add android', { cwd: buildDir });
+        log('Android platform output', { stdout: platformResult.stdout, stderr: platformResult.stderr });
+      } catch (error: any) {
+        const errorMsg = `Failed to add Android platform: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
+        log('Adding Android platform failed', { error: errorMsg });
+        throw new Error(errorMsg);
       }
 
       // Copy web content and sync with Android project
       log('Syncing web content');
-      try {
-        await execAsync('npx cap sync android', { cwd: buildDir });
-      } catch (error) {
-        log('Failed to sync content', error);
-        throw error;
+      try {        const syncResult = await execAsync('npx cap sync android', { cwd: buildDir });
+        log('Sync output', { stdout: syncResult.stdout, stderr: syncResult.stderr });
+      } catch (error: any) {
+        const errorMsg = `Failed to sync content: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
+        log('Content sync failed', { error: errorMsg });
+        throw new Error(errorMsg);
       }
 
       // Build debug APK
       log('Building debug APK');
       try {
-        await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
-      } catch (error) {
-        log('Failed to build APK', error);
-        throw error;
+        const buildResult = await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
+        log('Build output', { stdout: buildResult.stdout, stderr: buildResult.stderr });
+      } catch (error: any) {
+        const errorMsg = `Failed to build APK: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
+        log('APK build failed', { error: errorMsg });
+        throw new Error(errorMsg);
       }
 
       const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
@@ -914,8 +926,9 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         await fs.access(apkPath);
         log('APK built successfully at:', apkPath);
       } catch (error) {
-        log('APK not found at expected location', { path: apkPath });
-        throw new Error('APK build failed - output file not found');
+        const errorMsg = 'APK not found at expected location: ' + apkPath;
+        log('APK verification failed', { error: errorMsg });
+        throw new Error(errorMsg);
       }
 
       return {
@@ -924,9 +937,10 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         downloadUrl: `/download/android/${path.basename(apkPath)}`
       };
     } catch (error: any) {
-      log('Build process failed', { error: error.message });
+      const fullError = `Build process failed: ${error.message}`;
+      log('Build process failed', { error: fullError, logs: buildLogs });
       throw {
-        message: error.message,
+        message: fullError,
         logs: buildLogs
       };
     }
@@ -936,16 +950,19 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   app.post("/api/build/android", async (req, res) => {
     try {
       const { gameCode, appName, packageName } = req.body;
+      logApi("Android build request", { appName, packageName });
 
       if (!gameCode || !appName || !packageName) {
-        throw new Error("Missing required build information. Please provide game code, app name and package name.");
+        const errorMsg = "Missing required build information. Please provide game code, app name and package name.";
+        logApi("Build validation failed", { error: errorMsg });
+        throw new Error(errorMsg);
       }
 
       const packageNameRegex = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
       if (!packageNameRegex.test(packageName)) {
-        throw new Error(
-          "Invalid package name format. Must be like 'com.example.game'"
-        );
+        const errorMsg = "Invalid package name format. Must be like 'com.example.game'";
+        logApi("Package name validation failed", { error: errorMsg, packageName });
+        throw new Error(errorMsg);
       }
 
       const buildDir = path.join(process.cwd(), 'android-build');
@@ -957,15 +974,18 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
           packageName
         });
 
+        logApi("Build completed successfully", { downloadUrl: result.downloadUrl });
         res.json({
           downloadUrl: result.downloadUrl,
           logs: result.logs
         });
       } catch (buildError: any) {
+        logApi("Build process failed", { error: buildError.message, logs: buildError.logs });
         res.status(500).json({
           error: "Build failed",
           message: buildError.message,
-          logs: buildError.logs
+          logs: buildError.logs,
+          details: "Check the build logs for more information"
         });
       }
     } catch (error: any) {
