@@ -6,7 +6,8 @@ export type Auth = {
   username: string;
   role: string;
   forcePasswordChange: boolean;
-  modelPreference: string;
+  analysis_model: string;
+  code_gen_model: string;
 };
 
 type AuthContextType = {
@@ -21,7 +22,8 @@ const defaultAuth: Auth = {
   username: "",
   role: "",
   forcePasswordChange: false,
-  modelPreference: "gpt-4o"
+  analysis_model: "gpt-4o",
+  code_gen_model: "gpt-4o"
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -54,7 +56,8 @@ export function useAuthProvider() {
       username: data.username,
       role: data.role,
       forcePasswordChange: data.forcePasswordChange,
-      modelPreference: data.modelPreference || "gpt-4o"
+      analysis_model: data.analysis_model || "gpt-4o",
+      code_gen_model: data.code_gen_model || "gpt-4o"
     });
   };
 

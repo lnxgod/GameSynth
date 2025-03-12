@@ -26,8 +26,8 @@ export function ConfigMenu() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [preferences, setPreferences] = useState<ModelPreferences>({
-    analysisModel: auth.modelPreference || "gpt-4o",
-    codeGenModel: auth.modelPreference || "gpt-4o"
+    analysisModel: auth.analysis_model || "gpt-4o",
+    codeGenModel: auth.code_gen_model || "gpt-4o"
   });
 
   const { data: models, isLoading: isLoadingModels } = useQuery<ModelMap>({
