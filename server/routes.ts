@@ -364,10 +364,16 @@ Each feature should be specific and actionable.`
 
       const temperature = settings?.temperature ?? 0.7;
       const maxTokens = settings?.maxTokens ?? 16000;
+      const useMaxCompleteTokens = settings?.useMaxCompleteTokens ?? false;
+      const selectedModel = settings?.model || 'gpt-4';
 
-      // Update the chat completion creation
+      // Determine whether to use max_complete_tokens based on model type and settings
+      const useCompleteTokens = useMaxCompleteTokens && selectedModel.startsWith('o1');
+      const tokenParam = useCompleteTokens ? { max_complete_tokens: maxTokens } : { max_tokens: maxTokens };
+
+      // Update the chat completion creation with dynamic token parameter
       const response = await openai.chat.completions.create({
-        model: settings?.model || 'gpt-4', // Use default model if none specified
+        model: selectedModel,
         messages: [
           {
             role: "system",
@@ -381,7 +387,7 @@ Each feature should be specific and actionable.`
           }
         ],
         temperature,
-        max_tokens: maxTokens
+        ...tokenParam
       });
 
       const content = response.choices[0].message.content || "";

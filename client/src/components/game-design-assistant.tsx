@@ -15,6 +15,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Update the ModelType definition to be more flexible
 type ModelType = string;
@@ -102,6 +103,7 @@ export function GameDesignAssistant({
 
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(8000);
+  const [useMaxCompleteTokens, setUseMaxCompleteTokens] = useState(false);
 
   const [showDebugContext, setShowDebugContext] = useState(false);
 
@@ -210,6 +212,7 @@ export function GameDesignAssistant({
         settings: {
           temperature,
           maxTokens,
+          useMaxCompleteTokens,
           model: selectedModel
         }
       });
@@ -607,6 +610,22 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                       Controls the maximum length of generated code
                     </div>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="use-max-complete-tokens"
+                      checked={useMaxCompleteTokens}
+                      onCheckedChange={(checked) => setUseMaxCompleteTokens(checked as boolean)}
+                    />
+                    <label
+                      htmlFor="use-max-complete-tokens"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Use max_complete_tokens for O1 models
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-6">
+                    Enable this to use max_complete_tokens instead of max_tokens when using O1 models for debugging purposes
+                  </p>
                 </CollapsibleContent>
               </Collapsible>
 
