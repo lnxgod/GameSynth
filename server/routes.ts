@@ -22,8 +22,6 @@ import stream from 'stream';
 import express from 'express'; // Import express
 
 
-// Previous imports remain unchanged
-
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
 }
@@ -98,15 +96,27 @@ const apiLogs: Array<{
   message: string;
   request?: any;
   response?: any;
+  openAIConfig?: any;
 }> = [];
 
-function logApi(message: string, request?: any, response?: any) {
+const logOpenAIParams = (config: any) => {
+  return {
+    model: config.model,
+    reasoning_effort: config.reasoning_effort,
+    max_completion_tokens: config.max_completion_tokens,
+    temperature: config.temperature,
+    response_format: config.response_format
+  };
+};
+
+function logApi(message: string, request?: any, response?: any, openAIConfig?: any) {
   const timestamp = new Date().toLocaleTimeString();
   apiLogs.push({
     timestamp,
     message,
     request: request ? JSON.stringify(request, null, 2) : undefined,
-    response: response ? JSON.stringify(response, null, 2) : undefined
+    response: response ? JSON.stringify(response, null, 2) : undefined,
+    openAIConfig: openAIConfig ? JSON.stringify(openAIConfig, null, 2) : undefined
   });
   if (apiLogs.length > 100) {
     apiLogs.shift();
@@ -596,47 +606,38 @@ Please suggest the key visual elements needed for this game.`
       }
       const history = designConversations.get(sessionId)!;
 
-      logApi(`Analyzing game requirements`, { requirements });
+      const requestConfig = {
+        model: analysisModel,
+        messages: [
+          {
+            role: "system",
+            content: DESIGN_ASSISTANT_PROMPT
+          },
+          {
+            role: "user",
+            content: `Analyze this requirement for an HTML5 Canvas game: ${JSON.stringify(requirements)}`
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7
+      };
 
-      // Process all aspects in parallel
-      const analysisPromises = Object.entries(requirements).map(async ([aspect, content]) => {
-        const response = await openai.chat.completions.create({
-          model: analysisModel,
-          messages: [
-            {
-              role: "system",
-              content: DESIGN_ASSISTANT_PROMPT
-            },
-            {
-              role: "user",
-              content: `Analyze this ${aspect} requirement for an HTML5 Canvas game: ${content}`
-            }
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.7
-        });
+      logApi("Analyzing game requirements", { requirements }, null, logOpenAIParams(requestConfig));
 
-        const analysis = JSON.parse(response.choices[0].message.content || "{}");
+      const response = await openai.chat.completions.create(requestConfig);
 
-        history.push({
-          role: 'assistant',
-          content: `Analysis of ${aspect}:\n${analysis.analysis}\n\nImplementation details:\n${analysis.implementation_details.join("\n")}`
-        });
+      const analysisResults = JSON.parse(response.choices[0].message.content || "{}");
 
-        return [aspect, analysis];
+      history.push({
+        role: 'assistant',
+        content: `Analysis of requirement:\n${analysisResults.analysis}\n\nImplementation details:\n${analysisResults.implementation_details.join("\n")}`
       });
 
-      const analysisResults = await Promise.all(analysisPromises);
-      const combinedAnalysis = Object.fromEntries(analysisResults);
-
-      logApi(`Analysis complete for all aspects`, { combinedAnalysis });
-      res.json({ 
-        analysis: combinedAnalysis,
-        needsMoreInfo: analysisResults.some(([_, analysis]) => analysis.needs_clarification),
-        additionalQuestions: analysisResults
-          .filter(([_, analysis]) => analysis.needs_clarification)
-          .map(([_, analysis]) => analysis.clarifying_questions)
-          .flat()
+      logApi("Analysis complete", null, analysisResults, logOpenAIParams(requestConfig));
+      res.json({
+        analysis: analysisResults,
+        needsMoreInfo: analysisResults.needs_clarification,
+        additionalQuestions: analysisResults.clarifying_questions
       });
     } catch (error: any) {
       console.error('Analysis error:', error);
@@ -656,7 +657,7 @@ Please suggest the key visual elements needed for this game.`
 
       logApi("Generating final design", { sessionId });
 
-      const response = await openai.chat.completions.create({
+      const requestConfig = {
         model: "o3-mini",
         messages: [
           {
@@ -671,7 +672,10 @@ Please suggest the key visual elements needed for this game.`
           }
         ],
         reasoning_effort: "medium"
-      });
+      };
+      logApi("Final design request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const finalDesign = JSON.parse(response.choices[0].message.content || "{}");
 
@@ -680,7 +684,7 @@ Please suggest the key visual elements needed for this game.`
         content: `Final Game Design:\n${finalDesign.gameDescription}\n\nCore Mechanics:\n${finalDesign.coreMechanics.join("\n")}`
       });
 
-      logApi("Final design generated", { finalDesign });
+      logApi("Final design generated", { finalDesign }, null, logOpenAIParams(requestConfig));
       res.json({
         ...finalDesign,
         history
@@ -702,8 +706,8 @@ Please suggest the key visual elements needed for this game.`
 
       logApi("Generating features request", { gameDesign, currentFeatures });
 
-      const response = await openai.chat.completions.create({
-        model: user.analysis_model || "gpt-4o", // Use analysis model preference
+      const requestConfig = {
+        model: user.analysis_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -745,11 +749,14 @@ Each feature should be specific and actionable.`
         ],
         response_format: { type: "json_object" },
         temperature: 0.7
-      });
+      };
+      logApi("Generate features request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
-      logApi("Feature suggestions generated", { gameDesign }, suggestions);
+      logApi("Feature suggestions generated", { gameDesign }, suggestions, logOpenAIParams(requestConfig));
       res.json(suggestions);
     } catch (error: any) {
       logApi("Error generating feature suggestions", req.body, { error: error.message });
@@ -771,7 +778,7 @@ Each feature should be specific and actionable.`
         throw new Error("No design conversation found");
       }
 
-      logApi("Game generation request", { sessionId, modelConfig });
+      logApi("Game generation request", { sessionId, modelConfig }, null, logOpenAIParams(modelConfig));
 
       if (followUpAnswers) {
         Object.entries(followUpAnswers).forEach(([question, answer]) => {
@@ -830,7 +837,7 @@ Each feature should be specific and actionable.`
         response: content
       };
 
-      logApi("Game code generated", { sessionId }, result);
+      logApi("Game code generated", { sessionId }, result, logOpenAIParams(requestConfig));
       res.json(result);
     } catch (error: any) {
       console.error('Game generation error:', error);
@@ -850,8 +857,8 @@ Each feature should be specific and actionable.`
 
       logApi("Chat request received", { prompt, temperature, maxTokens });
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        model: user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -861,7 +868,10 @@ Each feature should be specific and actionable.`
         ],
         temperature,
         max_tokens: maxTokens
-      });
+      };
+      logApi("Chat request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const content = response.choices[0].message.content || "";
       console.log('Raw response content:', content);
@@ -883,7 +893,7 @@ Each feature should be specific and actionable.`
         }
       };
 
-      logApi("Chat response generated", { prompt }, result);
+      logApi("Chat response generated", { prompt }, result, logOpenAIParams(requestConfig));
       res.json(result);
     } catch (error: any) {
       logApi("Error in chat", req.body, { error: error.message });
@@ -898,7 +908,7 @@ Each feature should be specific and actionable.`
       res.json(chats);
     } catch (error: any) {
       logApi("Error getting chats", req.query, { error: error.message });
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error:error.message });
     }
   });
 
@@ -954,8 +964,8 @@ When modifying code:
 7. Assume canvas and ctx are available in the scope
 8. DO NOT include HTML, just the JavaScript game code`;
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        model: user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -970,7 +980,10 @@ When modifying code:
         ],
         temperature: 0.7,
         max_tokens: 16000
-      });
+      };
+      logApi("Code chat request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
@@ -980,7 +993,7 @@ When modifying code:
         updatedCode
       };
 
-      logApi("Code chat response", { message }, result);
+      logApi("Code chat response", { message }, result, logOpenAIParams(requestConfig));
       res.json(result);
     } catch (error: any) {
       logApi("Error in code chat", req.body, { error: error.message });
@@ -996,7 +1009,7 @@ When modifying code:
         throw new Error("User not authenticated");
       }
 
-      const response = await openai.chat.completions.create({
+      const requestConfig = {
         model: "o3-mini",
         messages: [
           {
@@ -1020,11 +1033,14 @@ When providing suggestions:
           }
         ],
         reasoning_effort: "medium"
-      });
+      };
+      logApi("Remix request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
-      logApi("Remix suggestions generated", { code }, suggestions);
+      logApi("Remix suggestions generated", { code }, suggestions, logOpenAIParams(requestConfig));
       res.json(suggestions);
     } catch (error: any) {
       console.error('Error generating remix suggestions:', error);
@@ -1062,7 +1078,9 @@ When explaining fixes:
 Remember:
 - Focus on what the game should do vs what it's doing
 - Explain things like you're talking to a friend
-- Keep it simple and clear- Always include the complete fixed code between +++CODESTSTART+++ and +++CODESTOP+++ markers
+- Keep it simple and clear- Always include the complete fixed code between +++CODES
+
+TART+++ and +++CODESTOP+++ markers
 
 Format your response as:
 1. 🎮 What's not working? (simple explanation)
@@ -1087,8 +1105,8 @@ Format your response as:
 2. 💡 How we'll fix it
 3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`;
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        model: user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -1107,7 +1125,10 @@ Please help fix this issue!`
         ],
         temperature: 0.7,
         max_tokens: 16000
-      });
+      };
+      logApi("Debug request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
@@ -1125,7 +1146,7 @@ Please help fix this issue!`
         updatedCode
       };
 
-      logApi("Debug suggestions generated", { error }, result);
+      logApi("Debug suggestions generated", { error }, result, logOpenAIParams(requestConfig));
       res.json(result);
     } catch (error: any) {
       logApi("Error in debug", req.body, { error: error.message });
@@ -1180,8 +1201,8 @@ Please help fix this issue!`
 
       logApi("Hint request received", { context, currentFeature });
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        model: user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -1202,11 +1223,14 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         ],
         temperature: 0.7,
         max_tokens: 100
-      });
+      };
+      logApi("Hint request", {}, null, logOpenAIParams(requestConfig));
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const hint = response.choices[0].message.content || "Keep up the great work! 🎮";
 
-      logApi("Hint generated", { hint });
+      logApi("Hint generated", { hint }, null, logOpenAIParams(requestConfig));
       res.json({ hint });
     } catch (error: any) {
       logApi("Error generating hint", req.body, { error: error.message });
@@ -1607,7 +1631,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
       const [updatedUser] = await db
         .update(users)
-        .set({ 
+        .set({
           analysis_model: analysisModel,
           code_gen_model: codeGenModel
         })
