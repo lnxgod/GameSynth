@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
@@ -15,10 +16,18 @@ interface BuildControlsProps {
   onBuildComplete?: () => void;
 }
 
+const GAME_TYPES = [
+  { id: 'arcade', name: 'Arcade Game', desc: 'Classic arcade-style games' },
+  { id: 'kaboom', name: 'Kaboom Atari Style', desc: 'Retro Atari-inspired games' },
+  { id: 'easy', name: 'Easy Mode Game', desc: 'Simple and beginner-friendly games' },
+  { id: 'powerups', name: 'Game with Powerups', desc: 'Games featuring shields and power-ups' }
+];
+
 export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: BuildControlsProps) {
   const [appName, setAppName] = useState('My Game');
   const [packageName, setPackageName] = useState('com.mygame.app');
   const [buildLogs, setBuildLogs] = useState<string[]>([]);
+  const [gameType, setGameType] = useState('arcade');
   const { toast } = useToast();
 
   // Real-time package name validation
@@ -33,13 +42,15 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
       console.log('Starting build with:', {
         appName,
         packageName,
+        gameType,
         hasGameCode: !!gameCode
       });
 
       const res = await apiRequest("POST", "/api/build/android", {
         gameCode,
         appName,
-        packageName
+        packageName,
+        gameType
       });
       return res.json();
     },
@@ -75,6 +86,22 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
       <h2 className="text-lg font-semibold">Build Android Debug APK</h2>
 
       <div className="space-y-4">
+        <div className="space-y-1">
+          <Label htmlFor="gameType">Game Type</Label>
+          <Select value={gameType} onValueChange={setGameType}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a game type" />
+            </SelectTrigger>
+            <SelectContent>
+              {GAME_TYPES.map((type) => (
+                <SelectItem key={type.id} value={type.id}>
+                  {type.name} - {type.desc}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="space-y-1">
           <Label htmlFor="appName">App Name</Label>
           <Input
@@ -125,7 +152,7 @@ export function BuildControls({ gameCode, onBuildStart, onBuildComplete }: Build
       {buildLogs.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Build Logs</h3>
-          <ScrollArea className="h-40 w-full rounded-md border bg-muted p-4">
+          <ScrollArea className="h-32 w-full rounded-md border bg-muted p-4">
             <pre className="text-xs whitespace-pre-wrap">
               {buildLogs.join('\n')}
             </pre>

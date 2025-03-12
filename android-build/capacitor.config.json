@@ -3,6 +3,13 @@
   "appName": "My Game",
   "webDir": ".",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "initialFocus": true,
+    "webContentsDebuggingEnabled": true
   }
 }
