@@ -17,6 +17,9 @@ import { chats, games, features, users } from "@shared/schema"; // Import schema
 import { db } from './db'; // Import the db instance correctly
 import { eq } from 'drizzle-orm';
 import {insertGameDesignSchema} from "@shared/schema"; //Import the schema for game design
+import { createWriteStream } from 'fs';
+import stream from 'stream';
+import express from 'express'; // Import express
 
 
 // Previous imports remain unchanged
@@ -204,6 +207,9 @@ export async function registerRoutes(app: Express) {
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
   }));
+
+  app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets'))); // Added middleware
+
 
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -454,8 +460,110 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  //New endpoint for graphics generation
+  // Add directory check and creation before saving images
+  app.post("/api/design/analyze-graphics", async (req, res) => {
+    try {
+      const { gameDesign } = req.body;
+      const userId = (req.session as any).userId;
+      if (!userId) {
+        throw new Error("User not authenticated");
+      }
+
+      // Ensure attached_assets directory exists
+      const assetsDir = path.join(process.cwd(), 'attached_assets');
+      try {
+        await fs.access(assetsDir);
+      } catch {
+        await fs.mkdir(assetsDir, { recursive: true });
+      }
+
+      logApi("Analyzing game design for graphics", { gameDesign });
+
+      // First, analyze the game design to suggest graphics
+      const analysisResponse = await openai.chat.completions.create({
+        model: "o3-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a game art director specialized in pixel art and retro game graphics.
+Analyze the game design and suggest specific graphics that would enhance the game.
+Focus on essential game elements that need visual representation.
+Format your response as JSON with this structure:
+{
+  "graphics": [
+    {
+      "name": "string (e.g., 'player_character')",
+      "description": "string (detailed description for image generation)",
+      "purpose": "string (how this will be used in the game)",
+      "size": "string (suggested pixel dimensions)"
+    }
+  ]
+}`
+          },
+          {
+            role: "user",
+            content: `Based on this game design, suggest essential graphics we need to create:
+Game Description:
+${gameDesign.gameDescription}
+
+Core Mechanics:
+${gameDesign.coreMechanics.join("\n")}
+
+Please suggest the key visual elements needed for this game.`
+          }
+        ],
+        reasoning_effort: "medium"
+      });
+
+      const suggestions = JSON.parse(analysisResponse.choices[0].message.content || "{}");
+      logApi("Graphics suggestions generated", suggestions);
+
+      // Generate images using DALL-E
+      const imagePromises = suggestions.graphics.map(async (graphic: any) => {
+        try {
+          const response = await openai.images.generate({
+            model: "dall-e-3",
+            prompt: `Create a pixel art style game asset: ${graphic.description}. The image should be clear, simple, and suitable for a retro-style game. Use vibrant colors and clear outlines.`,
+            n: 1,
+            size: "1024x1024",
+            quality: "standard",
+            response_format: "b64_json"
+          });
+
+          // Save the image
+          const imageData = response.data[0].b64_json;
+          const fileName = `${graphic.name.toLowerCase().replace(/\s+/g, '_')}.png`;
+          const filePath = path.join(assetsDir, fileName);
+
+          // Convert base64 to buffer and save
+          const buffer = Buffer.from(imageData!, 'base64');
+          await fs.writeFile(filePath, buffer);
+          logApi(`Saved image: ${fileName}`);
+
+          return {
+            ...graphic,
+            url: `/attached_assets/${fileName}`
+          };
+        } catch (error) {
+          console.error(`Failed to generate/save image for ${graphic.name}:`, error);
+          throw error;
+        }
+      });
+
+      const generatedImages = await Promise.all(imagePromises);
+
+      logApi("Graphics generation complete", { generatedImages });
+      res.json({ generatedImages });
+    } catch (error: any) {
+      console.error('Graphics generation error:', error);
+      logApi("Error generating graphics", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Keep existing protected routes
-  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users", "/api/game-designs"], isAuthenticated, requirePasswordChange);
+  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users", "/api/game-designs", "/api/design/analyze-graphics"], isAuthenticated, requirePasswordChange);
 
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
@@ -808,7 +916,7 @@ Each feature should be specific and actionable.`
 
   app.get("/api/games", async (req, res) => {
     try {
-      const games = await storage.getAllGames();
+      const games= await storage.getAllGames();
       logApi(`Retrieved ${games.length} games`, req.query, { count: games.length });
       res.json(games);
     } catch (error: any) {
@@ -897,7 +1005,7 @@ When modifying code:
 When providing suggestions:
 1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}
-3. Format your response as JSON with this structure:
+3. Format your responseas JSON with this structure:
 {
   "questions": [
     ""Suggestion 1: [Brief description of the first improvement]",

@@ -9,11 +9,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ModelConfig, type ModelConfig as ModelConfigType } from "./model-config";
+import { GraphicsGenerator } from "./graphics-generator";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
   onDesignGenerated: (design: any) => void;
   onFeaturesGenerated: (features: string[]) => void;
+  onGraphicsGenerated?: (graphics: any[]) => void;
   debugContext?: string;
   onAiOperation?: (op: { type: string; active: boolean }) => void;
 }
@@ -63,6 +65,7 @@ export function GameDesignAssistant({
   onCodeGenerated,
   onDesignGenerated,
   onFeaturesGenerated,
+  onGraphicsGenerated,
   debugContext,
   onAiOperation
 }: GameDesignAssistantProps) {
@@ -165,6 +168,7 @@ export function GameDesignAssistant({
           description: "Game design is complete and ready for implementation!",
         });
       }
+      onDesignGenerated(data);
     }
   });
 
@@ -405,6 +409,15 @@ export function GameDesignAssistant({
               <h3 className="text-lg font-semibold">Final Review</h3>
 
               <ModelConfig onConfigChange={setModelConfig} />
+
+              {finalDesign && (
+                <div className="mt-4">
+                  <GraphicsGenerator
+                    gameDesign={finalDesign}
+                    onGraphicsGenerated={onGraphicsGenerated}
+                  />
+                </div>
+              )}
 
               <div className="flex justify-between mt-4 space-x-4">
                 <Button variant="outline" onClick={handleBack}>
