@@ -32,20 +32,42 @@ async function getAvailableModels(): Promise<Record<string, string>> {
     // Filter and format models
     const formattedModels: Record<string, string> = {};
     models.data.forEach(model => {
-      // Only include GPT models
-      if (model.id.includes('gpt')) {
-        let displayName = model.id;
+      const id = model.id;
 
-        // Format display names
-        if (model.id.includes('gpt-4')) {
-          displayName = `GPT-4 ${model.id.split('gpt-4-')[1] || '(Latest)'}`;
-        } else if (model.id.includes('gpt-3.5')) {
-          displayName = `GPT-3.5 ${model.id.split('gpt-3.5-')[1] || '(Standard)'}`;
+      // Only include GPT models
+      if (id.includes('gpt')) {
+        let displayName = '';
+
+        // Format display names while preserving model versions
+        if (id.includes('gpt-4')) {
+          if (id === 'gpt-4') {
+            displayName = 'GPT-4 (Base)';
+          } else if (id.includes('01')) {
+            displayName = 'GPT-4 01 Model';
+          } else {
+            displayName = `GPT-4 ${id.split('gpt-4-')[1]}`;
+          }
+        } else if (id.includes('gpt-3.5')) {
+          if (id === 'gpt-3.5-turbo') {
+            displayName = 'GPT-3.5 Turbo (Base)';
+          } else if (id.includes('0301')) {
+            displayName = 'GPT-3.5 Turbo 0301';
+          } else if (id.includes('0613')) {
+            displayName = 'GPT-3.5 Turbo 0613';
+          } else {
+            displayName = `GPT-3.5 ${id.split('gpt-3.5-')[1]}`;
+          }
         }
 
-        formattedModels[model.id] = displayName;
+        // Only add models with valid display names
+        if (displayName) {
+          formattedModels[id] = displayName;
+        }
       }
     });
+
+    // Log available models for debugging
+    console.log('Available models:', formattedModels);
 
     // Update cache
     modelsCache = formattedModels;
@@ -56,8 +78,10 @@ async function getAvailableModels(): Promise<Record<string, string>> {
     console.error('Failed to fetch models:', error);
     // Return default models if API call fails
     return {
-      'gpt-4': 'GPT-4 (Standard)',
-      'gpt-3.5-turbo': 'GPT-3.5 Turbo'
+      'gpt-4': 'GPT-4 (Base)',
+      'gpt-4-0613': 'GPT-4 0613',
+      'gpt-4-01': 'GPT-4 01 Model',
+      'gpt-3.5-turbo': 'GPT-3.5 Turbo (Base)'
     };
   }
 }
