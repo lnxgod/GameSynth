@@ -86,11 +86,10 @@ export function GameDesignAssistant({
   const { toast } = useToast();
 
   const analyzeModelMutation = useMutation({
-    mutationFn: async (aspect: keyof GameRequirements) => {
+    mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/analyze', {
-        aspect,
-        content: requirements[aspect],
-        sessionId
+        sessionId,
+        requirements
       });
 
       if (!res.ok) {
@@ -100,11 +99,24 @@ export function GameDesignAssistant({
 
       return res.json();
     },
-    onSuccess: (data, aspect) => {
-      setAnalyses(prev => ({
-        ...prev,
-        [aspect]: data
-      }));
+    onSuccess: (data) => {
+      if (data.analysis) {
+        setAnalyses(data.analysis);
+      }
+      if (data.needsMoreInfo) {
+        setFollowUpQuestions(data.additionalQuestions.slice(0, 3));
+        setCurrentFollowUpIndex(0);
+        setShowFollowUp(true);
+        toast({
+          title: "Additional Information Needed",
+          description: "Let's answer some follow-up questions to refine the game design.",
+        });
+      } else {
+        toast({
+          title: "Design Ready",
+          description: "Game design is complete and ready for implementation!",
+        });
+      }
     },
     onError: (error: any) => {
       console.error('Analysis error:', error);
@@ -235,21 +247,8 @@ export function GameDesignAssistant({
     }
   };
 
-  const handleThink = async () => {
-    try {
-      for (const question of questions) {
-        const aspect = question.id as keyof GameRequirements;
-        await analyzeModelMutation.mutateAsync(aspect);
-      }
-      await finalizeMutation.mutateAsync();
-    } catch (error) {
-      console.error("Error during analysis:", error);
-      toast({
-        title: "Error",
-        description: "Failed to analyze game design. Please try again.",
-        variant: "destructive",
-      });
-    }
+  const handleThink = () => {
+    analyzeModelMutation.mutate();
   };
 
   const fillDemoValues = () => {
