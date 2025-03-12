@@ -743,7 +743,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       const logMessage = details ? `${message}: ${JSON.stringify(details)}` : message;
       buildLogs.push(logMessage);
       console.log(logMessage);
-      // Add to debug logs
       addDebugLog?.(`🔧 Android Build: ${logMessage}`);
     }
 
@@ -752,12 +751,14 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       log('Setting up build environment');
       await fs.rm(buildDir, { recursive: true, force: true });
       await fs.mkdir(buildDir, { recursive: true });
-      await fs.mkdir(path.join(buildDir, 'www'), { recursive: true });
+
+      // Create www directory first
+      const wwwDir = path.join(buildDir, 'www');
+      await fs.mkdir(wwwDir, { recursive: true });
 
       // Create index.html in www directory
       log('Creating game files');
-      const html = `
-<!DOCTYPE html>
+      const html = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -822,38 +823,29 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 </body>
 </html>`;
 
-      await fs.writeFile(path.join(buildDir, 'www', 'index.html'), html);
+      await fs.writeFile(path.join(wwwDir, 'index.html'), html);
 
-      // Create package.json with required dependencies
-      log('Creating package.json');
-      const packageJson = {
+      // Initialize npm project
+      log('Initializing npm project');
+      await fs.writeFile(path.join(buildDir, 'package.json'), JSON.stringify({
         name: options.packageName.replace(/\./g, '-'),
         version: "1.0.0",
-        private: true,
-        dependencies: {
-          "@capacitor/android": "latest",
-          "@capacitor/core": "latest",
-          "@ionic/core": "latest",
-          "@ionic/pwa-elements": "latest"
-        }
-      };
-      await fs.writeFile(
-        path.join(buildDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
+        private: true
+      }));
 
-      // Initialize npm and install dependencies
+      // Install dependencies
       log('Installing dependencies');
       try {
-        await execAsync('npm install', { cwd: buildDir });
+        await execAsync('npm install @capacitor/core @capacitor/cli @capacitor/android @ionic/core @ionic/pwa-elements', { cwd: buildDir });
+        log('Dependencies installed successfully');
       } catch (error: any) {
         const errorMsg = `Failed to install dependencies: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
         log('Dependencies installation failed', { error: errorMsg });
         throw new Error(errorMsg);
       }
 
-      // Create Capacitor config
-      log('Configuring Capacitor');
+      // Create capacitor config
+      log('Creating Capacitor configuration');
       const capacitorConfig = {
         appId: options.packageName,
         appName: options.appName,
@@ -873,6 +865,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
           webContentsDebuggingEnabled: true
         }
       };
+
       await fs.writeFile(
         path.join(buildDir, 'capacitor.config.json'),
         JSON.stringify(capacitorConfig, null, 2)
@@ -881,8 +874,8 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       // Initialize Capacitor project
       log('Initializing Capacitor project');
       try {
-        const initResult = await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir="www"`, { cwd: buildDir });
-        log('Capacitor init output', { stdout: initResult.stdout, stderr: initResult.stderr });
+        const initResult = await execAsync(`npx cap init "${options.appName}" "${options.packageName}" --web-dir www`, { cwd: buildDir });
+        log('Capacitor initialization completed', { stdout: initResult.stdout, stderr: initResult.stderr });
       } catch (error: any) {
         const errorMsg = `Capacitor initialization failed: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
         log('Capacitor init failed', { error: errorMsg });
@@ -893,17 +886,18 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       log('Adding Android platform');
       try {
         const platformResult = await execAsync('npx cap add android', { cwd: buildDir });
-        log('Android platform output', { stdout: platformResult.stdout, stderr: platformResult.stderr });
+        log('Android platform added successfully', { stdout: platformResult.stdout, stderr: platformResult.stderr });
       } catch (error: any) {
         const errorMsg = `Failed to add Android platform: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
         log('Adding Android platform failed', { error: errorMsg });
         throw new Error(errorMsg);
       }
 
-      // Copy web content and sync with Android project
+      // Sync web content with Android project
       log('Syncing web content');
-      try {        const syncResult = await execAsync('npx cap sync android', { cwd: buildDir });
-        log('Sync output', { stdout: syncResult.stdout, stderr: syncResult.stderr });
+      try {
+        const syncResult = await execAsync('npx cap sync android', { cwd: buildDir });
+        log('Content synced successfully', { stdout: syncResult.stdout, stderr: syncResult.stderr });
       } catch (error: any) {
         const errorMsg = `Failed to sync content: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
         log('Content sync failed', { error: errorMsg });
@@ -914,7 +908,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       log('Building debug APK');
       try {
         const buildResult = await execAsync('cd android && ./gradlew assembleDebug', { cwd: buildDir });
-        log('Build output', { stdout: buildResult.stdout, stderr: buildResult.stderr });
+        log('APK build completed', { stdout: buildResult.stdout, stderr: buildResult.stderr });
       } catch (error: any) {
         const errorMsg = `Failed to build APK: ${error.message}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`;
         log('APK build failed', { error: errorMsg });
@@ -922,6 +916,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       }
 
       const apkPath = path.join(buildDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+
       try {
         await fs.access(apkPath);
         log('APK built successfully at:', apkPath);
