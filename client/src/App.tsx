@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import Login from "@/pages/login";
 import ChangePassword from "@/pages/change-password";
 import UserManagement from "@/pages/user-management";
+import Run from "@/pages/run";
 import { AuthContext, useAuthProvider } from "@/lib/auth";
 import React, { useContext } from 'react';
 import { NavBar } from "@/components/nav-bar";
@@ -49,6 +50,7 @@ function Router() {
           )}
         </Route>
         <Route path="/users" component={() => <ProtectedRoute component={UserManagement} requireAdmin />} />
+        <Route path="/run" component={() => <ProtectedRoute component={Run} />} />
         <Route path="/" component={() => <ProtectedRoute component={Home} />} />
         <Route component={NotFound} />
       </Switch>

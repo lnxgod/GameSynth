@@ -1,7 +1,7 @@
 import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { UserCircle, Settings, LogOut } from "lucide-react";
+import { UserCircle, Settings, LogOut, Play } from "lucide-react";
 
 export function NavBar() {
   const { auth, logout } = useAuth();
@@ -18,6 +18,12 @@ export function NavBar() {
         <div className="flex items-center space-x-4">
           {auth.isAuthenticated && (
             <>
+              <Link href="/run">
+                <Button variant="ghost">
+                  <Play className="mr-2 h-4 w-4" />
+                  Run Game
+                </Button>
+              </Link>
               {auth.role === 'admin' && (
                 <Link href="/users">
                   <Button variant="ghost">
