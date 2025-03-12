@@ -1056,6 +1056,61 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
+  // Add new endpoint for fetching model parameters
+  app.get("/api/model-parameters/:model", async (req, res) => {
+    try {
+      const { model } = req.params;
+
+      // Query OpenAI for model information
+      const modelInfo = await openai.models.retrieve(model);
+
+      // Format the parameters based on model type
+      const parameters: Record<string, any> = {
+        temperature: {
+          type: "float",
+          min: 0,
+          max: 2,
+          default: 0.7,
+          description: "Controls randomness in the output"
+        },
+        max_tokens: {
+          type: "integer",
+          min: 1,
+          max: modelInfo.context_window || 16000,
+          default: 8000,
+          description: "Maximum number of tokens to generate"
+        }
+      };
+
+      // Add model-specific parameters
+      if (model.startsWith('o1')) {
+        parameters.max_complete_tokens = {
+          type: "integer",
+          min: 1,
+          max: modelInfo.context_window || 16000,
+          default: 8000,
+          description: "Maximum number of tokens to generate (O1 models)"
+        };
+      }
+
+      // Add response format for supported models
+      if (!model.includes('instruct')) {
+        parameters.response_format = {
+          type: "enum",
+          values: ["text", "json_object"],
+          default: "text",
+          description: "Format of the response"
+        };
+      }
+
+      logApi(`Retrieved parameters for model ${model}`, {}, parameters);
+      res.json(parameters);
+    } catch (error: any) {
+      logApi("Error fetching model parameters", { model: req.params.model }, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

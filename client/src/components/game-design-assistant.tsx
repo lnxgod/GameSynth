@@ -16,6 +16,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Update the ModelType definition to be more flexible
 type ModelType = string;
@@ -108,6 +109,8 @@ export function GameDesignAssistant({
   const [showDebugContext, setShowDebugContext] = useState(false);
 
   const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-4o');
+  const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
+  const [isLoadingParameters, setIsLoadingParameters] = useState(false);
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery<ModelInfo>({
     queryKey: ['models'],
@@ -452,6 +455,32 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
     );
   };
 
+  // Fetch model parameters when model changes
+  useEffect(() => {
+    const fetchModelParameters = async () => {
+      if (!selectedModel) return;
+
+      setIsLoadingParameters(true);
+      try {
+        const res = await apiRequest('GET', `/api/model-parameters/${selectedModel}`);
+        const params = await res.json();
+        setModelParameters(params);
+      } catch (error) {
+        console.error('Failed to fetch model parameters:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load model parameters",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingParameters(false);
+      }
+    };
+
+    fetchModelParameters();
+  }, [selectedModel, toast]);
+
+
   return (
     <Card className="w-full">
       <CardContent className="pt-6">
@@ -575,57 +604,83 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                     </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-sm font-medium">Temperature: {temperature}</label>
-                      <div className="w-64">
-                        <Slider
-                          value={[temperature]}
-                          onValueChange={([value]) => setTemperature(value)}
-                          max={1}
-                          step={0.1}
-                          className="w-full"
-                        />
-                      </div>
+                  {isLoadingParameters ? (
+                    <div className="space-y-4">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-1/2" />
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Lower values make the output more focused and deterministic
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      {Object.entries(modelParameters).map(([param, config]) => (
+                        <div key={param} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <label className="text-sm font-medium">
+                              {param.split('_').map(word =>
+                                word.charAt(0).toUpperCase() + word.slice(1)
+                              ).join(' ')}
+                            </label>
+                            {config.type === "float" || config.type === "integer" ? (
+                              <div className="w-64">
+                                <Slider
+                                  value={[
+                                    param === "temperature" ? temperature :
+                                      param === "max_tokens" ? maxTokens :
+                                        0
+                                  ]}
+                                  onValueChange={([value]) => {
+                                    if (param === "temperature") setTemperature(value);
+                                    else if (param === "max_tokens") setMaxTokens(value);
+                                  }}
+                                  min={config.min}
+                                  max={config.max}
+                                  step={config.type === "float" ? 0.1 : 1}
+                                  className="w-full"
+                                />
+                              </div>
+                            ) : config.type === "enum" ? (
+                              <Select
+                                value={param === "response_format" ? "json_object" : undefined}
+                                onValueChange={(value) => {
+                                  // Handle enum parameter changes
+                                }}
+                              >
+                                <SelectTrigger className="w-64">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {config.values.map((value: string) => (
+                                    <SelectItem key={value} value={value}>
+                                      {value}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {config.description}
+                          </div>
+                        </div>
+                      ))}
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-sm font-medium">Max Tokens: {maxTokens}</label>
-                      <div className="w-64">
-                        <Slider
-                          value={[maxTokens]}
-                          onValueChange={([value]) => setMaxTokens(value)}
-                          max={16000}
-                          step={1000}
-                          className="w-full"
-                        />
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Controls the maximum length of generated code
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="use-max-complete-tokens"
-                      checked={useMaxCompleteTokens}
-                      onCheckedChange={(checked) => setUseMaxCompleteTokens(checked as boolean)}
-                    />
-                    <label
-                      htmlFor="use-max-complete-tokens"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Use max_complete_tokens for O1 models
-                    </label>
-                  </div>
-                  <p className="text-xs text-muted-foreground pl-6">
-                    Enable this to use max_complete_tokens instead of max_tokens when using O1 models for debugging purposes
-                  </p>
+                      {selectedModel.startsWith('o1') && (
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="use-max-complete-tokens"
+                            checked={useMaxCompleteTokens}
+                            onCheckedChange={(checked) => setUseMaxCompleteTokens(checked as boolean)}
+                          />
+                          <label
+                            htmlFor="use-max-complete-tokens"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Use max_complete_tokens for O1 models
+                          </label>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </CollapsibleContent>
               </Collapsible>
 
@@ -698,14 +753,14 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                       key={index}
                       className={`flex ${
                         message.role === 'assistant' ? 'justify-start' : 'justify-end'
-                      }`}
+                        }`}
                     >
                       <div
                         className={`max-w-[80%] rounded-lg p-3 ${
                           message.role === 'assistant'
                             ? 'bg-muted'
                             : 'bg-primary text-primary-foreground'
-                        }`}
+                          }`}
                       >
                         {message.content}
                       </div>
