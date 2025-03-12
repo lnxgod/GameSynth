@@ -9,22 +9,58 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 
-// Add at the top with other constants
-const AVAILABLE_MODELS = {
-  'gpt-4o': 'GPT-4 Optimized (Latest)',
-  'gpt-4': 'GPT-4 (Standard)',
-  'gpt-4-01': 'GPT-4 01 (Balanced)',
-  'gpt-3.5-turbo': 'GPT-3.5 Turbo (Fast)',
-  'gpt-3.5-turbo-03-mini': 'GPT-3.5 03-Mini (Lightweight)'
-} as const;
-
-const DEFAULT_MODEL = 'gpt-4o';
-
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
 }
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Cache for models with 1-hour expiry
+let modelsCache: Record<string, string> | null = null;
+let modelsCacheTime: number = 0;
+const CACHE_DURATION = 3600000; // 1 hour in milliseconds
+
+async function getAvailableModels(): Promise<Record<string, string>> {
+  // Return cached models if available and not expired
+  if (modelsCache && (Date.now() - modelsCacheTime) < CACHE_DURATION) {
+    return modelsCache;
+  }
+
+  try {
+    const models = await openai.models.list();
+
+    // Filter and format models
+    const formattedModels: Record<string, string> = {};
+    models.data.forEach(model => {
+      // Only include GPT models
+      if (model.id.includes('gpt')) {
+        let displayName = model.id;
+
+        // Format display names
+        if (model.id.includes('gpt-4')) {
+          displayName = `GPT-4 ${model.id.split('gpt-4-')[1] || '(Latest)'}`;
+        } else if (model.id.includes('gpt-3.5')) {
+          displayName = `GPT-3.5 ${model.id.split('gpt-3.5-')[1] || '(Standard)'}`;
+        }
+
+        formattedModels[model.id] = displayName;
+      }
+    });
+
+    // Update cache
+    modelsCache = formattedModels;
+    modelsCacheTime = Date.now();
+
+    return formattedModels;
+  } catch (error) {
+    console.error('Failed to fetch models:', error);
+    // Return default models if API call fails
+    return {
+      'gpt-4': 'GPT-4 (Standard)',
+      'gpt-3.5-turbo': 'GPT-3.5 Turbo'
+    };
+  }
+}
 
 const DESIGN_ASSISTANT_PROMPT = `You are a game design assistant helping users create HTML5 Canvas games. 
 Analyze the specific game aspect provided and elaborate on its implementation details.
@@ -339,7 +375,7 @@ Each feature should be specific and actionable.`
 
       // Update the chat completion creation
       const response = await openai.chat.completions.create({
-        model: settings?.model || DEFAULT_MODEL,
+        model: settings?.model || 'gpt-4', // Use default model if none specified
         messages: [
           {
             role: "system",
@@ -1009,9 +1045,17 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     res.download(filePath);
   });
 
-  // Add a new endpoint to get available models
-  app.get("/api/models", (req, res) => {
-    res.json(AVAILABLE_MODELS);
+  // Update the models endpoint to use dynamic fetching
+  app.get("/api/models", async (req, res) => {
+    try {
+      const models = await getAvailableModels();
+      res.json(models);
+    } catch (error) {
+      res.status(500).json({ 
+        error: "Failed to fetch models",
+        message: "Using default models"
+      });
+    }
   });
 
   const httpServer = createServer(app);

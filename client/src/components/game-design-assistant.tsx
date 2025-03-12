@@ -16,8 +16,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-// Add model types
-type ModelType = 'gpt-4o' | 'gpt-4' | 'gpt-4-01' | 'gpt-3.5-turbo' | 'gpt-3.5-turbo-03-mini';
+// Update the ModelType definition to be more flexible
+type ModelType = string;
 type ModelInfo = Record<ModelType, string>;
 
 interface GameDesignAssistantProps {
@@ -107,12 +107,15 @@ export function GameDesignAssistant({
 
   const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-4o');
 
-  const { data: availableModels } = useQuery<ModelInfo>({
+  const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery<ModelInfo>({
     queryKey: ['models'],
     queryFn: async () => {
       const res = await apiRequest('GET', '/api/models');
-      return res.json();
-    }
+      const models = await res.json();
+      return models;
+    },
+    retry: 2,
+    staleTime: 3600000 // Cache for 1 hour
   });
 
   const analyzeMutation = useMutation({
@@ -543,20 +546,29 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                     <Select
                       value={selectedModel}
                       onValueChange={(value) => setSelectedModel(value as ModelType)}
+                      disabled={isLoadingModels}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a model" />
+                        <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select a model"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableModels && Object.entries(availableModels).map(([id, name]) => (
-                          <SelectItem key={id} value={id}>
-                            {name}
-                          </SelectItem>
-                        ))}
+                        {isLoadingModels ? (
+                          <SelectItem value="loading">Loading available models...</SelectItem>
+                        ) : modelsError ? (
+                          <SelectItem value="error">Error loading models</SelectItem>
+                        ) : (
+                          availableModels && Object.entries(availableModels).map(([id, name]) => (
+                            <SelectItem key={id} value={id}>
+                              {name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Select the AI model to use for code generation
+                      {isLoadingModels ? "Loading available models..." :
+                        modelsError ? "Error loading models, using defaults" :
+                          "Select the AI model to use for code generation"}
                     </p>
                   </div>
 
