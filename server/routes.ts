@@ -13,7 +13,9 @@ import fs from 'fs/promises';
 const AVAILABLE_MODELS = {
   'gpt-4o': 'GPT-4 Optimized (Latest)',
   'gpt-4': 'GPT-4 (Standard)',
-  'gpt-3.5-turbo': 'GPT-3.5 Turbo (Faster)'
+  'gpt-4-01': 'GPT-4 01 (Balanced)',
+  'gpt-3.5-turbo': 'GPT-3.5 Turbo (Fast)',
+  'gpt-3.5-turbo-03-mini': 'GPT-3.5 03-Mini (Lightweight)'
 } as const;
 
 const DEFAULT_MODEL = 'gpt-4o';

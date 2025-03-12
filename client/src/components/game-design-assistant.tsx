@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/collapsible";
 
 // Add model types
-type ModelType = 'gpt-4o' | 'gpt-4' | 'gpt-3.5-turbo';
+type ModelType = 'gpt-4o' | 'gpt-4' | 'gpt-4-01' | 'gpt-3.5-turbo' | 'gpt-3.5-turbo-03-mini';
 type ModelInfo = Record<ModelType, string>;
 
 interface GameDesignAssistantProps {
