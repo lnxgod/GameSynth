@@ -702,8 +702,7 @@ Each feature should be specific and actionable.`
             role: "user",
             content: `Based on these game requirements and our discussion, create a complete HTML5 Canvas game implementation:\n\n${gameRequirements}`
           }
-        ],
-        temperature: modelConfig.temperature || 0.7
+        ]
       };
 
       // Add model-specific configurations
@@ -715,7 +714,8 @@ Each feature should be specific and actionable.`
         }
       } else {
         requestConfig.model = modelConfig.model;
-        requestConfig.max_completion_tokens = 16000; //Using max_completion_tokens for all models except o3
+        requestConfig.max_completion_tokens = 16000;
+        requestConfig.temperature = modelConfig.temperature || 0.7;
       }
 
       const response = await openai.chat.completions.create(requestConfig);
@@ -897,7 +897,7 @@ When modifying code:
           {
             role: "system",
             content: `You are a game development assistant specialized in improving HTML5 Canvas games.
-When providing suggestions:
+When providingsuggestions:
 1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}
 3. Format your response as JSON with this structure:
