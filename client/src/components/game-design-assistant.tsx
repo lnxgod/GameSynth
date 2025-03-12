@@ -20,7 +20,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 // Update the ModelType definition to be more flexible
 type ModelType = string;
-type ModelInfo = Record<ModelType, string>;
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -36,12 +35,6 @@ interface GameRequirements {
   visualStyle: string;
   difficulty: string;
   specialFeatures: string;
-}
-
-interface AnalyzedAspect {
-  analysis: string;
-  implementation_details: string[];
-  technical_considerations: string[];
 }
 
 const questions = [
@@ -110,51 +103,14 @@ export function GameDesignAssistant({
 
   const [showDebugContext, setShowDebugContext] = useState(false);
 
-  // Initialize model states
-  const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-4o');
+  // Simplified model state management
+  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
   const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
-  const [parameterValues, setParameterValues] = useState<Record<string, number | string>>({});
+  const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
   const [enabledParameters, setEnabledParameters] = useState<Record<string, boolean>>({});
-  const [isLoadingParameters, setIsLoadingParameters] = useState(true); // Add loading state
 
-  // Load saved preferences from localStorage on mount
-  useEffect(() => {
-    const loadSavedPreferences = () => {
-      try {
-        const savedModel = localStorage.getItem('selectedModel');
-        const savedParameters = localStorage.getItem('modelParameters');
-        const savedValues = localStorage.getItem('parameterValues');
-        const savedEnabled = localStorage.getItem('enabledParameters');
 
-        if (savedModel) setSelectedModel(savedModel);
-        if (savedParameters) setModelParameters(JSON.parse(savedParameters));
-        if (savedValues) setParameterValues(JSON.parse(savedValues));
-        if (savedEnabled) setEnabledParameters(JSON.parse(savedEnabled));
-      } catch (error) {
-        console.error('Error loading saved preferences:', error);
-      }
-    };
-
-    loadSavedPreferences();
-  }, []);
-
-  // Save preferences whenever they change
-  useEffect(() => {
-    const savePreferences = () => {
-      try {
-        localStorage.setItem('selectedModel', selectedModel);
-        localStorage.setItem('modelParameters', JSON.stringify(modelParameters));
-        localStorage.setItem('parameterValues', JSON.stringify(parameterValues));
-        localStorage.setItem('enabledParameters', JSON.stringify(enabledParameters));
-      } catch (error) {
-        console.error('Error saving preferences:', error);
-      }
-    };
-
-    savePreferences();
-  }, [selectedModel, modelParameters, parameterValues, enabledParameters]);
-
-  const { data: availableModels, isLoading: isLoadingModels } = useQuery({
+  const { data: availableModels } = useQuery({
     queryKey: ['models'],
     queryFn: async () => {
       const res = await apiRequest('GET', '/api/models');
@@ -164,18 +120,18 @@ export function GameDesignAssistant({
 
   const analyzeModelMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
+      // Always include model and analysis_model
       const settings = {
         model: selectedModel,
-        analysis_model: selectedModel, // Ensure this is set
-        ...Object.entries(enabledParameters).reduce((acc, [param, isEnabled]) => {
-          if (isEnabled && parameterValues[param] !== undefined) {
-            return { ...acc, [param]: parameterValues[param] };
-          }
-          return acc;
-        }, {})
+        analysis_model: selectedModel,
+        // Include enabled parameters with their values
+        ...Object.entries(enabledParameters)
+          .filter(([_, enabled]) => enabled)
+          .reduce((acc, [param]) => ({
+            ...acc,
+            [param]: parameterValues[param]
+          }), {})
       };
-
-      console.log('Sending analysis request with settings:', settings);
 
       const res = await apiRequest('POST', '/api/design/analyze', {
         aspect,
@@ -546,10 +502,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
   };
 
   useEffect(() => {
-    const fetchModelParameters = async () => {
-      if (!selectedModel) return;
-
-      setIsLoadingParameters(true);
+    const loadModelParameters = async () => {
       try {
         const res = await apiRequest('GET', `/api/model-parameters/${selectedModel}`);
         if (!res.ok) {
@@ -559,35 +512,28 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
         const params = await res.json();
         setModelParameters(params);
 
-        // Initialize parameter values and enabled states
-        const newValues: Record<string, number | string> = {};
+        // Initialize with default values and all parameters disabled
+        const newValues: Record<string, number> = {};
         const newEnabled: Record<string, boolean> = {};
 
         Object.entries(params).forEach(([param, config]: [string, any]) => {
-          newValues[param] = config.default;
+          newValues[param] = config.default || 0;
           newEnabled[param] = false;
         });
 
         setParameterValues(newValues);
         setEnabledParameters(newEnabled);
       } catch (error) {
-        console.error('Failed to fetch model parameters:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load model parameters",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoadingParameters(false);
+        console.error('Failed to load model parameters:', error);
       }
     };
 
-    fetchModelParameters();
+    loadModelParameters();
   }, [selectedModel]);
 
 
   const renderParameterControls = () => {
-    if (isLoadingParameters || !modelParameters) {
+    if (!modelParameters) {
       return (
         <div className="space-y-4">
           <Skeleton className="h-4 w-full" />
@@ -605,7 +551,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id={`enable-${param}`}
-                  checked={enabledParameters[param] ?? false}
+                  checked={enabledParameters[param] || false}
                   onCheckedChange={(checked) => {
                     setEnabledParameters(prev => ({
                       ...prev,
@@ -674,7 +620,6 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
 
   const handleModelChange = (value: string) => {
     setSelectedModel(value);
-    // Parameters will be reset by the useEffect hook
   };
 
   return (
@@ -773,25 +718,21 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                     <Select
                       value={selectedModel}
                       onValueChange={handleModelChange}
-                      disabled={isLoadingModels}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select a model"} />
+                        <SelectValue placeholder="Select a model" />
                       </SelectTrigger>
                       <SelectContent>
-                        {isLoadingModels ? (
-                          <SelectItem value="loading">Loading available models...</SelectItem>
-                        ) : availableModels && Object.entries(availableModels).map(([id, name]) => (
+                        {availableModels && Object.entries(availableModels).map(([id, name]) => (
                           <SelectItem key={id} value={id}>
-                            {name}
+                            {name as string}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      {isLoadingModels ? "Loading available models..." :
-                        availableModels ? "Select the AI model to use for code generation" :
-                          "Error loading models, using defaults"}
+                      {availableModels ? "Select the AI model to use for code generation" :
+                        "Error loading models, using defaults"}
                     </p>
                   </div>
 
@@ -889,4 +830,10 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
       </CardContent>
     </Card>
   );
+}
+
+interface AnalyzedAspect {
+  analysis: string;
+  implementation_details: string[];
+  technical_considerations: string[];
 }
