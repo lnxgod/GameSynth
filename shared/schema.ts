@@ -1,7 +1,19 @@
 import { pgTable, text, serial, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  forcePasswordChange: boolean("force_password_change").default(true),
+  role: text("role").notNull().default('user'),
+  lastLogin: timestamp("last_login"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Keep existing tables
 export const chats = pgTable("chats", {
   id: serial("id").primaryKey(),
   prompt: text("prompt").notNull(),
@@ -15,18 +27,36 @@ export const games = pgTable("games", {
   name: text("name").notNull(),
   code: text("code").notNull(),
   chatId: integer("chat_id").references(() => chats.id),
-  designSettings: jsonb("design_settings"), // New field to store design assistant data
+  designSettings: jsonb("design_settings"),
 });
 
 export const features = pgTable("features", {
   id: serial("id").primaryKey(),
   description: text("description").notNull(),
   completed: boolean("completed").default(false),
-  type: text("type").notNull(), // 'core', 'tech', 'generated', 'manual'
+  type: text("type").notNull(),
   gameId: integer("game_id").references(() => games.id),
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Schema for inserting new user
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    password: true,
+    role: true,
+  })
+  .extend({
+    password: z.string().min(8, "Password must be at least 8 characters"),
+  });
+
+// Schema for changing password
+export const changePasswordSchema = z.object({
+  currentPassword: z.string(),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// Keep existing schemas
 export const insertChatSchema = createInsertSchema(chats).pick({
   prompt: true,
   response: true,
@@ -47,6 +77,9 @@ export const insertFeatureSchema = createInsertSchema(features).pick({
   completed: true,
 });
 
+// Type exports
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
 export type InsertChat = z.infer<typeof insertChatSchema>;
 export type Chat = typeof chats.$inferSelect;
 export type InsertGame = z.infer<typeof insertGameSchema>;

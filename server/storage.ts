@@ -1,6 +1,15 @@
-import { chats, games, features, type Chat, type Game, type Feature, type InsertChat, type InsertGame, type InsertFeature } from "@shared/schema";
+import { chats, games, features, users, type Chat, type Game, type Feature, type User, type InsertChat, type InsertGame, type InsertFeature, type InsertUser } from "@shared/schema";
+import bcrypt from "bcryptjs";
 
 export interface IStorage {
+  // User management
+  createUser(user: InsertUser): Promise<User>;
+  getUser(username: string): Promise<User | undefined>;
+  getUserById(id: number): Promise<User | undefined>;
+  updateUserPassword(id: number, password: string): Promise<User>;
+  updateUserLastLogin(id: number): Promise<User>;
+
+  // Existing methods
   createChat(chat: InsertChat): Promise<Chat>;
   getChat(id: number): Promise<Chat | undefined>;
   getAllChats(): Promise<Chat[]>;
@@ -14,22 +23,100 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
+  private users: Map<number, User>;
   private chats: Map<number, Chat>;
   private games: Map<number, Game>;
   private features: Map<number, Feature>;
+  private userId: number;
   private chatId: number;
   private gameId: number;
   private featureId: number;
+  private usernameIndex: Map<string, number>;
 
   constructor() {
+    this.users = new Map();
     this.chats = new Map();
     this.games = new Map();
     this.features = new Map();
+    this.userId = 1;
     this.chatId = 1;
     this.gameId = 1;
     this.featureId = 1;
+    this.usernameIndex = new Map();
+
+    // Create default admin user
+    this.createDefaultAdmin().catch(console.error);
   }
 
+  private async createDefaultAdmin() {
+    const hashedPassword = await bcrypt.hash('Password123', 10);
+    const admin: User = {
+      id: this.userId++,
+      username: 'admin',
+      password: hashedPassword,
+      role: 'admin',
+      forcePasswordChange: true,
+      lastLogin: null,
+      createdAt: new Date()
+    };
+    this.users.set(admin.id, admin);
+    this.usernameIndex.set(admin.username, admin.id);
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const id = this.userId++;
+    const hashedPassword = await bcrypt.hash(user.password, 10);
+    const newUser: User = {
+      ...user,
+      id,
+      password: hashedPassword,
+      forcePasswordChange: true,
+      lastLogin: null,
+      createdAt: new Date()
+    };
+    this.users.set(id, newUser);
+    this.usernameIndex.set(user.username, id);
+    return newUser;
+  }
+
+  async getUser(username: string): Promise<User | undefined> {
+    const id = this.usernameIndex.get(username);
+    return id ? this.users.get(id) : undefined;
+  }
+
+  async getUserById(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async updateUserPassword(id: number, password: string): Promise<User> {
+    const user = this.users.get(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const updatedUser: User = {
+      ...user,
+      password: hashedPassword,
+      forcePasswordChange: false
+    };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async updateUserLastLogin(id: number): Promise<User> {
+    const user = this.users.get(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const updatedUser: User = {
+      ...user,
+      lastLogin: new Date()
+    };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  // Existing methods remain unchanged
   async createChat(chat: InsertChat): Promise<Chat> {
     const id = this.chatId++;
     const newChat: Chat = {
