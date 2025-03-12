@@ -13,7 +13,11 @@ import { isAuthenticated, requirePasswordChange } from "./middleware/auth";
 import { changePasswordSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { insertUserSchema } from "@shared/schema"; // Import the schema for user creation
+import { chats, games, features, users } from "@shared/schema"; // Import schema from shared
+import { db } from './db'; // Import the db instance correctly
+import { eq } from 'drizzle-orm';
 
+// Previous imports remain unchanged
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -259,7 +263,104 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android"], isAuthenticated, requirePasswordChange);
+  //New User Management Endpoints
+  app.get("/api/users", isAuthenticated, async (req, res) => {
+    try {
+      // Only admin can list users
+      const user = (req as any).user;
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const usersList = await db.select().from(users);
+      res.json(usersList);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/users/:id/role", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const userId = parseInt(req.params.id);
+      const { role } = req.body;
+
+      // Don't allow changing admin user's role
+      const targetUser = await storage.getUserById(userId);
+      if (targetUser?.username === 'admin') {
+        return res.status(403).json({ error: "Cannot modify admin user" });
+      }
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({ role })
+        .where(eq(users.id, userId))
+        .returning();
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/users/:id/reset-password", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const userId = parseInt(req.params.id);
+
+      // Don't allow resetting admin user's password
+      const targetUser = await storage.getUserById(userId);
+      if (targetUser?.username === 'admin') {
+        return res.status(403).json({ error: "Cannot modify admin user" });
+      }
+
+      // Generate a temporary password
+      const temporaryPassword = Math.random().toString(36).slice(-8);
+
+      await storage.updateUserPassword(userId, temporaryPassword);
+
+      res.json({ temporaryPassword });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/users/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const userId = parseInt(req.params.id);
+
+      // Don't allow deleting admin user
+      const targetUser = await storage.getUserById(userId);
+      if (targetUser?.username === 'admin') {
+        return res.status(403).json({ error: "Cannot delete admin user" });
+      }
+
+      const [deletedUser] = await db
+        .delete(users)
+        .where(eq(users.id, userId))
+        .returning();
+
+      res.json(deletedUser);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+
+  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users"], isAuthenticated, requirePasswordChange);
 
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
@@ -806,7 +907,6 @@ Please help fix this issue!`
       res.json(features);
     } catch (error: any) {
       logApi("Error getting features", req.query, { error: error.message });
-      res.status(500).json({ error: error.message });
     }
   });
 
