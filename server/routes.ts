@@ -48,9 +48,6 @@ async function getAvailableModels(): Promise<Record<string, string>> {
       formattedModels[model.id] = model.id;
     });
 
-    // Log available models for debugging
-    console.log('Available models:', formattedModels);
-
     // Update cache
     modelsCache = formattedModels;
     modelsCacheTime = Date.now();
@@ -60,7 +57,7 @@ async function getAvailableModels(): Promise<Record<string, string>> {
     console.error('Failed to fetch models:', error);
     // Return default models if API call fails
     return {
-      'gpt-4': 'gpt-4',
+      'gpt-4o': 'gpt-4o',
       'gpt-3.5-turbo': 'gpt-3.5-turbo'
     };
   }
@@ -463,6 +460,7 @@ export async function registerRoutes(app: Express) {
   app.post("/api/design/analyze", async (req, res) => {
     try {
       const { aspect, content, sessionId } = req.body;
+      const user = (req as any).user;
 
       if (!designConversations.has(sessionId)) {
         designConversations.set(sessionId, []);
@@ -472,7 +470,7 @@ export async function registerRoutes(app: Express) {
       logApi(`Analyzing ${aspect}`, { aspect, content });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -505,6 +503,7 @@ export async function registerRoutes(app: Express) {
   app.post("/api/design/finalize", async (req, res) => {
     try {
       const { sessionId } = req.body;
+      const user = (req as any).user;
       const history = designConversations.get(sessionId);
 
       if (!history) {
@@ -514,7 +513,7 @@ export async function registerRoutes(app: Express) {
       logApi("Generating final design", { sessionId });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -552,6 +551,7 @@ export async function registerRoutes(app: Express) {
   app.post("/api/design/generate-features", async (req, res) => {
     try {
       const { gameDesign, currentFeatures } = req.body;
+      const user = (req as any).user;
 
       if (!gameDesign) {
         throw new Error("Game design is required");
@@ -560,7 +560,7 @@ export async function registerRoutes(app: Express) {
       logApi("Generating features request", { gameDesign, currentFeatures });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -617,6 +617,7 @@ Each feature should be specific and actionable.`
   app.post("/api/design/generate", async (req, res) => {
     try {
       const { sessionId, followUpAnswers, analyses, settings } = req.body;
+      const user = (req as any).user;
       const history = designConversations.get(sessionId);
 
       if (!history) {
@@ -649,13 +650,13 @@ Each feature should be specific and actionable.`
       const selectedModel = settings?.model || 'gpt-4';
 
       // Determine whether to use max_completion_tokens based on model type and settings
-      const tokenParams = useMaxCompleteTokens && selectedModel.startsWith('o1') 
+      const tokenParams = useMaxCompleteTokens && selectedModel.startsWith('o1')
         ? { max_completion_tokens: maxTokens }
         : { max_tokens: maxTokens };
 
       // Update the chat completion creation with dynamic token parameter
       const response = await openai.chat.completions.create({
-        model: selectedModel,
+        model: user.modelPreference || selectedModel,
         messages: [
           {
             role: "system",
@@ -691,6 +692,7 @@ Each feature should be specific and actionable.`
   app.post("/api/chat", async (req, res) => {
     try {
       const { prompt, temperature = 0.7, maxTokens = 16000 } = req.body;
+      const user = (req as any).user;
 
       if (maxTokens > 16000) {
         throw new Error("Max tokens cannot exceed 16,000 due to model limitations");
@@ -699,7 +701,7 @@ Each feature should be specific and actionable.`
       logApi("Chat request received", { prompt, temperature, maxTokens });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -776,6 +778,7 @@ Each feature should be specific and actionable.`
   app.post("/api/code/chat", async (req, res) => {
     try {
       const { code, message, gameDesign, debugContext, isNonTechnicalMode } = req.body;
+      const user = (req as any).user;
 
       logApi("Code chat request received", { message, isNonTechnicalMode });
 
@@ -802,7 +805,7 @@ When modifying code:
 8. DO NOT include HTML, just the JavaScript game code`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -838,9 +841,10 @@ When modifying code:
   app.post("/api/code/remix", async (req, res) => {
     try {
       const { code, features } = req.body;
+      const user = (req as any).user;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -879,6 +883,7 @@ When providing suggestions:
   app.post("/api/code/debug", async (req, res) => {
     try {
       const { code, error, isNonTechnicalMode } = req.body;
+      const user = (req as any).user;
 
       if (!error || !code) {
         return res.status(400).json({
@@ -888,12 +893,11 @@ When providing suggestions:
             : "Please run the game first so I can help fix any errors.",
         });
       }
-
       logApi("Debug request received", { error });
 
       const systemPrompt = isNonTechnicalMode
         ? `You are a friendly game helper who explains problems in simple terms.
-Help fix game problems using everyday language and simple explanations.
+Help fix game problems usingeveryday language and simple explanations.
 
 When explaining fixes:
 1. Explain what's wrong in simple, friendly terms
@@ -931,7 +935,7 @@ Format your response as:
 3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -1019,11 +1023,12 @@ Please help fix this issue!`
   app.post("/api/hint", async (req, res) => {
     try {
       const { context, gameDesign, code, currentFeature } = req.body;
+      const user = (req as any).user;
 
       logApi("Hint request received", { context, currentFeature });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: user.modelPreference || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -1330,7 +1335,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       const models = await getAvailableModels();
       res.json(models);
     } catch (error) {
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to fetch models",
         message: "Using default models"
       });
@@ -1388,6 +1393,34 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       res.json(parameters);
     } catch (error: any) {
       logApi("Error fetching model parameters", { model: req.params.model }, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add route to update user's model preference
+  app.patch("/api/users/model-preference", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { model } = req.body;
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({ modelPreference: model })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add route to get available models
+  app.get("/api/models", isAuthenticated, async (req, res) => {
+    try {
+      const models = await getAvailableModels();
+      res.json(models);
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });

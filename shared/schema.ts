@@ -12,6 +12,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default('user'),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow(),
+  modelPreference: text("model_preference").default('gpt-4o'), // Add model preference field
 });
 
 export const chats = pgTable("chats", {

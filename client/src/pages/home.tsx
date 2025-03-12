@@ -10,6 +10,7 @@ import { AIStatusIndicator } from "@/components/ai-status-indicator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { ModelSelector } from "@/components/model-selector";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState("");
@@ -31,7 +32,6 @@ export default function Home() {
 
   const handleCodeChange = (newCode: string) => {
     setGameCode(newCode);
-    // Save to localStorage whenever code changes
     localStorage.setItem('currentGameCode', newCode);
     addDebugLog("Code updated in editor");
   };
@@ -50,7 +50,6 @@ export default function Home() {
     }
   };
 
-  // Listen for game design updates from project loading
   useEffect(() => {
     const handleGameDesignLoad = (e: CustomEvent<any>) => {
       setGameDesign(e.detail);
@@ -69,16 +68,19 @@ export default function Home() {
         <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
           AI Game Creator
         </h1>
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="non-technical-mode"
-            checked={isNonTechnicalMode}
-            onCheckedChange={setIsNonTechnicalMode}
-            className="data-[state=checked]:bg-primary"
-          />
-          <Label htmlFor="non-technical-mode" className="text-sm">
-            {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
-          </Label>
+        <div className="flex items-center space-x-4">
+          <ModelSelector />
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="non-technical-mode"
+              checked={isNonTechnicalMode}
+              onCheckedChange={setIsNonTechnicalMode}
+              className="data-[state=checked]:bg-primary"
+            />
+            <Label htmlFor="non-technical-mode" className="text-sm">
+              {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
+            </Label>
+          </div>
         </div>
       </div>
 
