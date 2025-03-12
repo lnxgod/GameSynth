@@ -958,9 +958,10 @@ Each feature should be specific and actionable.`
     }
   });
 
+  // Update the code chat endpoint to use passed model config
   app.post("/api/code/chat", async (req, res) => {
     try {
-      const { code, message, gameDesign, debugContext, isNonTechnicalMode } = req.body;
+      const { code, message, gameDesign, debugContext, isNonTechnicalMode, modelConfig } = req.body;
       const user = (req as any).user;
 
       logApi("Code chat request received", { message, isNonTechnicalMode });
@@ -987,8 +988,7 @@ When modifying code:
 7. Assume canvas and ctx are available in the scope
 8. DO NOT include HTML, just the JavaScript game code`;
 
-      const requestConfig = {
-        model: user.code_gen_model || "gpt-4o",
+      const baseConfig = {
         messages: [
           {
             role: "system",
@@ -996,14 +996,17 @@ When modifying code:
           },
           {
             role: "user",
-            content: `Here is my current game code:\n\n${code}\n\nUser request: ${message}${
-              debugContext ? `\n\nDebug Context: ${debugContext}` : ''
-            }`
+            content: message
           }
-        ],
-        temperature: 0.7,
-        max_tokens: 16000
+        ]
       };
+
+      // Use model-specific configuration
+      const requestConfig = getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o", {
+        ...baseConfig,
+        ...modelConfig
+      });
+
       logApi("Code chat request", {}, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
@@ -1012,7 +1015,7 @@ When modifying code:
       const updatedCode = extractGameCode(content);
 
       const result = {
-        message: content,
+        content,
         updatedCode
       };
 
@@ -1216,36 +1219,45 @@ Please help fix this issue!`
     }
   });
 
+  // Update hint generation endpoint
   app.post("/api/hint", async (req, res) => {
     try {
-      const { context, gameDesign, code, currentFeature } = req.body;
+      const { context, currentFeature, modelConfig } = req.body;
       const user = (req as any).user;
+
+      if (!context || !currentFeature) {
+        throw new Error("Both context and currentFeature are required");
+      }
 
       logApi("Hint request received", { context, currentFeature });
 
-      const requestConfig = {
-        model: user.code_gen_model || "gpt-4o",
+      const baseConfig = {
         messages: [
           {
             role: "system",
-            content: `You are a helpful and playful game development assistant.
-Your task is to provide short, encouraging hints about the current context.
-Keep responses brief (1-2 sentences) and friendly.
-If a feature is being implemented, give specific suggestions.
-Format hints to be encouraging and actionable.`
+            content: `You are a game development mentor helping students learn Canvas game programming.
+When giving hints:
+1. Don't give away the complete solution
+2. Point in the right direction without full implementation details
+3. Use encouraging, supportive language
+4. Keep hints concise and focused
+5. Relate to what they're currently working on`
           },
           {
             role: "user",
-            content: `Generate a helpful hint for this context:
-Context: ${context || 'General game development'}
-Current Feature: ${currentFeature || 'None specified'}
-Game Design: ${gameDesign ? JSON.stringify(gameDesign) : 'Not available'}
-Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
+            content: `I'm working on this feature: "${currentFeature}"
+Current context: ${context}
+Can you give me a hint on how to proceed?`
           }
-        ],
-        temperature: 0.7,
-        max_tokens: 100
+        ]
       };
+
+      // Use model-specific configuration
+      const requestConfig = getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o", {
+        ...baseConfig,
+        ...modelConfig
+      });
+
       logApi("Hint request", {}, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
@@ -1259,8 +1271,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       res.status(500).json({ error: error.message });
     }
   });
-
-
 
   async function handleAndroidBuild(buildDir: string, options: {
     gameCode: string;

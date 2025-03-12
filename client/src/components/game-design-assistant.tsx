@@ -95,6 +95,8 @@ export function GameDesignAssistant({
     reasoning_effort: "medium"
   });
   const [generationPrompt, setGenerationPrompt] = useState<string>("");
+  const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
+
 
   const analyzeModelMutation = useMutation({
     mutationFn: async ({ requirements, sessionId }) => {
@@ -358,6 +360,31 @@ Include:
       setGenerationPrompt(defaultPrompt);
     }
   }, [finalDesign]);
+
+  // Update the hint request code
+  const generateHintMutation = useMutation({
+    mutationFn: async (context: string) => {
+      const res = await apiRequest('POST', '/api/hint', {
+        context,
+        currentFeature: generatedFeatures[currentFeatureIndex],
+        modelConfig // Pass the current model configuration
+      });
+      return res.json();
+    }
+  });
+
+  // Update the code chat request
+  const codeChatMutation = useMutation({
+    mutationFn: async ({ message, isNonTechnicalMode }: { message: string, isNonTechnicalMode: boolean }) => {
+      const res = await apiRequest('POST', '/api/code/chat', {
+        message,
+        isNonTechnicalMode,
+        modelConfig // Pass the current model configuration
+      });
+      return res.json();
+    }
+  });
+
 
   return (
     <Card className="w-full">
