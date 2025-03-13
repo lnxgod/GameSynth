@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertChatSchema, insertGameSchema } from "@shared/schema";
+import { insertChatSchema, insertGameSchema, changePasswordSchema } from "@shared/schema";
 import OpenAI from "openai";
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -13,6 +13,7 @@ import { insertUserSchema } from "@shared/schema";
 import { chats, games, features, users } from "@shared/schema";
 import { db } from './db';
 import { eq } from 'drizzle-orm';
+import bcrypt from "bcryptjs";
 
 // Helper function to format model parameters for logging
 const logOpenAIParams = (config: any) => {
