@@ -254,10 +254,95 @@ export function GameDesignAssistant({
       return;
     }
 
-    for (const aspect of Object.keys(requirements) as (keyof GameRequirements)[]) {
-      await analyzeMutation.mutateAsync(aspect);
+    // Run all analyses concurrently
+    try {
+      const aspects = Object.keys(requirements) as (keyof GameRequirements)[];
+      const analysisPromises = aspects.map(aspect => {
+        setAnalysisProgress(prev => ({
+          ...prev,
+          [aspect]: { status: 'analyzing', progress: 0 }
+        }));
+
+        return new Promise<{ aspect: keyof GameRequirements, data: any }>(async (resolve, reject) => {
+          const progressInterval = setInterval(() => {
+            setAnalysisProgress(prev => ({
+              ...prev,
+              [aspect]: {
+                ...prev[aspect],
+                progress: Math.min(95, (prev[aspect].progress || 0) + 10)
+              }
+            }));
+          }, 500);
+
+          try {
+            const res = await apiRequest('POST', '/api/design/analyze', {
+              aspect,
+              content: requirements[aspect],
+              sessionId,
+              model: selectedModel,
+              parameters: modelParameters
+            });
+            clearInterval(progressInterval);
+            const data = await res.json();
+            setAnalysisProgress(prev => ({
+              ...prev,
+              [aspect]: { status: 'complete', progress: 100 }
+            }));
+            resolve({ aspect, data });
+          } catch (error) {
+            clearInterval(progressInterval);
+            setAnalysisProgress(prev => ({
+              ...prev,
+              [aspect]: { status: 'error', progress: 0 }
+            }));
+            reject({ aspect, error });
+          }
+        });
+      });
+
+      // Wait for all analyses to complete
+      const results = await Promise.allSettled(analysisPromises);
+
+      // Process successful results
+      const successfulResults = results
+        .filter((result): result is PromiseFulfilledResult<{ aspect: keyof GameRequirements, data: any }> =>
+          result.status === 'fulfilled'
+        )
+        .map(result => result.value);
+
+      // Update analyses state with all successful results
+      const newAnalyses = successfulResults.reduce((acc, { aspect, data }) => ({
+        ...acc,
+        [aspect]: data
+      }), {});
+
+      setAnalyses(newAnalyses);
+
+      // Process failed results
+      const failedResults = results
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map(result => result.reason);
+
+      failedResults.forEach(({ aspect, error }) => {
+        toast({
+          title: `Error Analyzing ${aspect}`,
+          description: error.message,
+          variant: "destructive"
+        });
+      });
+
+      // If we have any successful results, proceed with finalization
+      if (successfulResults.length > 0) {
+        await finalizeMutation.mutateAsync();
+      }
+
+    } catch (error) {
+      toast({
+        title: "Analysis Error",
+        description: "Failed to complete analysis",
+        variant: "destructive"
+      });
     }
-    await finalizeMutation.mutateAsync();
   };
 
   const renderCurrentPrompt = () => {
@@ -457,9 +542,9 @@ export function GameDesignAssistant({
               <Button
                 variant="secondary"
                 onClick={handleThink}
-                disabled={analyzeMutation.isPending || finalizeMutation.isPending}
+                disabled={finalizeMutation.isPending}
               >
-                {analyzeMutation.isPending || finalizeMutation.isPending ? (
+                {finalizeMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Analyzing...
