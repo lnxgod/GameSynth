@@ -15,6 +15,43 @@ import { db } from './db';
 import { eq } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
 
+// Add at the beginning of the file, after imports
+
+// Store prompts in memory with defaults
+const SystemPrompts = {
+  DESIGN_ASSISTANT_PROMPT: `You are a game design assistant helping users create HTML5 Canvas games. 
+Analyze the specific game aspect provided and elaborate on its implementation details.
+Focus on concrete, implementable features and mechanics.
+Format your response as JSON with the following structure:
+{
+  "analysis": "Detailed analysis of this game aspect",
+  "implementation_details": ["List of specific features or mechanics to implement"],
+  "technical_considerations": ["Technical aspects to consider"]
+}`,
+
+  FINAL_PROMPT_ASSISTANT: `You are a game design assistant helping create HTML5 Canvas games.
+Review all the analyzed aspects and create a comprehensive game design document.
+Consider how all elements work together and ensure the game will be fun and technically feasible.
+Format your response as JSON with this structure:
+{
+  "gameDescription": "Complete game description",
+  "coreMechanics": ["List of core mechanics"],
+  "technicalRequirements": ["Technical requirements"],
+  "implementationApproach": "Suggested implementation approach",
+  "needsMoreInfo": boolean,
+  "additionalQuestions": ["Any clarifying questions if needed"]
+}`,
+
+  SYSTEM_PROMPT: `You are a game development assistant specialized in creating HTML5 Canvas games.
+When providing code:
+1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
+2. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
+3. Include clear comments explaining the game mechanics
+4. Return fully working, self-contained game code that handles its own game loop
+5. Use requestAnimationFrame for animation
+6. Handle cleanup properly when the game stops`
+};
+
 // Helper function to format model parameters for logging
 const logOpenAIParams = (config: any) => {
   return {
@@ -133,14 +170,6 @@ function extractGameCode(content: string): string | null {
   }
 }
 
-const SYSTEM_PROMPT = `You are a game development assistant specialized in creating HTML5 Canvas games.
-When providing code:
-1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
-2. Focus on creating interactive, fun games using vanilla JavaScript and Canvas API
-3. Include clear comments explaining the game mechanics
-4. Return fully working, self-contained game code that handles its own game loop
-5. Use requestAnimationFrame for animation
-6. Handle cleanup properly when the game stops`;
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -167,6 +196,41 @@ export async function registerRoutes(app: Express) {
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
   }));
+
+  // Add these new routes inside registerRoutes function, before other routes
+
+  // Get current prompts
+  app.get("/api/prompts", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Only admins can view prompts" });
+      }
+      res.json(SystemPrompts);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update prompts
+  app.post("/api/prompts", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Only admins can update prompts" });
+      }
+
+      const { promptKey, newPrompt } = req.body;
+      if (!promptKey || !newPrompt || !SystemPrompts.hasOwnProperty(promptKey)) {
+        return res.status(400).json({ error: "Invalid prompt key or value" });
+      }
+
+      SystemPrompts[promptKey as keyof typeof SystemPrompts] = newPrompt;
+      res.json({ message: "Prompt updated successfully", promptKey, newPrompt });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -440,7 +504,7 @@ export async function registerRoutes(app: Express) {
         messages: [
           {
             role: "system",
-            content: DESIGN_ASSISTANT_PROMPT
+            content: SystemPrompts.DESIGN_ASSISTANT_PROMPT
           },
           {
             role: "user",
@@ -484,7 +548,7 @@ export async function registerRoutes(app: Express) {
         messages: [
           {
             role: "system",
-            content: FINAL_PROMPT_ASSISTANT
+            content: SystemPrompts.FINAL_PROMPT_ASSISTANT
           },
           {
             role: "user",
@@ -631,7 +695,7 @@ Each feature should be specific and actionable.`
         messages: [
           {
             role: "system",
-            content: SYSTEM_PROMPT
+            content: SystemPrompts.SYSTEM_PROMPT
           },
           {
             role: "user",
@@ -674,7 +738,7 @@ Each feature should be specific and actionable.`
           messages: [
               {
                   role: "system",
-                  content: SYSTEM_PROMPT
+                  content: SystemPrompts.SYSTEM_PROMPT
               },
               { role: "user", content: prompt }
           ]
@@ -829,7 +893,7 @@ When providing suggestions:
           },
           {
             role: "user",
-            content: `Please analyze this game code and suggest 3 improvements that help implement these remaining features: ${features?.join(", ")}\n\n${code}`
+            content: `Please analyze this game code and suggest 3 improvements that help implement these remainingfeatures: ${features?.join(", ")}\n\n${code}`
           }
         ],
         response_format: { type: "json_object" },
