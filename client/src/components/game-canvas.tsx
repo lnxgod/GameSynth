@@ -12,9 +12,11 @@ import { apiRequest } from "@/lib/queryClient";
 interface GameCanvasProps {
   code: string;
   onDebugLog?: (log: string) => void;
+  onCodeUpdate?: (code: string) => void;
+  gameDesign?: any;
 }
 
-export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
+export function GameCanvas({ code, onDebugLog, onCodeUpdate, gameDesign }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
   const sandboxRef = useRef<any>(null);
@@ -65,6 +67,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
       const res = await apiRequest("POST", "/api/code/chat", {
         code,
         message,
+        gameDesign,
         type: "remix"
       });
       return res.json();
@@ -72,6 +75,9 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     onSuccess: (data) => {
       if (data.updatedCode) {
         onDebugLog?.("🎮 Game code remixed successfully");
+        if (onCodeUpdate) {
+          onCodeUpdate(data.updatedCode);
+        }
         toast({
           title: "Game Remixed",
           description: "The game code has been updated with your suggestions",
