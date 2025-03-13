@@ -49,7 +49,27 @@ When providing code:
 3. Include clear comments explaining the game mechanics
 4. Return fully working, self-contained game code that handles its own game loop
 5. Use requestAnimationFrame for animation
-6. Handle cleanup properly when the game stops`
+6. Handle cleanup properly when the game stops`,
+  DEBUG_FRIENDLY: `You are a friendly game development assistant helping create HTML5 Canvas games.
+Explain things in simple terms as if talking to someone new to programming.
+When explaining code or changes:
+1. Use everyday analogies and simple examples
+2. Avoid technical jargon - when you must use it, explain it simply
+3. Focus on what the code does, not how it works internally
+4. Use friendly, encouraging language
+5. Break down complex concepts into simple steps
+6. Always wrap the code between +++CODESTART+++ and +++CODESTOP+++ markers
+7. The canvas and context variables are already provided`,
+  DEBUG_TECHNICAL: `You are a game development assistant specialized in HTML5 Canvas games.
+When modifying code:
+1. ALWAYS provide the COMPLETE updated code, never partial updates
+2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
+3. Explain the changes you're making in clear, simple terms
+4. Maintain game functionality and style consistency
+5. Include initialization and cleanup code
+6. The canvas and context variables are already provided, DO NOT create them
+7. Assume canvas and ctx are available in the scope
+8. DO NOT include HTML, just the JavaScript game code`
 };
 
 // Helper function to format model parameters for logging
@@ -98,13 +118,33 @@ function logApi(message: string, request?: any, response?: any, openAIConfig?: a
   }
 }
 
-// Simplified model config helper
-const getModelConfig = (model: string) => {
-  // Only return the essential configuration
-  return {
+// Helper function to get model-specific parameters
+const getModelConfig = (model: string, baseConfig: any = {}) => {
+  const config: any = {
     model: model || "gpt-4o",
-    messages: [] // Will be populated by the route handlers
+    messages: baseConfig.messages || [],
+    temperature: 0.7,
   };
+
+  // O1 specific configuration
+  if (model.startsWith('o1')) {
+    if (baseConfig.max_tokens) {
+      config.max_completion_tokens = baseConfig.max_tokens;
+      delete config.max_tokens;
+    }
+    return config;
+  }
+
+  // Regular configuration for other models
+  if (baseConfig.max_tokens) {
+    config.max_tokens = baseConfig.max_tokens;
+  }
+
+  if (baseConfig.response_format) {
+    config.response_format = baseConfig.response_format;
+  }
+
+  return config;
 };
 
 const designConversations = new Map<string, Array<{
@@ -691,7 +731,7 @@ Each feature should be specific and actionable.`
 
       // Update the chat completion creation with dynamic token parameter
       const requestConfig = {
-        ...getModelConfig(model || selectedModel),
+        ...getModelConfig(model || selectedModel, {max_tokens: maxTokens}),
         messages: [
           {
             role: "system",
@@ -734,14 +774,14 @@ Each feature should be specific and actionable.`
       logApi("Chat request received", { prompt }, null, { requestedModel: modelConfig?.model });
 
       const requestConfig = {
-          ...getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o"),
-          messages: [
-              {
-                  role: "system",
-                  content: SystemPrompts.SYSTEM_PROMPT
-              },
-              { role: "user", content: prompt }
-          ]
+        ...getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o"),
+        messages: [
+          {
+            role: "system",
+            content: SystemPrompts.SYSTEM_PROMPT
+          },
+          { role: "user", content: prompt }
+        ]
       };
 
       logApi("Chat request configuration", null, null, logOpenAIParams(requestConfig));
@@ -811,26 +851,8 @@ Each feature should be specific and actionable.`
       logApi("Code chat request received", { message, isNonTechnicalMode, model });
 
       const systemPrompt = isNonTechnicalMode
-        ? `You are a friendly game development assistant helping create HTML5 Canvas games.
-Explain things in simple terms as if talking to someone new to programming.
-When explaining code or changes:
-1. Use everyday analogies and simple examples
-2. Avoid technical jargon - when you must use it, explain it simply
-3. Focus on what the code does, not how it works internally
-4. Use friendly, encouraging language
-5. Break down complex concepts into simple steps
-6. Always wrap the code between +++CODESTART+++ and +++CODESTOP+++ markers
-7. The canvas and context variables are already provided`
-        : `You are a game development assistant specialized in HTML5 Canvas games.
-When modifying code:
-1. ALWAYS provide the COMPLETE updated code, never partial updates
-2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
-3. Explain the changes you're making in clear, simple terms
-4. Maintain game functionality and style consistency
-5. Include initialization and cleanup code
-6. The canvas and context variables are already provided, DO NOT create them
-7. Assume canvas and ctx are available in the scope
-8. DO NOT include HTML, just the JavaScript game code`;
+        ? SystemPrompts.DEBUG_FRIENDLY
+        : SystemPrompts.DEBUG_TECHNICAL;
 
       const requestConfig = {
         ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
@@ -914,59 +936,23 @@ When providing suggestions:
   app.post("/api/code/debug", async (req, res) => {
     try {
       const { code, error, isNonTechnicalMode, model } = req.body;
-      const user = (req as any).user;
 
       if (!error || !code) {
         return res.status(400).json({
-          error: "Missing Information",
+          error: "Debug Helper Error",
           message: isNonTechnicalMode
-            ? "I need to see the game running first to help fix any problems. Could you try playing the game and let meknow what's not working?"
+            ? "I need to see the game running first to help fix any problems. Could you try playing the game and let me know what's not working?"
             : "Please run the game first so I can help fix any errors.",
         });
       }
+
       logApi("Debug request received", { error, model });
 
       const systemPrompt = isNonTechnicalMode
-        ? `You are a friendly game helper who explains problems in simple terms.
-Help fix game problems usingeveryday language and simple explanations.
+        ? SystemPrompts.DEBUG_FRIENDLY
+        : SystemPrompts.DEBUG_TECHNICAL;
 
-When explaining fixes:
-1. Explain what's wrong in simple, friendly terms
-2. Use everyday examples to explain the solution
-3. Break down the fix into easy steps
-4. Avoid technical terms - if you must use them, explain them simply
-5. Be encouraging and positive
-
-Remember:
-- Focus on what the game should do vs what it's doing
-- Explain things like you're talking to a friend
-- Keep it simple and clear- Always include thecomplete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
-
-Format your response as:
-1. 🎮 What's not working? (simple explanation)
-2. 💡 Here's how we'll fix it (in friendly terms)
-3. Complete fixed code between the markers`
-        : `You are a helpful game debugging assistant.
-Help fix HTML5 Canvas game errors in simple, clear language.
-
-When explaining fixes:
-1. Identify the core problem in simple terms
-2. Suggest a clear solution
-3. Provide the complete fixed code
-
-Remember:
-- Focus on common game issues (collisions, animations, input handling)
-- Explain in non-technical terms
-- Always include the full working code
-- Analyze both the error and any additional debug context
-
-Format your response as:
-1. 🎮 What went wrong? (simple explanation)
-2. 💡 How we'll fix it
-3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`;
-
-      const requestConfig = {
-        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
+      const requestConfig = getModelConfig(model || "gpt-4o", {
         messages: [
           {
             role: "system",
@@ -974,41 +960,24 @@ Format your response as:
           },
           {
             role: "user",
-            content: `The game has this error:
-${error}
-
-Here's the current code:
-${code}
-
-Please help fix this issue!`
+            content: `The game has this error:\n${error}\n\nHere's the current code:\n${code}\n\nPlease help fix this issue!`
           }
         ],
-        temperature: 0.7,
-        max_tokens: 16000
-      };
+        response_format: { type: "json_object" }
+      });
+
+      logApi("Debug request configuration", null, null, logOpenAIParams(requestConfig));
 
       const response = await openai.chat.completions.create(requestConfig);
-
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
 
-      if (!updatedCode) {
-        throw new Error("Could not generate valid fixed code");
-      }
-
-      const explanation = content
-        .replace(/\+\+\+CODESTART\+\+\+[\s\S]*\+\+\+CODESTOP\+\+\+/, '')
-        .trim();
-
-      const result = {
-        message: explanation,
-        updatedCode
-      };
-
-      logApi("Debug suggestions generated", { error }, result);
-      res.json(result);
+      res.json({
+        explanation: content,
+        fixedCode: updatedCode
+      });
     } catch (error: any) {
-      logApi("Error in debug", req.body, { error: error.message });
+      console.error('Debug endpoint error:', error);
       res.status(500).json({
         error: "Debug Helper Error",
         message: "I couldn't analyze the game properly. Please try running the game again to get fresh error information.",
