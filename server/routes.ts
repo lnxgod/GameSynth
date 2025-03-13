@@ -3,110 +3,95 @@ import { createServer } from "http";
 import { storage } from "./storage";
 import { insertChatSchema, insertGameSchema } from "@shared/schema";
 import OpenAI from "openai";
-import {insertFeatureSchema} from "@shared/schema"; 
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from "path";
 import fs from "fs/promises";
 import session from "express-session";
 import { isAuthenticated, requirePasswordChange } from "./middleware/auth";
-import { changePasswordSchema } from "@shared/schema";
-import bcrypt from "bcryptjs";
-import { insertUserSchema } from "@shared/schema"; // Import the schema for user creation
-import { chats, games, features, users } from "@shared/schema"; // Import schema from shared
-import { db } from './db'; // Import the db instance correctly
+import { insertUserSchema } from "@shared/schema";
+import { chats, games, features, users } from "@shared/schema";
+import { db } from './db';
 import { eq } from 'drizzle-orm';
-import {insertGameDesignSchema} from "@shared/schema"; //Import the schema for game design
 
+// Helper function to format model parameters for logging
+const logOpenAIParams = (config: any) => {
+  return {
+    model: config.model,
+    reasoning_effort: config.reasoning_effort,
+    max_completion_tokens: config.max_completion_tokens,
+    temperature: config.temperature,
+    response_format: config.response_format
+  };
+};
 
-// Previous imports remain unchanged
-
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY environment variable is required");
-}
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Cache for models with 1-hour expiry
-let modelsCache: Record<string, string> | null = null;
-let modelsCacheTime: number = 0;
-const CACHE_DURATION = 3600000; // 1 hour in milliseconds
-
-async function getAvailableModels(): Promise<Record<string, string>> {
-  // Return cached models if available and not expired
-  if (modelsCache && (Date.now() - modelsCacheTime) < CACHE_DURATION) {
-    return modelsCache;
-  }
-
-  try {
-    const models = await openai.models.list();
-
-    // Create a map of model IDs
-    const formattedModels: Record<string, string> = {};
-    models.data.forEach(model => {
-      // Include all models without filtering
-      formattedModels[model.id] = model.id;
-    });
-
-    // Update cache
-    modelsCache = formattedModels;
-    modelsCacheTime = Date.now();
-
-    return formattedModels;
-  } catch (error) {
-    console.error('Failed to fetch models:', error);
-    // Return default models if API call fails
-    return {
-      'gpt-4o': 'gpt-4o',
-      'gpt-3.5-turbo': 'gpt-3.5-turbo'
-    };
-  }
-}
-
-const DESIGN_ASSISTANT_PROMPT = `You are a game design assistant helping users create HTML5 Canvas games. 
-Analyze the specific game aspect provided and elaborate on its implementation details.
-Focus on concrete, implementable features and mechanics.
-Format your response as JSON with the following structure:
-{
-  "analysis": "Detailed analysis of this game aspect",
-  "implementation_details": ["List of specific features or mechanics to implement"],
-  "technical_considerations": ["Technical aspects to consider"]
-}
-`;
-
-const FINAL_PROMPT_ASSISTANT = `You are a game design assistant helping create HTML5 Canvas games.
-Review all the analyzed aspects and create a comprehensive game design document.
-Consider how all elements work together and ensure the game will be fun and technically feasible.
-Format your response as JSON with the following structure:
-{
-  "gameDescription": "Complete game description",
-  "coreMechanics": ["List of core mechanics"],
-  "technicalRequirements": ["Technical requirements"],
-  "implementationApproach": "Suggested implementation approach",
-  "needsMoreInfo": boolean,
-  "additionalQuestions": ["Any clarifying questions if needed"]
-}
-`;
-
-const apiLogs: Array<{
+// API Logs array with type definition
+interface ApiLog {
   timestamp: string;
   message: string;
   request?: any;
   response?: any;
-}> = [];
+  openAIConfig?: any;
+}
 
-function logApi(message: string, request?: any, response?: any) {
+const apiLogs: ApiLog[] = [];
+
+function logApi(message: string, request?: any, response?: any, openAIConfig?: any) {
   const timestamp = new Date().toLocaleTimeString();
-  apiLogs.push({
+  const logEntry = {
     timestamp,
     message,
     request: request ? JSON.stringify(request, null, 2) : undefined,
-    response: response ? JSON.stringify(response, null, 2) : undefined
-  });
+    response: response ? JSON.stringify(response, null, 2) : undefined,
+    openAIConfig: openAIConfig ? JSON.stringify(openAIConfig, null, 2) : undefined
+  };
+
+  apiLogs.push(logEntry);
+
+  // Keep log size manageable
   if (apiLogs.length > 100) {
     apiLogs.shift();
   }
+
+  // Log to console for debugging
+  console.log(`[${timestamp}] ${message}`);
+  if (openAIConfig) {
+    console.log('Model Configuration:', openAIConfig);
+  }
 }
+
+// Helper function to get model-specific parameters
+const getModelConfig = (model: string, baseConfig: any) => {
+  const config: any = {
+    model,
+    messages: baseConfig.messages
+  };
+
+  // O1 specific configuration - only supports reasoning_effort
+  if (model === 'o1') {
+    if (baseConfig.reasoning_effort) {
+      config.reasoning_effort = baseConfig.reasoning_effort;
+    }
+    return config;
+  }
+
+  // O3 models support all parameters
+  if (model.startsWith('o3')) {
+    return {
+      ...config,
+      temperature: baseConfig.temperature,
+      response_format: baseConfig.response_format,
+      reasoning_effort: baseConfig.reasoning_effort
+    };
+  }
+
+  // GPT-4 and other models
+  return {
+    ...config,
+    temperature: baseConfig.temperature,
+    max_tokens: baseConfig.max_tokens
+  };
+};
 
 const designConversations = new Map<string, Array<{
   role: 'assistant' | 'user';
@@ -180,8 +165,11 @@ When providing code:
 5. Use requestAnimationFrame for animation
 6. Handle cleanup properly when the game stops`;
 
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY environment variable is required");
+}
 
-let addDebugLog: ((message: string) => void) | undefined; //Added to handle debug logging
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function registerRoutes(app: Express) {
   // Ensure database is initialized
@@ -693,33 +681,32 @@ Each feature should be specific and actionable.`
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, temperature = 0.7, maxTokens = 16000 } = req.body;
+      const { prompt, modelConfig } = req.body;
       const user = (req as any).user;
 
-      if (maxTokens > 16000) {
-        throw new Error("Max tokens cannot exceed 16,000 due to model limitations");
-      }
+      logApi("Chat request received", { prompt }, null, { requestedModel: modelConfig?.model });
 
-      logApi("Chat request received", { prompt, temperature, maxTokens });
-
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const baseConfig = {
         messages: [
           {
             role: "system",
             content: SYSTEM_PROMPT
           },
           { role: "user", content: prompt }
-        ],
-        temperature,
-        max_tokens: maxTokens
+        ]
+      };
+
+      // Use model-specific configuration
+      const requestConfig = getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o", {
+        ...baseConfig,
+        ...modelConfig
       });
 
-      const content = response.choices[0].message.content || "";
-      console.log('Raw response content:', content);
+      logApi("Chat request configuration", null, null, logOpenAIParams(requestConfig));
 
+      const response = await openai.chat.completions.create(requestConfig);
+      const content = response.choices[0].message.content || "";
       const code = extractGameCode(content);
-      console.log('Extracted code:', code);
 
       const chat = await storage.createChat({
         prompt,
@@ -729,13 +716,10 @@ Each feature should be specific and actionable.`
 
       const result = {
         ...chat,
-        settings: {
-          temperature,
-          maxTokens
-        }
+        code
       };
 
-      logApi("Chat response generated", { prompt }, result);
+      logApi("Chat response generated", null, { codeLength: code?.length }, logOpenAIParams(requestConfig));
       res.json(result);
     } catch (error: any) {
       logApi("Error in chat", req.body, { error: error.message });
@@ -911,7 +895,7 @@ When explaining fixes:
 Remember:
 - Focus on what the game should do vs what it's doing
 - Explain things like you're talking to a friend
-- Keep it simple and clear- Always include the complete fixed code between +++CODESTSTART+++ and +++CODESTOP+++ markers
+- Keep it simple and clear- Always include the complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
 
 Format your response as:
 1. 🎮 What's not working? (simple explanation)
@@ -1456,7 +1440,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
       const [updatedUser] = await db
         .update(users)
-        .set({ 
+        .set({
           analysis_model: analysisModel,
           code_gen_model: codeGenModel
         })
