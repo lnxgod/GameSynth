@@ -896,7 +896,7 @@ When explaining fixes:
 Remember:
 - Focus on what the game should do vs what it's doing
 - Explain things like you're talking to a friend
-- Keep it simple and clear- Always include the complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
+- Keep it simple and clear- Always include thecomplete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers
 
 Format your response as:
 1. 🎮 What's not working? (simple explanation)
@@ -1316,103 +1316,67 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     res.download(filePath);
   });
 
-  // Update the models endpoint to use dynamic fetching
+  // Add models endpoint
   app.get("/api/models", async (req, res) => {
     try {
-      const models = await getAvailableModels();
-      res.json(models);
-    } catch (error) {
-      res.status(500).json({
-        error: "Failed to fetch models",
-        message: "Using default models"
+      // For now, return default models since OpenAI API integration is pending
+      res.json(DEFAULT_MODELS);
+    } catch (error: any) {
+      console.error('Error fetching models:', error);
+      res.status(500).json({ 
+        error: "Failed to fetch models", 
+        message: "Using default model configuration" 
       });
     }
   });
 
-  // Add new endpoint for fetching model parameters
+  // Add model parameters endpoint
   app.get("/api/model-parameters/:model", async (req, res) => {
-    try {
-      const { model } = req.params;
+    const { model } = req.params;
 
-      // Query OpenAI for model information
-      const modelInfo = await openai.models.retrieve(model);
+    const parameters: Record<string, any> = {
+      temperature: {
+        type: "float",
+        min: 0,
+        max: 2,
+        default: 0.7,
+        description: "Controls randomness in the output. Higher values make the output more creative but less predictable."
+      }
+    };
 
-      // Format the parameters based on model type
-      const parameters: Record<string, any> = {
-        temperature: {
-          type: "float",
-          min: 0,
-          max: 2,
-          default: 0.7,
-          description: "Controls randomness in the output"
-        },
-        max_tokens: {
-          type: "integer",
-          min: 1,
-          max: modelInfo.context_window || 16000,
-          default: 8000,
-          description: "Maximum number of tokens to generate"
-        }
+    if (model === 'o1') {
+      parameters.reasoning_effort = {
+        type: "enum",
+        values: ["low", "medium", "high"],
+        default: "medium",
+        description: "Controls how much effort the model puts into reasoning about the response."
       };
-
-      // Add model-specific parameters
-      if (model.startsWith('o1')) {
-        parameters.max_completion_tokens = {
-          type: "integer",
-          min: 1,
-          max: modelInfo.context_window || 16000,
-          default: 8000,
-          description: "Maximum number of tokens to generate (O1 models)"
-        };
-      }
-
-      // Add response format for supported models
-      if (!model.includes('instruct')) {
-        parameters.response_format = {
-          type: "enum",
-          values: ["text", "json_object"],
-          default: "text",
-          description: "Format of the response"
-        };
-      }
-
-      logApi(`Retrieved parameters for model ${model}`, {}, parameters);
-      res.json(parameters);
-    } catch (error: any) {
-      logApi("Error fetching model parameters", { model: req.params.model }, { error: error.message });
-      res.status(500).json({ error: error.message });
+    } else if (model.startsWith('o3')) {
+      parameters.max_completion_tokens = {
+        type: "integer",
+        min: 1000,
+        max: 32000,
+        default: 16000,
+        description: "Maximum number of tokens to generate."
+      };
+      parameters.reasoning_effort = {
+        type: "enum",
+        values: ["low", "medium", "high"],
+        default: "medium",
+        description: "Controls how much effort the model puts into reasoning about the response."
+      };
     }
+
+    res.json(parameters);
   });
 
-  // Add route to update user's model preference
-  app.patch("/api/users/model-preference", isAuthenticated, async (req, res) => {
-    try {
-      const user = (req as any).user;
-      const { model } = req.body;
+  const DEFAULT_MODELS = {
+    'gpt-4o': 'GPT-4 Optimized',
+    'o1': 'O1 Base',
+    'o3-mini': 'O3 Mini',
+    'o3': 'O3 Standard'
+  };
 
-      const [updatedUser] = await db
-        .update(users)
-        .set({ modelPreference: model })
-        .where(eq(users.id, user.id))
-        .returning();
-
-      res.json(updatedUser);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Add route to get available models
-  app.get("/api/models", isAuthenticated, async (req, res) => {
-    try {
-      const models = await getAvailableModels();
-      res.json(models);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Add this to the existing routes in registerRoutes function
   app.post("/api/users", isAuthenticated, async (req, res) => {
     try {
       const user = (req as any).user;
@@ -1457,6 +1421,15 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       });
     } catch (error: any) {
       console.error('Model preferences update error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/models", isAuthenticated, async (req, res) => {
+    try {
+      const models = await getAvailableModels();
+      res.json(models);
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
