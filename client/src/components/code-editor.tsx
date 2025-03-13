@@ -11,6 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BuildControls } from "@/components/build-controls";
 import crypto from 'crypto';
+import { GamePreview } from "./game-preview";
 
 
 interface ProjectState {
@@ -120,7 +121,6 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
       onSuccess: (data) => {
         setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
         if (data.updatedCode) {
-          // Save current version before updating
           const currentVersion: Version = {
             timestamp: Date.now(),
             files: [{
@@ -132,7 +132,6 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
           };
           setVersions(prev => [...prev, currentVersion]);
 
-          // Update code
           setLocalCode(data.updatedCode);
           onCodeChange(data.updatedCode);
           addDebugLog?.("Code updated via chat");
@@ -374,8 +373,8 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
     }));
 
     return (
-      <Card className="p-4">
-        <div className="space-y-4">
+      <Card className="w-full">
+        <div className="p-4 space-y-4">
           <div className="flex gap-2 items-center">
             <Input
               placeholder="Enter project name to save"
@@ -563,6 +562,12 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
               </Card>
             )}
           </div>
+          <GamePreview
+            code={localCode}
+            onDebugLog={addDebugLog}
+            onCodeUpdate={onCodeChange}
+            gameDesign={gameDesign}
+          />
         </div>
       </Card>
     );
