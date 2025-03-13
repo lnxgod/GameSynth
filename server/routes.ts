@@ -22,7 +22,6 @@ async function makeOpenAIRequest(config: any) {
   } catch (error: any) {
     if (error.message?.includes("'max_tokens' is not supported with this model")) {
       logWithTimestamp('Retrying request with max_completion_tokens instead of max_tokens');
-      // Convert max_tokens to max_completion_tokens
       const retryConfig = { ...config };
       if (retryConfig.max_tokens) {
         retryConfig.max_completion_tokens = retryConfig.max_tokens;
@@ -144,19 +143,40 @@ const logWithTimestamp = (message: string, ...args: any[]) => {
 const getModelConfig = (model: string, baseConfig: any = {}) => {
   logWithTimestamp(`Creating config for model: ${model}`);
 
+  // Start with basic config that all models support
   const config: any = {
     model: model || "gpt-4o",
-    messages: baseConfig.messages || [],
-    temperature: baseConfig.temperature || 0.7,
+    messages: baseConfig.messages || []
   };
 
-  // Handle token limits based on model
-  if (baseConfig.max_tokens) {
-    if (model.startsWith('o1')) {
+  // o1 models only support messages and max_completion_tokens
+  if (model.startsWith('o1')) {
+    logWithTimestamp('Using o1 model configuration');
+    if (baseConfig.max_tokens) {
       config.max_completion_tokens = baseConfig.max_tokens;
-    } else {
-      config.max_tokens = baseConfig.max_tokens;
     }
+    return config;
+  }
+
+  // o3-mini has limited parameter support
+  if (model === 'o3-mini') {
+    logWithTimestamp('Using o3-mini model configuration');
+    if (baseConfig.max_tokens) {
+      config.max_completion_tokens = baseConfig.max_tokens;
+    }
+    if (baseConfig.response_format) {
+      config.response_format = baseConfig.response_format;
+    }
+    return config;
+  }
+
+  // For other models (gpt-4o, etc), include all parameters
+  if (baseConfig.temperature) {
+    config.temperature = baseConfig.temperature;
+  }
+
+  if (baseConfig.max_tokens) {
+    config.max_tokens = baseConfig.max_tokens;
   }
 
   if (baseConfig.response_format) {
@@ -705,9 +725,9 @@ Each feature should be specific and actionable.`
       res.json(suggestions);
     } catch (error: any) {
       logWithTimestamp('Error in feature generation:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: error.message,
-        details: "Check server logs for more information" 
+        details: "Check server logs for more information"
       });
     }
   });
@@ -754,7 +774,7 @@ Each feature should be specific and actionable.`
 
       // Update the chat completion creation with dynamic token parameter
       const requestConfig = {
-        ...getModelConfig(model || selectedModel, {max_tokens: maxTokens}),
+        ...getModelConfig(model || selectedModel, { max_tokens: maxTokens }),
         messages: [
           {
             role: "system",
@@ -1362,9 +1382,9 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       res.json(DEFAULT_MODELS);
     } catch (error: any) {
       console.error('Error fetching models:', error);
-      res.status(500).json({ 
-        error: "Failed to fetch models", 
-        message: "Using default model configuration" 
+      res.status(500).json({
+        error: "Failed to fetch models",
+        message: "Using default model configuration"
       });
     }
   });
