@@ -143,42 +143,27 @@ const logWithTimestamp = (message: string, ...args: any[]) => {
 const getModelConfig = (model: string, baseConfig: any = {}) => {
   logWithTimestamp(`Creating config for model: ${model}`);
 
-  // Start with basic config that all models support
+  // Start with only the essential parameters
   const config: any = {
     model: model || "gpt-4o",
     messages: baseConfig.messages || []
   };
 
-  // o1 models only support messages and max_completion_tokens
-  if (model.startsWith('o1')) {
-    logWithTimestamp('Using o1 model configuration');
-    if (baseConfig.max_tokens) {
-      config.max_completion_tokens = baseConfig.max_tokens;
-    }
-    return config;
+  // Only include parameters that were explicitly passed from the client
+  if (baseConfig.parameters) {
+    Object.entries(baseConfig.parameters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        // Special handling for max_tokens in o1 models
+        if (key === 'max_tokens' && model.startsWith('o1')) {
+          config.max_completion_tokens = value;
+        } else {
+          config[key] = value;
+        }
+      }
+    });
   }
 
-  // o3-mini has limited parameter support
-  if (model === 'o3-mini') {
-    logWithTimestamp('Using o3-mini model configuration');
-    if (baseConfig.max_tokens) {
-      config.max_completion_tokens = baseConfig.max_tokens;
-    }
-    if (baseConfig.response_format) {
-      config.response_format = baseConfig.response_format;
-    }
-    return config;
-  }
-
-  // For other models (gpt-4o, etc), include all parameters
-  if (baseConfig.temperature) {
-    config.temperature = baseConfig.temperature;
-  }
-
-  if (baseConfig.max_tokens) {
-    config.max_tokens = baseConfig.max_tokens;
-  }
-
+  // Always include response_format if specified, as it's required for JSON responses
   if (baseConfig.response_format) {
     config.response_format = baseConfig.response_format;
   }
@@ -1433,12 +1418,18 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         }
       },
       'o1': {
-        max_completion_tokens: {
+        max_tokens: {
           type: "integer",
           min: 1,
           max: 128000,
           default: 32000,
-          description: "Maximum number of tokens to generate."
+          description: "Maximum number of tokens to generate (will be converted to max_completion_tokens)."
+        },
+        response_format: {
+          type: "enum",
+          values: ["text", "json_object"],
+          default: "text",
+          description: "Format of the response"
         }
       },
       'o3-mini': {
