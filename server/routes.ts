@@ -15,23 +15,39 @@ import { db } from './db';
 import { eq } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
 
-// Add this helper function at the top of the file after imports
+// Helper function to make OpenAI requests with strict parameter control
 async function makeOpenAIRequest(config: any) {
-  try {
-    return await openai.chat.completions.create(config);
-  } catch (error: any) {
-    if (error.message?.includes("'max_tokens' is not supported with this model")) {
-      logWithTimestamp('Retrying request with max_completion_tokens instead of max_tokens');
-      const retryConfig = { ...config };
-      if (retryConfig.max_tokens) {
-        retryConfig.max_completion_tokens = retryConfig.max_tokens;
-        delete retryConfig.max_tokens;
+  // Start with only the essential parameters
+  const baseRequest = {
+    model: config.model,
+    messages: config.messages
+  };
+
+  // Only add parameters that were explicitly set by the user through the UI
+  if (config.parameters) {
+    logWithTimestamp('Parameters received from client:', config.parameters);
+    Object.entries(config.parameters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        baseRequest[key] = value;
       }
-      return await openai.chat.completions.create(retryConfig);
-    }
+    });
+  }
+
+  // Only add response_format if specifically requested
+  if (config.response_format) {
+    baseRequest.response_format = config.response_format;
+  }
+
+  logWithTimestamp('Final OpenAI request configuration:', baseRequest);
+
+  try {
+    return await openai.chat.completions.create(baseRequest);
+  } catch (error: any) {
+    logWithTimestamp('OpenAI API Error:', error.message);
     throw error;
   }
 }
+
 
 // Store prompts in memory with defaults
 const SystemPrompts = {
@@ -88,24 +104,6 @@ When modifying code:
 8. DO NOT include HTML, just the JavaScript game code`
 };
 
-// Add this after the SystemPrompts definition
-const MODEL_SUPPORTED_PARAMETERS = {
-  'gpt-4o': ['temperature', 'max_tokens', 'top_p', 'frequency_penalty', 'presence_penalty', 'response_format'],
-  'o1': ['max_completion_tokens', 'response_format'],
-  'o3-mini': ['max_completion_tokens', 'response_format']
-};
-
-// Helper function to format model parameters for logging
-const logOpenAIParams = (config: any) => {
-  return {
-    model: config.model,
-    reasoning_effort: config.reasoning_effort,
-    max_completion_tokens: config.max_completion_tokens,
-    temperature: config.temperature,
-    response_format: config.response_format
-  };
-};
-
 // API Logs array with type definition
 interface ApiLog {
   timestamp: string;
@@ -144,43 +142,6 @@ function logApi(message: string, request?: any, response?: any, openAIConfig?: a
 const logWithTimestamp = (message: string, ...args: any[]) => {
   const timestamp = new Date().toLocaleTimeString();
   console.log(`[${timestamp}] ${message}`, ...args);
-};
-
-// Helper function to get model-specific parameters
-const getModelConfig = (model: string, baseConfig: any = {}) => {
-  logWithTimestamp(`Creating config for model: ${model}`);
-
-  // Always include model and messages
-  const config: any = {
-    model: model || "gpt-4o",
-    messages: baseConfig.messages || []
-  };
-
-  // Get list of supported parameters for this model
-  const supportedParams = MODEL_SUPPORTED_PARAMETERS[model] || MODEL_SUPPORTED_PARAMETERS['gpt-4o'];
-
-  // Only include parameters that were explicitly passed AND are supported by the model
-  if (baseConfig.parameters) {
-    Object.entries(baseConfig.parameters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && supportedParams.includes(key)) {
-        config[key] = value;
-      }
-    });
-  }
-
-  // Handle max_tokens conversion for o1 models
-  if (model.startsWith('o1') && config.max_tokens) {
-    config.max_completion_tokens = config.max_tokens;
-    delete config.max_tokens;
-  }
-
-  // Always include response_format if it's supported and specified
-  if (baseConfig.response_format && supportedParams.includes('response_format')) {
-    config.response_format = baseConfig.response_format;
-  }
-
-  logWithTimestamp('Final model config:', config);
-  return config;
 };
 
 const designConversations = new Map<string, Array<{
@@ -562,19 +523,20 @@ export async function registerRoutes(app: Express) {
     res.json(apiLogs);
   });
 
+  // Update the analyze endpoint to use the new approach
   app.post("/api/design/analyze", async (req, res) => {
     try {
-      const { aspect, content, sessionId, model } = req.body;
+      const { aspect, content, sessionId, model, parameters } = req.body;
 
       if (!designConversations.has(sessionId)) {
         designConversations.set(sessionId, []);
       }
       const history = designConversations.get(sessionId)!;
 
-      logApi(`Analyzing ${aspect}`, { aspect, content, model });
+      logApi(`Analyzing ${aspect}`, { aspect, content, model, parameters });
 
       const requestConfig = {
-        ...getModelConfig(model),
+        model: model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -586,7 +548,7 @@ export async function registerRoutes(app: Express) {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7
+        parameters // Pass through any explicitly set parameters
       };
 
       const response = await makeOpenAIRequest(requestConfig);
@@ -607,7 +569,7 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/design/finalize", async (req, res) => {
     try {
-      const { sessionId, model } = req.body;
+      const { sessionId, model, parameters } = req.body;
       const user = (req as any).user;
       const history = designConversations.get(sessionId);
 
@@ -615,10 +577,10 @@ export async function registerRoutes(app: Express) {
         throw new Error("No design conversation found");
       }
 
-      logApi("Generating final design", { sessionId, model });
+      logApi("Generating final design", { sessionId, model, parameters });
 
       const requestConfig = {
-        ...getModelConfig(model),
+        model: model || user.analysis_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -632,7 +594,7 @@ export async function registerRoutes(app: Express) {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7
+        parameters
       };
 
 
@@ -659,17 +621,15 @@ export async function registerRoutes(app: Express) {
   // Update the generate features endpoint
   app.post("/api/design/generate-features", async (req, res) => {
     try {
-      const { gameDesign, currentFeatures, model } = req.body;
-      logWithTimestamp('Feature generation request received', { model });
+      const { gameDesign, currentFeatures, model, parameters } = req.body;
+      logWithTimestamp('Feature generation request received', { model, parameters });
 
       if (!gameDesign) {
         throw new Error("Game design is required");
       }
 
-      const baseConfig = {
-        temperature: 0.7,
-        max_tokens: 8000,
-        response_format: { type: "json_object" },
+      const requestConfig = {
+        model: model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -706,12 +666,12 @@ Please suggest new concrete, implementable features that would enhance this game
 Focus on features that can be implemented using HTML5 Canvas and JavaScript.
 Each feature should be specific and actionable.`
           }
-        ]
+        ],
+        response_format: { type: "json_object" },
+        parameters // Pass through any explicitly set parameters
       };
 
-      const requestConfig = getModelConfig(model || "gpt-4o", baseConfig);
       logWithTimestamp('Sending request to OpenAI with config:', requestConfig);
-
       const response = await makeOpenAIRequest(requestConfig);
       logWithTimestamp('Received response from OpenAI');
 
@@ -730,7 +690,7 @@ Each feature should be specific and actionable.`
 
   app.post("/api/design/generate", async (req, res) => {
     try {
-      const { sessionId, followUpAnswers, analyses, settings, model } = req.body;
+      const { sessionId, followUpAnswers, analyses, settings, model, parameters } = req.body;
       const user = (req as any).user;
       const history = designConversations.get(sessionId);
 
@@ -738,7 +698,7 @@ Each feature should be specific and actionable.`
         throw new Error("No design conversation found");
       }
 
-      logApi("Game generation request", { sessionId, settings, model });
+      logApi("Game generation request", { sessionId, settings, model, parameters });
 
       if (followUpAnswers) {
         Object.entries(followUpAnswers).forEach(([question, answer]) => {
@@ -763,14 +723,9 @@ Each feature should be specific and actionable.`
       const useMaxCompleteTokens = settings?.useMaxCompleteTokens ?? false;
       const selectedModel = settings?.model || 'gpt-4';
 
-      // Determine whether to use max_completion_tokens based on model type and settings
-      const tokenParams = useMaxCompleteTokens && selectedModel.startsWith('o1')
-        ? { max_completion_tokens: maxTokens }
-        : { max_tokens: maxTokens };
 
-      // Update the chat completion creation with dynamic token parameter
       const requestConfig = {
-        ...getModelConfig(model || selectedModel, { max_tokens: maxTokens }),
+        model: model || selectedModel,
         messages: [
           {
             role: "system",
@@ -784,7 +739,8 @@ Each feature should be specific and actionable.`
           }
         ],
         temperature,
-        ...tokenParams
+        max_tokens: maxTokens,
+        parameters
       };
 
       const response = await makeOpenAIRequest(requestConfig);
@@ -807,20 +763,21 @@ Each feature should be specific and actionable.`
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { prompt, modelConfig } = req.body;
+      const { prompt, modelConfig, parameters } = req.body;
       const user = (req as any).user;
 
       logApi("Chat request received", { prompt }, null, { requestedModel: modelConfig?.model });
 
       const requestConfig = {
-        ...getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o"),
+        model: modelConfig?.model || user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
             content: SystemPrompts.SYSTEM_PROMPT
           },
           { role: "user", content: prompt }
-        ]
+        ],
+        parameters
       };
 
       logApi("Chat request configuration", null, null, logOpenAIParams(requestConfig));
@@ -884,17 +841,17 @@ Each feature should be specific and actionable.`
 
   app.post("/api/code/chat", async (req, res) => {
     try {
-      const { code, message, gameDesign, debugContext, isNonTechnicalMode, model } = req.body;
+      const { code, message, gameDesign, debugContext, isNonTechnicalMode, model, parameters } = req.body;
       const user = (req as any).user;
 
-      logApi("Code chat request received", { message, isNonTechnicalMode, model });
+      logApi("Code chat request received", { message, isNonTechnicalMode, model, parameters });
 
       const systemPrompt = isNonTechnicalMode
         ? SystemPrompts.DEBUG_FRIENDLY
         : SystemPrompts.DEBUG_TECHNICAL;
 
       const requestConfig = {
-        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
+        model: model || user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -908,7 +865,8 @@ Each feature should be specific and actionable.`
           }
         ],
         temperature: 0.7,
-        max_tokens: 16000
+        max_tokens: 16000,
+        parameters
       };
 
       const response = await makeOpenAIRequest(requestConfig);
@@ -931,17 +889,17 @@ Each feature should be specific and actionable.`
 
   app.post("/api/code/remix", async (req, res) => {
     try {
-      const { code, features, model } = req.body;
+      const { code, features, model, parameters } = req.body;
       const user = (req as any).user;
 
       const requestConfig = {
-        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
+        model: model || user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
             content: `You are a game development assistant specialized in improving HTML5 Canvas games.
 When providing suggestions:
-1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
+1. Analyze the current game code and suggest 3specific improvements that could make the game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}
 3. Format your response as JSON with this structure:
 {
@@ -958,7 +916,8 @@ When providing suggestions:
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7
+        temperature: 0.7,
+        parameters
       };
 
       const response = await makeOpenAIRequest(requestConfig);
@@ -974,7 +933,7 @@ When providing suggestions:
 
   app.post("/api/code/debug", async (req, res) => {
     try {
-      const { code, error, isNonTechnicalMode, model } = req.body;
+      const { code, error, isNonTechnicalMode, model, parameters } = req.body;
 
       if (!error || !code) {
         return res.status(400).json({
@@ -985,13 +944,14 @@ When providing suggestions:
         });
       }
 
-      logApi("Debug request received", { error, model });
+      logApi("Debug request received", { error, model, parameters });
 
       const systemPrompt = isNonTechnicalMode
         ? SystemPrompts.DEBUG_FRIENDLY
         : SystemPrompts.DEBUG_TECHNICAL;
 
-      const requestConfig = getModelConfig(model || "gpt-4o", {
+      const requestConfig = {
+        model: model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -1002,8 +962,9 @@ When providing suggestions:
             content: `The game has this error:\n${error}\n\nHere's the current code:\n${code}\n\nPlease help fix this issue!`
           }
         ],
-        response_format: { type: "json_object" }
-      });
+        response_format: { type: "json_object" },
+        parameters
+      };
 
       logApi("Debug request configuration", null, null, logOpenAIParams(requestConfig));
 
@@ -1063,13 +1024,13 @@ When providing suggestions:
 
   app.post("/api/hint", async (req, res) => {
     try {
-      const { context, gameDesign, code, currentFeature, model } = req.body;
+      const { context, gameDesign, code, currentFeature, model, parameters } = req.body;
       const user = (req as any).user;
 
-      logApi("Hint request received", { context, currentFeature, model });
+      logApi("Hint request received", { context, currentFeature, model, parameters });
 
       const requestConfig = {
-        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
+        model: model || user.code_gen_model || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -1089,7 +1050,8 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 100
+        max_tokens: 100,
+        parameters
       };
 
       const response = await makeOpenAIRequest(requestConfig);
