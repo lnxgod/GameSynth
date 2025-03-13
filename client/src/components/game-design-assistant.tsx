@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ModelParameterControls } from "@/components/model-parameter-controls";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -97,9 +98,9 @@ export function GameDesignAssistant({
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const { toast } = useToast();
-
-  // Simplified model configuration
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
+  const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
+
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery({
     queryKey: ['models'],
@@ -117,7 +118,8 @@ export function GameDesignAssistant({
         aspect,
         content: requirements[aspect],
         sessionId,
-        model: selectedModel
+        model: selectedModel,
+        parameters: modelParameters
       });
       return res.json();
     },
@@ -133,7 +135,8 @@ export function GameDesignAssistant({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/design/finalize', {
         sessionId,
-        model: selectedModel
+        model: selectedModel,
+        parameters: modelParameters
       });
       return res.json();
     },
@@ -163,7 +166,8 @@ export function GameDesignAssistant({
       const res = await apiRequest('POST', '/api/design/generate-features', {
         gameDesign: finalDesign,
         currentFeatures: generatedFeatures,
-        model: selectedModel
+        model: selectedModel,
+        parameters: modelParameters
       });
       return res.json();
     },
@@ -204,7 +208,8 @@ export function GameDesignAssistant({
             }
           ])
         ),
-        model: selectedModel
+        model: selectedModel,
+        parameters: modelParameters
       });
       return res.json();
     },
@@ -437,9 +442,10 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
 
 
   const renderParameterControls = () => {
-    //This section is removed because model parameters are no longer used.
     return null;
   };
+
+  let showDebugContext = false;
 
   return (
     <Card className="w-full">
@@ -558,7 +564,10 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                     </Select>
                   </div>
 
-
+                  <ModelParameterControls
+                    model={selectedModel}
+                    onParametersChange={setModelParameters}
+                  />
                 </CollapsibleContent>
               </Collapsible>
 

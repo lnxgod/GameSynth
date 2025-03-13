@@ -1389,44 +1389,76 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  // Add model parameters endpoint
+  // Add new endpoint for model parameters
   app.get("/api/model-parameters/:model", async (req, res) => {
     const { model } = req.params;
 
-    const parameters: Record<string, any> = {
-      temperature: {
-        type: "float",
-        min: 0,
-        max: 2,
-        default: 0.7,
-        description: "Controls randomness in the output. Higher values make the output more creative but less predictable."
+    // Define model-specific parameter configurations
+    const modelParams: Record<string, any> = {
+      'gpt-4o': {
+        temperature: {
+          type: "float",
+          min: 0,
+          max: 2,
+          default: 0.7,
+          description: "Controls randomness in the output. Higher values make the output more creative but less predictable."
+        },
+        max_tokens: {
+          type: "integer",
+          min: 1,
+          max: 128000,
+          default: 32000,
+          description: "Maximum number of tokens to generate."
+        },
+        top_p: {
+          type: "float",
+          min: 0,
+          max: 1,
+          default: 1,
+          description: "Alternative to temperature, controls diversity via nucleus sampling."
+        },
+        frequency_penalty: {
+          type: "float",
+          min: -2.0,
+          max: 2.0,
+          default: 0,
+          description: "Decreases the model's likelihood to repeat tokens."
+        },
+        presence_penalty: {
+          type: "float",
+          min: -2.0,
+          max: 2.0,
+          default: 0,
+          description: "Increases the model's likelihood to talk about new topics."
+        }
+      },
+      'o1': {
+        max_completion_tokens: {
+          type: "integer",
+          min: 1,
+          max: 128000,
+          default: 32000,
+          description: "Maximum number of tokens to generate."
+        }
+      },
+      'o3-mini': {
+        max_completion_tokens: {
+          type: "integer",
+          min: 1,
+          max: 64000,
+          default: 16000,
+          description: "Maximum number of tokens to generate."
+        },
+        response_format: {
+          type: "enum",
+          values: ["text", "json_object"],
+          default: "text",
+          description: "Format of the response"
+        }
       }
     };
 
-    if (model === 'o1') {
-      parameters.reasoning_effort = {
-        type: "enum",
-        values: ["low", "medium", "high"],
-        default: "medium",
-        description: "Controls how much effort the model puts into reasoning about the response."
-      };
-    } else if (model.startsWith('o3')) {
-      parameters.max_completion_tokens = {
-        type: "integer",
-        min: 1000,
-        max: 32000,
-        default: 16000,
-        description: "Maximum number of tokens to generate."
-      };
-      parameters.reasoning_effort = {
-        type: "enum",
-        values: ["low", "medium", "high"],
-        default: "medium",
-        description: "Controls how much effort the model puts into reasoning about the response."
-      };
-    }
-
-    res.json(parameters);
+    res.json(modelParams[model] || {});
   });
 
   const DEFAULT_MODELS = {
