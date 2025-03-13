@@ -12,6 +12,7 @@ import {
   X,
   ExternalLink,
   FolderOpen,
+  Loader2
 } from "lucide-react";
 import {
   ResizableHandle,
@@ -19,7 +20,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import Editor from "@monaco-editor/react";
 
@@ -31,7 +32,7 @@ interface CodeFile {
 }
 
 interface Project {
-  id: string;
+  id: number;
   name: string;
   files: CodeFile[];
 }
@@ -48,6 +49,7 @@ export function EnhancedCodeEditor({
   readOnly = false
 }: EnhancedCodeEditorProps) {
   const { auth } = useAuth();
+  const queryClient = useQueryClient();
   const [files, setFiles] = useState<CodeFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled Project");
@@ -68,7 +70,7 @@ export function EnhancedCodeEditor({
   }, [initialCode]);
 
   const saveProjectMutation = useMutation({
-    mutationFn: async (project: Project) => {
+    mutationFn: async (project: { name: string; files: CodeFile[] }) => {
       const res = await apiRequest('POST', '/api/projects', project);
       return res.json();
     },
@@ -77,37 +79,55 @@ export function EnhancedCodeEditor({
         title: "Success",
         description: "Project saved successfully",
       });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       window.history.pushState({}, '', `/editor/${data.id}`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save project",
+        variant: "destructive"
+      });
     }
   });
 
-  // Add query for fetching projects with auth check
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       if (!auth.isAuthenticated) {
-        throw new Error("Authentication required");
+        return [];
       }
       const res = await apiRequest('GET', '/api/projects');
       return res.json();
     },
-    enabled: auth.isAuthenticated // Only fetch when authenticated
+    enabled: auth.isAuthenticated,
   });
 
   const loadProjectMutation = useMutation({
-    mutationFn: async (projectId: string) => {
+    mutationFn: async (projectId: number) => {
       const res = await apiRequest('GET', `/api/projects/${projectId}`);
-      return res.json();
+      const data = await res.json();
+      return data;
     },
     onSuccess: (project: Project) => {
       setFiles(project.files);
       setProjectName(project.name);
       if (project.files.length > 0) {
         setActiveFileId(project.files[0].id);
+        if (onCodeChange) {
+          onCodeChange(project.files[0].content);
+        }
       }
       toast({
         title: "Success",
         description: "Project loaded successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load project",
+        variant: "destructive"
       });
     }
   });
@@ -181,13 +201,12 @@ export function EnhancedCodeEditor({
     }
 
     saveProjectMutation.mutate({
-      id: crypto.randomUUID(),
       name: projectName,
       files
     });
   };
 
-  const loadProject = (projectId: string) => {
+  const loadProject = (projectId: number) => {
     loadProjectMutation.mutate(projectId);
     setShowProjectList(false);
   };
@@ -233,7 +252,11 @@ export function EnhancedCodeEditor({
                   onClick={saveProject}
                   disabled={saveProjectMutation.isPending || !auth.isAuthenticated}
                 >
-                  <Save className="h-4 w-4 mr-1" />
+                  {saveProjectMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-1" />
+                  )}
                   Save
                 </Button>
                 <Button
@@ -260,7 +283,12 @@ export function EnhancedCodeEditor({
                 {showProjectList && (
                   <div className="mb-4 space-y-2">
                     <h3 className="font-semibold px-2">Available Projects</h3>
-                    {projects.length === 0 ? (
+                    {isLoadingProjects ? (
+                      <div className="flex items-center justify-center p-4">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Loading projects...
+                      </div>
+                    ) : projects.length === 0 ? (
                       <div className="text-sm text-muted-foreground px-2">
                         No projects found
                       </div>
