@@ -4,21 +4,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2, ListPlus, FileSpreadsheet } from "lucide-react";
+import { Loader2, Wand2, ListPlus, Settings2, Bug } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { ModelConfig, type ModelConfig as ModelConfigType } from "./model-config";
-import { GraphicsGenerator } from "./graphics-generator";
-import { DebugMenu } from "./model-debug-info";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Update the ModelType definition to be more flexible
+type ModelType = string;
+type ModelInfo = Record<ModelType, string>;
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
   onDesignGenerated: (design: any) => void;
   onFeaturesGenerated: (features: string[]) => void;
-  onGraphicsGenerated?: (graphics: any[]) => void;
   debugContext?: string;
-  onAiOperation?: (op: { type: string; active: boolean }) => void;
 }
 
 interface GameRequirements {
@@ -72,9 +80,7 @@ export function GameDesignAssistant({
   onCodeGenerated,
   onDesignGenerated,
   onFeaturesGenerated,
-  onGraphicsGenerated,
-  debugContext,
-  onAiOperation
+  debugContext
 }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -95,46 +101,47 @@ export function GameDesignAssistant({
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const { toast } = useToast();
-  const [modelConfig, setModelConfig] = useState<ModelConfigType>({
-    model: "o3-mini",
-    temperature: 0.7,
-    reasoning_effort: "medium"
-  });
-  const [generationPrompt, setGenerationPrompt] = useState<string>("");
-  const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
 
-  const analyzeModelMutation = useMutation({
-    mutationFn: async ({ requirements, sessionId }: { requirements: GameRequirements; sessionId: string }) => {
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(8000);
+  const [useMaxCompletionTokens, setUseMaxCompletionTokens] = useState(false);
+
+  const [showDebugContext, setShowDebugContext] = useState(false);
+
+  const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-4o');
+  const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
+  const [isLoadingParameters, setIsLoadingParameters] = useState(false);
+
+  const [parameterValues, setParameterValues] = useState<Record<string, number | string>>({});
+
+  const [enabledParameters, setEnabledParameters] = useState<Record<string, boolean>>({});
+
+
+  const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery<ModelInfo>({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/models');
+      const models = await res.json();
+      return models;
+    },
+    retry: 2,
+    staleTime: 3600000 // Cache for 1 hour
+  });
+
+  const analyzeMutation = useMutation({
+    mutationFn: async (aspect: keyof GameRequirements) => {
       const res = await apiRequest('POST', '/api/design/analyze', {
-        requirements,
+        aspect,
+        content: requirements[aspect],
         sessionId
       });
       return res.json();
     },
-    onSuccess: (data) => {
-      if (data.analysis) {
-        setAnalyses(prev => ({
-          ...prev,
-          ...data.analysis
-        }));
-
-        if (data.needsMoreInfo) {
-          setFollowUpQuestions(data.additionalQuestions || []);
-          setCurrentFollowUpIndex(0);
-          setShowFollowUp(true);
-          toast({
-            title: "Additional Information Needed",
-            description: "Let's answer some follow-up questions to refine the game design.",
-          });
-        } else {
-          toast({
-            title: "Design Analysis Complete",
-            description: "Game design has been analyzed successfully!",
-          });
-          finalizeMutation.mutate();
-        }
-      }
-      onAiOperation?.({ type: '', active: false });
+    onSuccess: (data, aspect) => {
+      setAnalyses(prev => ({
+        ...prev,
+        [aspect]: data
+      }));
     }
   });
 
@@ -162,7 +169,6 @@ export function GameDesignAssistant({
           description: "Game design is complete and ready for implementation!",
         });
       }
-      onDesignGenerated(data);
     }
   });
 
@@ -175,17 +181,48 @@ export function GameDesignAssistant({
       return res.json();
     },
     onSuccess: (data) => {
+      if (!data.features || !Array.isArray(data.features)) {
+        throw new Error("Invalid response format");
+      }
+
       setGeneratedFeatures([...generatedFeatures, ...data.features]);
       onFeaturesGenerated([...generatedFeatures, ...data.features]);
+
       toast({
         title: "Features Generated",
         description: `Added ${data.features.length} new features to the game design.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error Generating Features",
+        description: error.message,
+        variant: "destructive",
       });
     }
   });
 
   const generateMutation = useMutation({
-    mutationFn: async ({ modelConfig }: { modelConfig: ModelConfigType }) => {
+    mutationFn: async () => {
+      const settings: Record<string, any> = {
+        model: selectedModel
+      };
+
+      Object.entries(enabledParameters).forEach(([param, isEnabled]) => {
+        if (isEnabled && parameterValues[param] !== undefined) {
+          if (param === 'max_tokens' && selectedModel.startsWith('o1')) {
+            return;
+          }
+          settings[param] = parameterValues[param];
+        }
+      });
+
+      if (selectedModel.startsWith('o1') && enabledParameters.max_tokens) {
+        settings.max_completion_tokens = parameterValues.max_tokens;
+      }
+
+      console.log('Settings being sent:', settings);
+
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         followUpAnswers,
@@ -199,8 +236,7 @@ export function GameDesignAssistant({
             }
           ])
         ),
-        modelConfig,
-        generationPrompt
+        settings
       });
       return res.json();
     },
@@ -213,31 +249,11 @@ export function GameDesignAssistant({
         });
       }
       onDesignGenerated(data);
-    }
-  });
-
-  const analyzeDevelopmentPlanMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/design/analyze-development-plan', {
-        gameDesign: finalDesign,
-        currentFeatures: generatedFeatures,
-        history: messages
-      });
-      return res.json();
     },
-    onSuccess: (data) => {
-      setGenerationPrompt(data.baseGamePrompt);
-      setGeneratedFeatures(data.developmentSteps);
-      onFeaturesGenerated(data.developmentSteps);
-      toast({
-        title: "Development Plan Generated",
-        description: "Created a structured plan for implementing your game.",
-      });
-    },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to generate development plan",
+        description: error.message,
         variant: "destructive",
       });
     }
@@ -287,42 +303,75 @@ export function GameDesignAssistant({
     }
   };
 
-  const handleThink = () => {
-    onAiOperation?.({ type: 'Analyzing Game Design...', active: true });
-    analyzeModelMutation.mutate({
-      requirements,
-      sessionId
-    });
-  };
-
-  const fillDemoValues = () => {
-    setRequirements({
-      gameType: "Arcade",
-      mechanics: "Frogger-style gameplay where player needs to navigate through obstacles. Player can collect power-ups that provide temporary abilities like invincibility or speed boost.",
-      visualStyle: "16-bit retro graphics with bright colors and smooth animations",
-      difficulty: "Medium - Progressive difficulty increase as levels advance",
-      specialFeatures: "Power-up system including speed boost, invincibility, and extra lives. Score multiplier system based on consecutive successful moves."
-    });
-    setCurrentQuestionIndex(questions.length - 1);
-    setShowFinalPrompt(true);
-  };
-
-  const handleBuildGame = () => {
-    if (!analyses || Object.keys(analyses).length === 0) {
-      toast({
-        title: "Error",
-        description: "Please analyze the game design first before building.",
-        variant: "destructive"
-      });
-      return;
+  const handleThink = async () => {
+    for (const question of questions) {
+      const aspect = question.id as keyof GameRequirements;
+      await analyzeMutation.mutateAsync(aspect);
     }
-    generateMutation.mutate({ modelConfig });
+    await finalizeMutation.mutateAsync();
   };
 
-  useEffect(() => {
-    if (finalDesign) {
-      const defaultPrompt = `Based on these game requirements and our discussion, create a complete HTML5 Canvas game implementation:
+  const currentQuestion = questions[currentQuestionIndex];
 
+  const renderDesignDoc = () => {
+    if (!finalDesign) return null;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Game Design Document</h3>
+        <div className="space-y-4">
+          <div>
+            <div className="font-semibold">Initial Requirements:</div>
+            <ul className="list-disc pl-4">
+              <li>Game Type: {requirements.gameType}</li>
+              <li>Mechanics: {requirements.mechanics}</li>
+              <li>Visual Style: {requirements.visualStyle}</li>
+              <li>Difficulty: {requirements.difficulty}</li>
+              <li>Special Features: {requirements.specialFeatures}</li>
+            </ul>
+          </div>
+
+          <div>
+            <div className="font-semibold">Technical Analysis:</div>
+            {Object.entries(analyses).map(([aspect, analysis]) => (
+              <div key={aspect} className="mt-2">
+                <div className="font-medium capitalize">{aspect}:</div>
+                <div className="text-sm text-muted-foreground">{analysis?.analysis}</div>
+                <ul className="list-disc pl-4 text-sm mt-1">
+                  {analysis?.implementation_details.map((detail, i) => (
+                    <li key={i}>{detail}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {Object.keys(followUpAnswers).length > 0 && (
+            <div>
+              <div className="font-semibold">Follow-up Details:</div>
+              <ul className="list-disc pl-4">
+                {Object.entries(followUpAnswers).map(([question, answer], index) => (
+                  <li key={index}>
+                    <span className="font-medium">{question}</span>: {answer}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAIPrompt = () => {
+    if (!finalDesign) return null;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">AI Generation Prompt</h3>
+        <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+          <pre className="whitespace-pre-wrap font-mono text-sm">
+            {`Creating HTML5 Canvas game with the following specifications:
 Game Description:
 ${finalDesign.gameDescription}
 
@@ -335,18 +384,213 @@ ${finalDesign.technicalRequirements.join("\n")}
 Implementation Approach:
 ${finalDesign.implementationApproach}
 
-Include:
-1. Complete game initialization and setup
-2. Game loop with proper timing
-3. Player controls and movement
-4. Game mechanics implementation
-5. Score tracking and game state management
-6. Clear comments explaining the code
-7. Proper cleanup on game end`;
+Additional Specifications:
+${Object.entries(analyses).map(([aspect, analysis]) =>
+  `${aspect.toUpperCase()}:
+  - Analysis: ${analysis?.analysis}
+  - Implementation: ${analysis?.implementation_details.join(", ")}
+  - Technical: ${analysis?.technical_considerations.join(", ")}`
+).join("\n\n")}
 
-      setGenerationPrompt(defaultPrompt);
+Follow-up Details:
+${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")}`}
+          </pre>
+        </ScrollArea>
+      </div>
+    );
+  };
+
+  const renderCurrentPrompt = () => {
+    if (finalDesign) {
+      return (
+        <>
+          {renderDesignDoc()}
+          {renderAIPrompt()}
+        </>
+      );
     }
-  }, [finalDesign]);
+
+    return (
+      <div className="space-y-4">
+        {Object.entries(requirements).map(([aspect, value]) => {
+          const analysis = analyses[aspect as keyof GameRequirements];
+          return (
+            <div key={aspect} className="space-y-2">
+              <div className="font-semibold capitalize">{aspect}:</div>
+              <div>{value}</div>
+              {analysis && (
+                <>
+                  <div className="text-sm text-muted-foreground">{analysis.analysis}</div>
+                  {analysis.implementation_details.length > 0 && (
+                    <ul className="list-disc pl-4 text-sm">
+                      {analysis.implementation_details.map((detail, index) => (
+                        <li key={index}>{detail}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderDebugContext = () => {
+    if (!debugContext) return null;
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Debug Context</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDebugContext(!showDebugContext)}
+          >
+            {showDebugContext ? "Hide Context" : "Show Context"}
+          </Button>
+        </div>
+
+        {showDebugContext && (
+          <Card className="p-4">
+            <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <Bug className="h-5 w-5 mt-1 text-yellow-500" />
+                  <div>
+                    <div className="font-medium">Current Debug Information:</div>
+                    <pre className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {debugContext}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    const fetchModelParameters = async () => {
+      if (!selectedModel) return;
+
+      setIsLoadingParameters(true);
+      try {
+        const res = await apiRequest('GET', `/api/model-parameters/${selectedModel}`);
+        const params = await res.json();
+        setModelParameters(params);
+
+        const newValues: Record<string, number | string> = {};
+        Object.entries(params).forEach(([param, config]: [string, any]) => {
+          newValues[param] = config.default;
+        });
+        setParameterValues(newValues);
+
+      } catch (error) {
+        console.error('Failed to fetch model parameters:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load model parameters",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingParameters(false);
+      }
+    };
+
+    fetchModelParameters();
+  }, [selectedModel, toast]);
+
+
+  const renderParameterControls = () => {
+    if (isLoadingParameters) {
+      return (
+        <div className="space-y-4">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {Object.entries(modelParameters).map(([param, config]: [string, any]) => (
+          <div key={param} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={`enable-${param}`}
+                  checked={enabledParameters[param] ?? false}
+                  onCheckedChange={(checked) => {
+                    setEnabledParameters(prev => ({
+                      ...prev,
+                      [param]: checked as boolean
+                    }));
+                  }}
+                />
+                <label
+                  htmlFor={`enable-${param}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {param.split('_').map(word =>
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                  ).join(' ')}
+                </label>
+              </div>
+              {config.type === "float" || config.type === "integer" ? (
+                <div className="w-64">
+                  <Slider
+                    value={[parameterValues[param] as number || config.default]}
+                    onValueChange={([value]) => {
+                      setParameterValues(prev => ({
+                        ...prev,
+                        [param]: value
+                      }));
+                    }}
+                    disabled={!enabledParameters[param]}
+                    min={config.min}
+                    max={config.max}
+                    step={config.type === "float" ? 0.1 : 1}
+                    className="w-full"
+                  />
+                </div>
+              ) : config.type === "enum" ? (
+                <Select
+                  value={parameterValues[param] as string}
+                  onValueChange={(value) => {
+                    setParameterValues(prev => ({
+                      ...prev,
+                      [param]: value
+                    }));
+                  }}
+                  disabled={!enabledParameters[param]}
+                >
+                  <SelectTrigger className="w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {config.values.map((value: string) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
+            <div className="text-xs text-muted-foreground pl-6">
+              {config.description}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <Card className="w-full">
@@ -354,56 +598,32 @@ Include:
         <div className="space-y-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Game Design Assistant</h2>
-            <Button
-              variant="outline"
-              onClick={fillDemoValues}
-              className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
-            >
-              Fill Demo Values
-            </Button>
           </div>
 
           <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Current Design</h3>
             <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-              {Object.entries(requirements).map(([aspect, value]) => {
-                const analysis = analyses[aspect as keyof GameRequirements];
-                return (
-                  <div key={aspect} className="space-y-2">
-                    <div className="font-semibold capitalize">{aspect}:</div>
-                    <div>{value}</div>
-                    {analysis && (
-                      <>
-                        <div className="text-sm text-muted-foreground">{analysis.analysis}</div>
-                        {analysis.implementation_details.length > 0 && (
-                          <ul className="list-disc pl-4 text-sm">
-                            {analysis.implementation_details.map((detail, index) => (
-                              <li key={index}>{detail}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+              {renderCurrentPrompt()}
             </ScrollArea>
           </div>
 
+          {renderDebugContext()}
+
           {!showFinalPrompt && !showFollowUp ? (
             <div className="space-y-4">
-              <div className="text-lg mb-2">{questions[currentQuestionIndex].question}</div>
+              <div className="text-lg mb-2">{currentQuestion.question}</div>
 
-              {questions[currentQuestionIndex].type === 'textarea' ? (
+              {currentQuestion.type === 'textarea' ? (
                 <Textarea
-                  placeholder={questions[currentQuestionIndex].placeholder}
-                  value={requirements[questions[currentQuestionIndex].id as keyof GameRequirements]}
+                  placeholder={currentQuestion.placeholder}
+                  value={requirements[currentQuestion.id as keyof GameRequirements]}
                   onChange={(e) => handleAnswer(e.target.value)}
                   className="min-h-[100px]"
                 />
               ) : (
                 <Input
-                  placeholder={questions[currentQuestionIndex].placeholder}
-                  value={requirements[questions[currentQuestionIndex].id as keyof GameRequirements]}
+                  placeholder={currentQuestion.placeholder}
+                  value={requirements[currentQuestion.id as keyof GameRequirements]}
                   onChange={(e) => handleAnswer(e.target.value)}
                 />
               )}
@@ -418,7 +638,7 @@ Include:
                 </Button>
                 <Button
                   onClick={handleNext}
-                  disabled={!requirements[questions[currentQuestionIndex].id as keyof GameRequirements].trim()}
+                  disabled={!requirements[currentQuestion.id as keyof GameRequirements].trim()}
                 >
                   {currentQuestionIndex === questions.length - 1 ? "Review" : "Next"}
                 </Button>
@@ -455,65 +675,48 @@ Include:
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Final Review</h3>
 
-              <ModelConfig onConfigChange={setModelConfig} />
-
-              {finalDesign && (
-                <>
-                  <div className="mt-4">
-                    <h3 className="text-lg font-semibold mb-2">Development Plan</h3>
-                    <Button
-                      variant="secondary"
-                      onClick={() => analyzeDevelopmentPlanMutation.mutate()}
-                      disabled={analyzeDevelopmentPlanMutation.isPending}
-                      className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white mb-4"
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" className="w-full">
+                    <Settings2 className="mr-2 h-4 w-4" />
+                    Generation Settings
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Model Selection</label>
+                    <Select
+                      value={selectedModel}
+                      onValueChange={(value) => setSelectedModel(value as ModelType)}
+                      disabled={isLoadingModels}
                     >
-                      {analyzeDevelopmentPlanMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Analyzing Development Steps...
-                        </>
-                      ) : (
-                        <>
-                          <FileSpreadsheet className="mr-2 h-4 w-4" />
-                          Create Development Plan
-                        </>
-                      )}
-                    </Button>
-                    <Textarea
-                      value={generationPrompt}
-                      onChange={(e) => setGenerationPrompt(e.target.value)}
-                      className="min-h-[200px] font-mono text-sm"
-                      placeholder="Customize how your game code should be generated..."
-                    />
+                      <SelectTrigger>
+                        <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select a model"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isLoadingModels ? (
+                          <SelectItem value="loading">Loading available models...</SelectItem>
+                        ) : modelsError ? (
+                          <SelectItem value="error">Error loading models</SelectItem>
+                        ) : (
+                          availableModels && Object.entries(availableModels).map(([id, name]) => (
+                            <SelectItem key={id} value={id}>
+                              {name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {isLoadingModels ? "Loading available models..." :
+                        modelsError ? "Error loading models, using defaults" :
+                          "Select the AI model to use for code generation"}
+                    </p>
                   </div>
 
-                  {generatedFeatures.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="text-md font-semibold mb-2">Implementation Steps</h4>
-                      <ScrollArea className="h-[200px] w-full rounded-md border p-4">
-                        <ol className="list-decimal pl-4 space-y-2">
-                          {generatedFeatures.map((feature, index) => (
-                            <li key={index} className="text-sm">
-                              {feature}
-                            </li>
-                          ))}
-                        </ol>
-                      </ScrollArea>
-                    </div>
-                  )}
-
-                  <div className="mt-4">
-                    <GraphicsGenerator
-                      gameDesign={finalDesign}
-                      onGraphicsGenerated={(graphics) => {
-                        if (onGraphicsGenerated) {
-                          onGraphicsGenerated(graphics);
-                        }
-                      }}
-                    />
-                  </div>
-                </>
-              )}
+                  {renderParameterControls()}
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="flex justify-between mt-4 space-x-4">
                 <Button variant="outline" onClick={handleBack}>
@@ -522,9 +725,9 @@ Include:
                 <Button
                   variant="secondary"
                   onClick={handleThink}
-                  disabled={analyzeModelMutation.isPending || finalizeMutation.isPending}
+                  disabled={analyzeMutation.isPending || finalizeMutation.isPending}
                 >
-                  {analyzeModelMutation.isPending || finalizeMutation.isPending ? (
+                  {analyzeMutation.isPending || finalizeMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Analyzing...
@@ -555,8 +758,8 @@ Include:
                   )}
                 </Button>
                 <Button
-                  onClick={handleBuildGame}
-                  disabled={generateMutation.isPending || Object.keys(analyses).length === 0}
+                  onClick={() => generateMutation.mutate()}
+                  disabled={generateMutation.isPending}
                 >
                   {generateMutation.isPending ? (
                     <>
@@ -571,14 +774,6 @@ Include:
                   )}
                 </Button>
               </div>
-
-              <DebugMenu
-                codeGenModel={modelConfig.model}
-                analysisModel="o3-mini"
-                developmentPlanModel="o1"
-                graphicsModel="o3-mini"
-                currentConfig={modelConfig}
-              />
             </div>
           )}
 
@@ -592,14 +787,14 @@ Include:
                       key={index}
                       className={`flex ${
                         message.role === 'assistant' ? 'justify-start' : 'justify-end'
-                      }`}
+                        }`}
                     >
                       <div
                         className={`max-w-[80%] rounded-lg p-3 ${
                           message.role === 'assistant'
                             ? 'bg-muted'
                             : 'bg-primary text-primary-foreground'
-                        }`}
+                          }`}
                       >
                         {message.content}
                       </div>

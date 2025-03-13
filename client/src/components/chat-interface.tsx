@@ -4,16 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Settings2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { sendChatMessage } from "@/lib/openai";
 import { useToast } from "@/hooks/use-toast";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Slider } from "@/components/ui/slider";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ModelConfig, type ModelConfig as ModelConfigType } from "./model-config";
-import { DebugMenu } from "./model-debug-info";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ChatInterfaceProps {
   onCodeReceived: (code: string) => void;
@@ -30,20 +29,14 @@ When providing code:
 
 export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
   const [prompt, setPrompt] = useState("");
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(16000); 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [modelConfig, setModelConfig] = useState<ModelConfigType>({
-    model: "o3-mini",
-    temperature: 0.7,
-    reasoning_effort: "medium"
-  });
   const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: async (variables: { prompt: string; modelConfig: ModelConfigType }) =>
-      apiRequest('POST', '/api/chat', {
-        prompt: variables.prompt,
-        modelConfig: variables.modelConfig
-      }).then(res => res.json()),
+    mutationFn: (variables: { prompt: string; temperature: number; maxTokens: number }) =>
+      sendChatMessage(variables.prompt, variables.temperature, variables.maxTokens),
     onSuccess: (data) => {
       if (data.code) {
         onCodeReceived(data.code);
@@ -65,7 +58,7 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
-    mutation.mutate({ prompt, modelConfig });
+    mutation.mutate({ prompt, temperature, maxTokens });
   };
 
   return (
@@ -83,14 +76,43 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
               <CollapsibleContent className="space-y-4 mt-4">
                 <div className="space-y-4">
                   <div className="space-y-2">
+                    <label className="text-sm font-medium">System Prompt</label>
                     <ScrollArea className="h-[200px] w-full rounded-md border p-4">
                       <pre className="text-xs whitespace-pre-wrap font-mono">
                         {SYSTEM_PROMPT}
                       </pre>
                     </ScrollArea>
                   </div>
-
-                  <ModelConfig onConfigChange={setModelConfig} />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Temperature: {temperature}
+                    </label>
+                    <Slider
+                      value={[temperature]}
+                      onValueChange={([value]) => setTemperature(value)}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Higher values make the output more creative but less predictable
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Max Tokens: {maxTokens}
+                    </label>
+                    <Slider 
+                      value={[maxTokens]}
+                      onValueChange={([value]) => setMaxTokens(value)}
+                      min={1000}
+                      max={16000} 
+                      step={1000}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum length of the generated response (maximum supported by the model)
+                    </p>
+                  </div>
                 </div>
               </CollapsibleContent>
             </Collapsible>
@@ -115,14 +137,6 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
               "Generate Game"
             )}
           </Button>
-
-          <DebugMenu
-            codeGenModel={modelConfig.model}
-            analysisModel="o3-mini"
-            developmentPlanModel="o1"
-            graphicsModel="o3-mini"
-            currentConfig={modelConfig}
-          />
         </form>
       </CardContent>
     </Card>
