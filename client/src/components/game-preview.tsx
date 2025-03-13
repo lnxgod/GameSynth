@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play, Square, Wand2, Loader2 } from "lucide-react";
+import { Play, Square, Save, Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,7 +44,7 @@ export function GamePreview({ code, onDebugLog, onCodeUpdate, gameDesign }: Game
             (function() {
               const canvas = document.getElementById('gameCanvas');
               const ctx = canvas.getContext('2d');
-              
+
               // Set canvas size to match window
               function resizeCanvas() {
                 canvas.width = window.innerWidth;
@@ -134,6 +134,32 @@ export function GamePreview({ code, onDebugLog, onCodeUpdate, gameDesign }: Game
       onDebugLog?.("🛑 Game stopped");
     } catch (error: any) {
       console.error("Error stopping game:", error);
+    }
+  };
+
+  const saveGameAsHTML = () => {
+    try {
+      const htmlContent = generateGameHTML(code);
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'game.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Game Saved",
+        description: "The game has been saved as an HTML file.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to save game: " + error.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -234,6 +260,10 @@ export function GamePreview({ code, onDebugLog, onCodeUpdate, gameDesign }: Game
               Stop
             </Button>
           )}
+          <Button onClick={saveGameAsHTML} variant="outline">
+            <Save className="mr-2 h-4 w-4" />
+            Save HTML
+          </Button>
           <Button
             onClick={() => setShowRemixChat(!showRemixChat)}
             variant="secondary"
