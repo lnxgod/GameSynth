@@ -182,14 +182,14 @@ export function GameDesignAssistant({
         sessionId,
         model: selectedModel,
         parameters: modelParameters,
-        systemPrompt // Include system prompt in the request
+        systemPrompt
       });
       return res.json();
     },
     onSuccess: (data) => {
       setMessages(data.history);
       setFinalDesign(data);
-      setEditableDesign(JSON.stringify(data, null, 2));
+      setEditableDesign(data.description || "");
       toast({
         title: "Design Ready",
         description: "Game design is complete and ready for implementation!",
@@ -222,15 +222,6 @@ export function GameDesignAssistant({
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      let designToUse = finalDesign;
-      try {
-        if (editableDesign) {
-          designToUse = JSON.parse(editableDesign);
-        }
-      } catch (e) {
-        throw new Error("Invalid design format. Please check your JSON syntax.");
-      }
-
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         analyses: Object.fromEntries(
@@ -245,7 +236,7 @@ export function GameDesignAssistant({
         ),
         model: selectedModel,
         parameters: modelParameters,
-        design: designToUse,
+        design: editableDesign,
         systemPrompt
       });
       return res.json();
@@ -566,8 +557,8 @@ export function GameDesignAssistant({
                 <Textarea
                   value={editableDesign}
                   onChange={(e) => setEditableDesign(e.target.value)}
-                  className="min-h-[200px] font-mono text-sm"
-                  placeholder="Edit the final design before code generation..."
+                  className="min-h-[200px]"
+                  placeholder="Edit the game design description..."
                 />
               </Card>
             )}

@@ -11,13 +11,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BuildControls } from "@/components/build-controls";
 import crypto from 'crypto';
-import { GamePreview } from "./game-preview";
 
 
 interface ProjectState {
   name: string;
   code: string;
-  gameDesign: any;
+  gameDesign: string; // Changed to string for editable text
   designSettings: {
     parameterValues: any;
     enabledParameters: any;
@@ -38,7 +37,7 @@ interface CodeEditorProps {
   code: string;
   onCodeChange: (code: string) => void;
   addDebugLog?: (message: string) => void;
-  gameDesign?: any;
+  gameDesign?: string; // Changed to string for editable text
   debugContext?: string;
   onAiOperation?: (op: { type: string; active: boolean }) => void;
 }
@@ -71,23 +70,13 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
     const [selectedModel, setSelectedModel] = useState<any>(null);
     const [modelParameters, setModelParameters] = useState<any>(null);
     const [versions, setVersions] = useState<Version[]>([]);
+    const [localGameDesign, setLocalGameDesign] = useState<string>(gameDesign || ''); // Added state for gameDesign
 
 
     useEffect(() => {
-      if (gameDesign && gameDesign.coreMechanics && gameDesign.technicalRequirements) {
-        const newFeatures: Feature[] = [
-          ...(gameDesign.coreMechanics || []).map((mechanic: string) => ({
-            id: `mechanic-${mechanic}`,
-            description: mechanic,
-            completed: false
-          })),
-          ...(gameDesign.technicalRequirements || []).map((req: string) => ({
-            id: `tech-${req}`,
-            description: req,
-            completed: false
-          }))
-        ];
-        setFeatures(newFeatures);
+      if (gameDesign) {
+        const parsedGameDesign = typeof gameDesign === 'string' ? gameDesign : JSON.stringify(gameDesign, null, 2); //Handle string or object
+        setLocalGameDesign(parsedGameDesign);
       }
     }, [gameDesign]);
 
@@ -113,7 +102,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         const res = await apiRequest("POST", "/api/code/chat", {
           code: localCode,
           message,
-          gameDesign,
+          gameDesign: localGameDesign, // Use localGameDesign state
           debugContext
         });
         return res.json();
@@ -294,7 +283,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
       const projectState: ProjectState = {
         name: saveName,
         code: localCode,
-        gameDesign: gameDesign || {},
+        gameDesign: localGameDesign, // Use localGameDesign state
         designSettings,
         features: features,
         timestamp: new Date().toISOString(),
@@ -324,7 +313,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
         setSelectedModel(selectedModel);
         setModelParameters(modelParameters);
       }
-
+      setLocalGameDesign(project.gameDesign); // Update localGameDesign state
       toast({
         title: "Success",
         description: "Project loaded successfully",
@@ -335,6 +324,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
       if (confirm("Are you sure you want to reset? This will clear the current code.")) {
         setLocalCode("");
         onCodeChange("");
+        setLocalGameDesign(''); // Reset gameDesign
         toast({
           title: "Reset",
           description: "Code editor has been reset",
@@ -477,97 +467,100 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
               <textarea
                 value={localCode}
                 onChange={handleCodeChange}
-                className="w-full h-[600px] font-mono text-sm p-4 bg-background border rounded-md"
+                className="w-full h-[300px] font-mono text-sm p-4 bg-background border rounded-md"
                 spellCheck="false"
               />
             </div>
+            <div className="flex-1">
+              <Textarea
+                value={localGameDesign}
+                onChange={(e) => setLocalGameDesign(e.target.value)}
+                className="w-full h-[300px] font-mono text-sm p-4 bg-background border rounded-md"
+                placeholder="Enter or edit game design JSON here..."
+              />
+            </div>
+          </div>
 
-            {(showChat || showRemixSuggestions || showBuildControls) && (
-              <Card className="w-96 p-4">
-                <ScrollArea className="h-[600px]">
-                  <div className="space-y-4">
-                    {showRemixSuggestions ? (
-                      <div className="space-y-4">
-                        <div className="font-semibold mb-4">
-                          Choose an improvement to implement:
-                        </div>
-                        {remixSuggestions.map((suggestion, index) => (
-                          <Button
-                            key={index}
-                            onClick={() => handleRemixSelection(suggestion)}
-                            variant="outline"
-                            className="w-full text-left justify-start h-auto whitespace-normal p-4"
-                          >
-                            {suggestion}
-                          </Button>
-                        ))}
+
+          {(showChat || showRemixSuggestions || showBuildControls) && (
+            <Card className="w-96 p-4">
+              <ScrollArea className="h-[600px]">
+                <div className="space-y-4">
+                  {showRemixSuggestions ? (
+                    <div className="space-y-4">
+                      <div className="font-semibold mb-4">
+                        Choose an improvement to implement:
                       </div>
-                    ) : (
-                      <>
-                        {chatHistory.map((msg, index) => (
+                      {remixSuggestions.map((suggestion, index) => (
+                        <Button
+                          key={index}
+                          onClick={() => handleRemixSelection(suggestion)}
+                          variant="outline"
+                          className="w-full text-left justify-start h-auto whitespace-normal p-4"
+                        >
+                          {suggestion}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      {chatHistory.map((msg, index) => (
+                        <div
+                          key={index}
+                          className={`flex ${
+                            msg.role === 'assistant' ? 'justify-start' : 'justify-end'
+                          }`}
+                        >
                           <div
-                            key={index}
-                            className={`flex ${
-                              msg.role === 'assistant' ? 'justify-start' : 'justify-end'
+                            className={`max-w-[80%] rounded-lg p-3 ${
+                              msg.role === 'assistant'
+                                ? 'bg-muted'
+                                : 'bg-primary text-primary-foreground'
                             }`}
                           >
-                            <div
-                              className={`max-w-[80%] rounded-lg p-3 ${
-                                msg.role === 'assistant'
-                                  ? 'bg-muted'
-                                  : 'bg-primary text-primary-foreground'
-                              }`}
-                            >
-                              <pre className="whitespace-pre-wrap text-sm">
-                                {msg.content}
-                              </pre>
-                            </div>
+                            <pre className="whitespace-pre-wrap text-sm">
+                              {msg.content}
+                            </pre>
                           </div>
-                        ))}
-                        <form onSubmit={handleChatSubmit} className="mt-4 space-y-2">
-                          <Textarea
-                            placeholder="Ask about modifying or debugging your code..."
-                            value={chatMessage}
-                            onChange={(e) => setChatMessage(e.target.value)}
-                            className="min-h-[80px]"
-                          />
-                          <Button
-                            type="submit"
-                            className="w-full"
-                            disabled={chatMutation.isPending}
-                          >
-                            {chatMutation.isPending ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Processing...
-                              </>
-                            ) : (
-                              "Send"
-                            )}
-                          </Button>
-                        </form>
-                      </>
-                    )}
-                    {showBuildControls && (
-                      <Card className="w-96 p-4">
-                        <BuildControls
-                          gameCode={localCode}
-                          onBuildStart={() => onAiOperation?.({ type: 'Building Android APK...', active: true })}
-                          onBuildComplete={() => onAiOperation?.({ type: '', active: false })}
+                        </div>
+                      ))}
+                      <form onSubmit={handleChatSubmit} className="mt-4 space-y-2">
+                        <Textarea
+                          placeholder="Ask about modifying or debugging your code..."
+                          value={chatMessage}
+                          onChange={(e) => setChatMessage(e.target.value)}
+                          className="min-h-[80px]"
                         />
-                      </Card>
-                    )}
-                  </div>
-                </ScrollArea>
-              </Card>
-            )}
-          </div>
-          <GamePreview
-            code={localCode}
-            onDebugLog={addDebugLog}
-            onCodeUpdate={onCodeChange}
-            gameDesign={gameDesign}
-          />
+                        <Button
+                          type="submit"
+                          className="w-full"
+                          disabled={chatMutation.isPending}
+                        >
+                          {chatMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            "Send"
+                          )}
+                        </Button>
+                      </form>
+                    </>
+                  )}
+                  {showBuildControls && (
+                    <Card className="w-96 p-4">
+                      <BuildControls
+                        gameCode={localCode}
+                        onBuildStart={() => onAiOperation?.({ type: 'Building Android APK...', active: true })}
+                        onBuildComplete={() => onAiOperation?.({ type: '', active: false })}
+                      />
+                    </Card>
+                  )}
+                </div>
+              </ScrollArea>
+            </Card>
+          )}
         </div>
       </Card>
     );
