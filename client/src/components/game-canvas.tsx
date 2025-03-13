@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play, Square } from "lucide-react";
+import { Play, Square, Wand2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { gameEvents } from "@/lib/EventManager";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface GameCanvasProps {
   code: string;
@@ -14,6 +18,8 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
   const [isRunning, setIsRunning] = useState(false);
+  const [showRemixChat, setShowRemixChat] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
   const { toast } = useToast();
 
   // Clean up function to stop the game
@@ -36,6 +42,37 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
   };
+
+  const remixMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const res = await apiRequest("POST", "/api/code/chat", {
+        code,
+        message,
+        type: "remix"
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.updatedCode) {
+        onDebugLog?.("🎮 Game code remixed successfully");
+        toast({
+          title: "Game Remixed",
+          description: "The game code has been updated with your suggestions",
+        });
+        setShowRemixChat(false);
+        setChatMessage("");
+        stopGame();
+        startGame();
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remix game code",
+        variant: "destructive",
+      });
+    }
+  });
 
   // Global error handler for the game
   const handleGameError = (error: any) => {
@@ -159,6 +196,12 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     }
   };
 
+  const handleRemix = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+    remixMutation.mutate(chatMessage);
+  };
+
   // Cleanup on unmount or code change
   useEffect(() => {
     return () => {
@@ -183,14 +226,61 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
               Stop
             </Button>
           )}
+          <Button
+            onClick={() => setShowRemixChat(!showRemixChat)}
+            variant="secondary"
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+          >
+            <Wand2 className="mr-2 h-4 w-4" />
+            Remix
+          </Button>
         </div>
-        <canvas
-          ref={canvasRef}
-          width={800}
-          height={600}
-          className="w-full h-[600px] border border-border rounded-md bg-black"
-          style={{ aspectRatio: "4/3" }}
-        />
+
+        <div className="flex gap-4">
+          <canvas
+            ref={canvasRef}
+            width={800}
+            height={600}
+            className="w-full h-[600px] border border-border rounded-md bg-black"
+            style={{ aspectRatio: "4/3" }}
+          />
+
+          {showRemixChat && (
+            <Card className="w-96 p-4">
+              <ScrollArea className="h-[600px]">
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Remix Game</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Describe how you'd like to modify the game. For example:
+                    "Add power-ups", "Make the game faster", or "Change the colors".
+                  </p>
+                  <form onSubmit={handleRemix} className="space-y-4">
+                    <Textarea
+                      placeholder="What would you like to change?"
+                      value={chatMessage}
+                      onChange={(e) => setChatMessage(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={remixMutation.isPending}
+                    >
+                      {remixMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Remixing...
+                        </>
+                      ) : (
+                        "Apply Changes"
+                      )}
+                    </Button>
+                  </form>
+                </div>
+              </ScrollArea>
+            </Card>
+          )}
+        </div>
       </div>
     </Card>
   );
