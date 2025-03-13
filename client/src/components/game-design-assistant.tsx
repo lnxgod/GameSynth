@@ -93,6 +93,7 @@ export function GameDesignAssistant({
   });
   const [analyses, setAnalyses] = useState<Partial<Record<keyof GameRequirements, AnalyzedAspect>>>({});
   const [finalDesign, setFinalDesign] = useState<any>(null);
+  const [editableDesign, setEditableDesign] = useState<string>("");
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
@@ -104,6 +105,10 @@ export function GameDesignAssistant({
     difficulty: { status: 'idle', progress: 0 },
     specialFeatures: { status: 'idle', progress: 0 }
   });
+  const [systemPrompt, setSystemPrompt] = useState<string>(
+    `You are an expert game designer and developer. Analyze the given requirements and create detailed implementation plans. 
+     Focus on creating engaging, polished games that are fun to play and technically sound.`
+  );
   const { toast } = useToast();
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery({
@@ -176,13 +181,15 @@ export function GameDesignAssistant({
       const res = await apiRequest('POST', '/api/design/finalize', {
         sessionId,
         model: selectedModel,
-        parameters: modelParameters
+        parameters: modelParameters,
+        systemPrompt // Include system prompt in the request
       });
       return res.json();
     },
     onSuccess: (data) => {
       setMessages(data.history);
       setFinalDesign(data);
+      setEditableDesign(JSON.stringify(data, null, 2));
       toast({
         title: "Design Ready",
         description: "Game design is complete and ready for implementation!",
@@ -215,6 +222,15 @@ export function GameDesignAssistant({
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      let designToUse = finalDesign;
+      try {
+        if (editableDesign) {
+          designToUse = JSON.parse(editableDesign);
+        }
+      } catch (e) {
+        throw new Error("Invalid design format. Please check your JSON syntax.");
+      }
+
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         analyses: Object.fromEntries(
@@ -228,7 +244,9 @@ export function GameDesignAssistant({
           ])
         ),
         model: selectedModel,
-        parameters: modelParameters
+        parameters: modelParameters,
+        design: designToUse,
+        systemPrompt
       });
       return res.json();
     },
@@ -254,7 +272,6 @@ export function GameDesignAssistant({
       return;
     }
 
-    // Run all analyses concurrently
     try {
       const aspects = Object.keys(requirements) as (keyof GameRequirements)[];
       const analysisPromises = aspects.map(aspect => {
@@ -300,17 +317,14 @@ export function GameDesignAssistant({
         });
       });
 
-      // Wait for all analyses to complete
       const results = await Promise.allSettled(analysisPromises);
 
-      // Process successful results
       const successfulResults = results
         .filter((result): result is PromiseFulfilledResult<{ aspect: keyof GameRequirements, data: any }> =>
           result.status === 'fulfilled'
         )
         .map(result => result.value);
 
-      // Update analyses state with all successful results
       const newAnalyses = successfulResults.reduce((acc, { aspect, data }) => ({
         ...acc,
         [aspect]: data
@@ -318,7 +332,6 @@ export function GameDesignAssistant({
 
       setAnalyses(newAnalyses);
 
-      // Process failed results
       const failedResults = results
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map(result => result.reason);
@@ -331,7 +344,6 @@ export function GameDesignAssistant({
         });
       });
 
-      // If we have any successful results, proceed with finalization
       if (successfulResults.length > 0) {
         await finalizeMutation.mutateAsync();
       }
@@ -406,10 +418,20 @@ export function GameDesignAssistant({
             <CollapsibleTrigger asChild>
               <Button variant="outline" className="w-full">
                 <Settings2 className="mr-2 h-4 w-4" />
-                Model Settings
+                Advanced Settings
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">System Prompt</label>
+                <Textarea
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  className="min-h-[100px] font-mono text-sm"
+                  placeholder="Customize the AI's behavior and focus..."
+                />
+              </div>
+
               <div className="space-y-2 mb-4">
                 <label className="text-sm font-medium">AI Model</label>
                 <Select
@@ -537,6 +559,18 @@ export function GameDesignAssistant({
                 </ScrollArea>
               </Card>
             </div>
+
+            {finalDesign && (
+              <Card className="p-4 space-y-4">
+                <h3 className="font-semibold">Final Design (Editable)</h3>
+                <Textarea
+                  value={editableDesign}
+                  onChange={(e) => setEditableDesign(e.target.value)}
+                  className="min-h-[200px] font-mono text-sm"
+                  placeholder="Edit the final design before code generation..."
+                />
+              </Card>
+            )}
 
             <div className="flex justify-end space-x-4">
               <Button
