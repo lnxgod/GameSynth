@@ -13,6 +13,7 @@ import {
   GitBranch,
   History,
   RotateCcw,
+  Settings,
   Loader2
 } from "lucide-react";
 import {
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/resizable";
 import { useToast } from "@/hooks/use-toast";
 import Editor from "@monaco-editor/react";
+import { SystemPromptEditor } from "./system-prompt-editor";
 
 interface Version {
   timestamp: number;
@@ -59,6 +61,7 @@ export function EnhancedCodeEditor({
   const [projectName, setProjectName] = useState("Untitled Project");
   const [versions, setVersions] = useState<Version[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -223,6 +226,14 @@ export function EnhancedCodeEditor({
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setShowSettings(!showSettings)}
+                >
+                  <Settings className="h-4 w-4 mr-1" />
+                  Settings
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={addNewFile}
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -232,7 +243,9 @@ export function EnhancedCodeEditor({
             </div>
             <ScrollArea className="h-[calc(100%-80px)]">
               <div className="p-2">
-                {showHistory ? (
+                {showSettings ? (
+                  <SystemPromptEditor />
+                ) : showHistory ? (
                   <div className="mb-4 space-y-2">
                     <h3 className="font-semibold px-2">Version History</h3>
                     {versions.map((version, index) => (
