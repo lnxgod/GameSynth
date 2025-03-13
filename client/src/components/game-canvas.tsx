@@ -39,20 +39,15 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
   // Global error handler for the game
   const handleGameError = (error: any) => {
-    // Log the error details
     const errorDetails = {
       message: error.message || "Unknown error",
       stack: error.stack,
       timestamp: new Date().toISOString()
     };
 
-    // Send to debug logs
     onDebugLog?.(`🚨 Error executing game code: ${JSON.stringify(errorDetails)}`);
-
-    // Stop the game
     stopGame();
 
-    // Show a user-friendly toast
     toast({
       title: "Game Error",
       description: "There was an error running the game. Check the debug logs for details.",
@@ -86,11 +81,12 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     onDebugLog?.(`📐 Canvas size: ${canvas.width}x${canvas.height}`);
 
     try {
-      // Create a safer environment for the game code
+      // Create a sandboxed environment for the game code
       const gameEnvironment = {
+        // Canvas-related
         canvas,
         ctx,
-        // Wrap requestAnimationFrame to maintain our frame reference
+        // Animation frame handling
         requestAnimationFrame: (callback: FrameRequestCallback) => {
           frameRef.current = requestAnimationFrame(callback);
           return frameRef.current;
@@ -101,27 +97,38 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
             frameRef.current = undefined;
           }
         },
-        // Provide safe event handling methods
-        addEventListener: (event: string, callback: Function) => {
-          gameEvents.on(event, callback);
+        // Event handling functions
+        document: {
+          addEventListener: (event: string, callback: Function) => {
+            gameEvents.on(event, callback);
+          },
+          removeEventListener: (event: string, callback: Function) => {
+            gameEvents.off(event, callback);
+          }
         },
-        removeEventListener: (event: string, callback: Function) => {
-          gameEvents.off(event, callback);
+        window: {
+          addEventListener: (event: string, callback: Function) => {
+            gameEvents.on(event, callback);
+          },
+          removeEventListener: (event: string, callback: Function) => {
+            gameEvents.off(event, callback);
+          },
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight
         },
-        // Provide one-time event handling
-        once: (event: string, callback: Function) => {
-          gameEvents.once(event, callback);
-        },
-        // Access to emit events (useful for custom game events)
-        emit: (event: string, ...args: any[]) => {
-          gameEvents.emit(event, ...args);
+        // Custom event system
+        gameEvents: {
+          on: (event: string, callback: Function) => gameEvents.on(event, callback),
+          off: (event: string, callback: Function) => gameEvents.off(event, callback),
+          once: (event: string, callback: Function) => gameEvents.once(event, callback),
+          emit: (event: string, ...args: any[]) => gameEvents.emit(event, ...args)
         }
       };
 
-      // Wrap game code in error handling
+      // Wrap game code in error handling and provide the sandboxed environment
       const wrappedCode = `
         try {
-          const { canvas, ctx, addEventListener, removeEventListener, once, emit, requestAnimationFrame, cancelAnimationFrame } = gameEnv;
+          const { canvas, ctx, document, window, gameEvents, requestAnimationFrame, cancelAnimationFrame } = gameEnv;
           ${code}
         } catch (error) {
           throw new Error(JSON.stringify({
