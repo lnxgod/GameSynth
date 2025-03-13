@@ -17,6 +17,7 @@ interface GameCanvasProps {
 export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
+  const sandboxRef = useRef<any>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [showRemixChat, setShowRemixChat] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
@@ -24,14 +25,30 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
   // Clean up function to stop the game
   const stopGame = () => {
-    if (frameRef.current) {
-      cancelAnimationFrame(frameRef.current);
-      frameRef.current = undefined;
+    try {
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = undefined;
+      }
+
+      // Clear all event listeners
+      gameEvents.clear();
+      gameEvents.disable();
+
+      // Clear sandbox
+      if (sandboxRef.current) {
+        // Clean up any global objects created by the game
+        Object.keys(sandboxRef.current).forEach(key => {
+          delete sandboxRef.current[key];
+        });
+        sandboxRef.current = null;
+      }
+
+      setIsRunning(false);
+      onDebugLog?.("🛑 Game stopped");
+    } catch (error) {
+      console.error("Error stopping game:", error);
     }
-    setIsRunning(false);
-    gameEvents.clear(); // Clear all event listeners
-    gameEvents.disable(); // Disable event system
-    onDebugLog?.("🛑 Game stopped");
   };
 
   // Reset canvas
@@ -118,8 +135,8 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     onDebugLog?.(`📐 Canvas size: ${canvas.width}x${canvas.height}`);
 
     try {
-      // Create a sandboxed environment for the game code
-      const gameEnvironment = {
+      // Create a fresh sandbox for each game instance
+      sandboxRef.current = {
         // Canvas-related
         canvas,
         ctx,
@@ -159,14 +176,31 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
           off: (event: string, callback: Function) => gameEvents.off(event, callback),
           once: (event: string, callback: Function) => gameEvents.once(event, callback),
           emit: (event: string, ...args: any[]) => gameEvents.emit(event, ...args)
+        },
+        // Utility functions
+        Math: Math,
+        Date: Date,
+        console: {
+          log: (...args: any[]) => {
+            console.log('[Game]:', ...args);
+            onDebugLog?.(`📝 Game Log: ${args.join(' ')}`);
+          },
+          error: (...args: any[]) => {
+            console.error('[Game Error]:', ...args);
+            onDebugLog?.(`❌ Game Error: ${args.join(' ')}`);
+          }
         }
       };
 
       // Wrap game code in error handling and provide the sandboxed environment
       const wrappedCode = `
+        "use strict";
         try {
-          const { canvas, ctx, document, window, gameEvents, requestAnimationFrame, cancelAnimationFrame } = gameEnv;
-          ${code}
+          const { canvas, ctx, document, window, gameEvents, requestAnimationFrame, cancelAnimationFrame, Math, Date, console } = gameEnv;
+          // Wrap the game code in an IIFE to avoid global scope pollution
+          (function() {
+            ${code}
+          })();
         } catch (error) {
           throw new Error(JSON.stringify({
             message: error.message,
@@ -185,7 +219,7 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
       // Run the game with error handling
       try {
-        gameFunction(gameEnvironment);
+        gameFunction(sandboxRef.current);
         setIsRunning(true);
         onDebugLog?.("✅ Game started successfully");
       } catch (error) {
@@ -212,8 +246,8 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
   }, [code]);
 
   return (
-    <Card className="p-4">
-      <div className="space-y-4">
+    <Card className="w-full">
+      <div className="p-4 space-y-4">
         <div className="flex gap-2 justify-end">
           {!isRunning ? (
             <Button onClick={startGame} className="w-24">
