@@ -15,8 +15,6 @@ import { db } from './db';
 import { eq } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
 
-// Add at the beginning of the file, after imports
-
 // Store prompts in memory with defaults
 const SystemPrompts = {
   DESIGN_ASSISTANT_PROMPT: `You are a game design assistant helping users create HTML5 Canvas games. 
@@ -123,10 +121,9 @@ const getModelConfig = (model: string, baseConfig: any = {}) => {
   const config: any = {
     model: model || "gpt-4o",
     messages: baseConfig.messages || [],
-    temperature: 0.7,
+    temperature: baseConfig.temperature || 0.7,
   };
 
-  // O1 specific configuration
   if (model.startsWith('o1')) {
     if (baseConfig.max_tokens) {
       config.max_completion_tokens = baseConfig.max_tokens;
@@ -135,8 +132,8 @@ const getModelConfig = (model: string, baseConfig: any = {}) => {
     return config;
   }
 
-  // Regular configuration for other models
-  if (baseConfig.max_tokens) {
+  // For other models
+  if (baseConfig.max_tokens && !model.startsWith('o1')) {
     config.max_tokens = baseConfig.max_tokens;
   }
 
@@ -236,8 +233,6 @@ export async function registerRoutes(app: Express) {
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
   }));
-
-  // Add these new routes inside registerRoutes function, before other routes
 
   // Get current prompts
   app.get("/api/prompts", isAuthenticated, async (req, res) => {
@@ -622,10 +617,10 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Update the generate features endpoint
   app.post("/api/design/generate-features", async (req, res) => {
     try {
       const { gameDesign, currentFeatures, model } = req.body;
-      const user = (req as any).user;
 
       if (!gameDesign) {
         throw new Error("Game design is required");
@@ -633,8 +628,7 @@ export async function registerRoutes(app: Express) {
 
       logApi("Generating features request", { gameDesign, currentFeatures, model });
 
-      const requestConfig = {
-        ...getModelConfig(model),
+      const requestConfig = getModelConfig(model || "gpt-4o", {
         messages: [
           {
             role: "system",
@@ -646,8 +640,7 @@ Format your response as JSON with this structure:
   "features": [
     "Feature 1: Detailed description",
     "Feature 2: Detailed description",
-    "Feature 3: Detailed description",
-    ...
+    "Feature 3: Detailed description"
   ]
 }`
           },
@@ -676,7 +669,7 @@ Each feature should be specific and actionable.`
         ],
         response_format: { type: "json_object" },
         temperature: 0.7
-      };
+      });
 
       const response = await openai.chat.completions.create(requestConfig);
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
@@ -900,7 +893,7 @@ Each feature should be specific and actionable.`
         messages: [
           {
             role: "system",
-            content: `You are a game development assistant specialized in improving HTML5 Canvas games.
+content: `You are a game development assistant specialized in improving HTML5 Canvas games.
 When providing suggestions:
 1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}
