@@ -61,36 +61,12 @@ function logApi(message: string, request?: any, response?: any, openAIConfig?: a
   }
 }
 
-// Helper function to get model-specific parameters
-const getModelConfig = (model: string, baseConfig: any) => {
-  const config: any = {
-    model,
-    messages: baseConfig.messages
-  };
-
-  // O1 specific configuration - only supports reasoning_effort
-  if (model === 'o1') {
-    if (baseConfig.reasoning_effort) {
-      config.reasoning_effort = baseConfig.reasoning_effort;
-    }
-    return config;
-  }
-
-  // O3 models support all parameters
-  if (model.startsWith('o3')) {
-    return {
-      ...config,
-      temperature: baseConfig.temperature,
-      response_format: baseConfig.response_format,
-      reasoning_effort: baseConfig.reasoning_effort
-    };
-  }
-
-  // GPT-4 and other models
+// Simplified model config helper
+const getModelConfig = (model: string) => {
+  // Only return the essential configuration
   return {
-    ...config,
-    temperature: baseConfig.temperature,
-    max_tokens: baseConfig.max_tokens
+    model: model || "gpt-4o",
+    messages: [] // Will be populated by the route handlers
   };
 };
 
@@ -450,18 +426,17 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/design/analyze", async (req, res) => {
     try {
-      const { aspect, content, sessionId } = req.body;
-      const user = (req as any).user;
+      const { aspect, content, sessionId, model } = req.body;
 
       if (!designConversations.has(sessionId)) {
         designConversations.set(sessionId, []);
       }
       const history = designConversations.get(sessionId)!;
 
-      logApi(`Analyzing ${aspect}`, { aspect, content });
+      logApi(`Analyzing ${aspect}`, { aspect, content, model });
 
-      const response = await openai.chat.completions.create({
-        model: user.analysis_model || "gpt-4o", // Use analysis model preference
+      const requestConfig = {
+        ...getModelConfig(model),
         messages: [
           {
             role: "system",
@@ -474,8 +449,9 @@ export async function registerRoutes(app: Express) {
         ],
         response_format: { type: "json_object" },
         temperature: 0.7
-      });
+      };
 
+      const response = await openai.chat.completions.create(requestConfig);
       const analysis = JSON.parse(response.choices[0].message.content || "{}");
 
       history.push({
@@ -493,7 +469,7 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/design/finalize", async (req, res) => {
     try {
-      const { sessionId } = req.body;
+      const { sessionId, model } = req.body;
       const user = (req as any).user;
       const history = designConversations.get(sessionId);
 
@@ -501,10 +477,10 @@ export async function registerRoutes(app: Express) {
         throw new Error("No design conversation found");
       }
 
-      logApi("Generating final design", { sessionId });
+      logApi("Generating final design", { sessionId, model });
 
-      const response = await openai.chat.completions.create({
-        model: user.analysis_model || "gpt-4o", // Use analysis model preference
+      const requestConfig = {
+        ...getModelConfig(model),
         messages: [
           {
             role: "system",
@@ -519,7 +495,10 @@ export async function registerRoutes(app: Express) {
         ],
         response_format: { type: "json_object" },
         temperature: 0.7
-      });
+      };
+
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const finalDesign = JSON.parse(response.choices[0].message.content || "{}");
 
@@ -541,17 +520,17 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/design/generate-features", async (req, res) => {
     try {
-      const { gameDesign, currentFeatures } = req.body;
+      const { gameDesign, currentFeatures, model } = req.body;
       const user = (req as any).user;
 
       if (!gameDesign) {
         throw new Error("Game design is required");
       }
 
-      logApi("Generating features request", { gameDesign, currentFeatures });
+      logApi("Generating features request", { gameDesign, currentFeatures, model });
 
-      const response = await openai.chat.completions.create({
-        model: user.analysis_model || "gpt-4o", // Use analysis model preference
+      const requestConfig = {
+        ...getModelConfig(model),
         messages: [
           {
             role: "system",
@@ -593,8 +572,9 @@ Each feature should be specific and actionable.`
         ],
         response_format: { type: "json_object" },
         temperature: 0.7
-      });
+      };
 
+      const response = await openai.chat.completions.create(requestConfig);
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
       logApi("Feature suggestions generated", { gameDesign }, suggestions);
@@ -607,7 +587,7 @@ Each feature should be specific and actionable.`
 
   app.post("/api/design/generate", async (req, res) => {
     try {
-      const { sessionId, followUpAnswers, analyses, settings } = req.body;
+      const { sessionId, followUpAnswers, analyses, settings, model } = req.body;
       const user = (req as any).user;
       const history = designConversations.get(sessionId);
 
@@ -615,7 +595,7 @@ Each feature should be specific and actionable.`
         throw new Error("No design conversation found");
       }
 
-      logApi("Game generation request", { sessionId, settings });
+      logApi("Game generation request", { sessionId, settings, model });
 
       if (followUpAnswers) {
         Object.entries(followUpAnswers).forEach(([question, answer]) => {
@@ -646,8 +626,8 @@ Each feature should be specific and actionable.`
         : { max_tokens: maxTokens };
 
       // Update the chat completion creation with dynamic token parameter
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || selectedModel, // Use code generation model preference
+      const requestConfig = {
+        ...getModelConfig(model || selectedModel),
         messages: [
           {
             role: "system",
@@ -662,7 +642,9 @@ Each feature should be specific and actionable.`
         ],
         temperature,
         ...tokenParams
-      });
+      };
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const code = extractGameCode(content);
@@ -687,21 +669,16 @@ Each feature should be specific and actionable.`
 
       logApi("Chat request received", { prompt }, null, { requestedModel: modelConfig?.model });
 
-      const baseConfig = {
-        messages: [
-          {
-            role: "system",
-            content: SYSTEM_PROMPT
-          },
-          { role: "user", content: prompt }
-        ]
+      const requestConfig = {
+          ...getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o"),
+          messages: [
+              {
+                  role: "system",
+                  content: SYSTEM_PROMPT
+              },
+              { role: "user", content: prompt }
+          ]
       };
-
-      // Use model-specific configuration
-      const requestConfig = getModelConfig(modelConfig?.model || user.code_gen_model || "gpt-4o", {
-        ...baseConfig,
-        ...modelConfig
-      });
 
       logApi("Chat request configuration", null, null, logOpenAIParams(requestConfig));
 
@@ -764,10 +741,10 @@ Each feature should be specific and actionable.`
 
   app.post("/api/code/chat", async (req, res) => {
     try {
-      const { code, message, gameDesign, debugContext, isNonTechnicalMode } = req.body;
+      const { code, message, gameDesign, debugContext, isNonTechnicalMode, model } = req.body;
       const user = (req as any).user;
 
-      logApi("Code chat request received", { message, isNonTechnicalMode });
+      logApi("Code chat request received", { message, isNonTechnicalMode, model });
 
       const systemPrompt = isNonTechnicalMode
         ? `You are a friendly game development assistant helping create HTML5 Canvas games.
@@ -791,8 +768,8 @@ When modifying code:
 7. Assume canvas and ctx are available in the scope
 8. DO NOT include HTML, just the JavaScript game code`;
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
         messages: [
           {
             role: "system",
@@ -807,7 +784,9 @@ When modifying code:
         ],
         temperature: 0.7,
         max_tokens: 16000
-      });
+      };
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
@@ -827,11 +806,11 @@ When modifying code:
 
   app.post("/api/code/remix", async (req, res) => {
     try {
-      const { code, features } = req.body;
+      const { code, features, model } = req.body;
       const user = (req as any).user;
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
         messages: [
           {
             role: "system",
@@ -855,8 +834,9 @@ When providing suggestions:
         ],
         response_format: { type: "json_object" },
         temperature: 0.7
-      });
+      };
 
+      const response = await openai.chat.completions.create(requestConfig);
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
       logApi("Remix suggestions generated", { code }, suggestions);
@@ -869,7 +849,7 @@ When providing suggestions:
 
   app.post("/api/code/debug", async (req, res) => {
     try {
-      const { code, error, isNonTechnicalMode } = req.body;
+      const { code, error, isNonTechnicalMode, model } = req.body;
       const user = (req as any).user;
 
       if (!error || !code) {
@@ -880,7 +860,7 @@ When providing suggestions:
             : "Please run the game first so I can help fix any errors.",
         });
       }
-      logApi("Debug request received", { error });
+      logApi("Debug request received", { error, model });
 
       const systemPrompt = isNonTechnicalMode
         ? `You are a friendly game helper who explains problems in simple terms.
@@ -921,8 +901,8 @@ Format your response as:
 2. 💡 How we'll fix it
 3. Complete fixed code between +++CODESTART+++ and +++CODESTOP+++ markers`;
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
         messages: [
           {
             role: "system",
@@ -941,7 +921,9 @@ Please help fix this issue!`
         ],
         temperature: 0.7,
         max_tokens: 16000
-      });
+      };
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
@@ -1009,13 +991,13 @@ Please help fix this issue!`
 
   app.post("/api/hint", async (req, res) => {
     try {
-      const { context, gameDesign, code, currentFeature } = req.body;
+      const { context, gameDesign, code, currentFeature, model } = req.body;
       const user = (req as any).user;
 
-      logApi("Hint request received", { context, currentFeature });
+      logApi("Hint request received", { context, currentFeature, model });
 
-      const response = await openai.chat.completions.create({
-        model: user.code_gen_model || "gpt-4o", // Use code generation model preference
+      const requestConfig = {
+        ...getModelConfig(model || user.code_gen_model || "gpt-4o"),
         messages: [
           {
             role: "system",
@@ -1036,7 +1018,9 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         ],
         temperature: 0.7,
         max_tokens: 100
-      });
+      };
+
+      const response = await openai.chat.completions.create(requestConfig);
 
       const hint = response.choices[0].message.content || "Keep up the great work! 🎮";
 
@@ -1319,7 +1303,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   // Add models endpoint
   app.get("/api/models", async (req, res) => {
     try {
-      // For now, return default models since OpenAI API integration is pending
       res.json(DEFAULT_MODELS);
     } catch (error: any) {
       console.error('Error fetching models:', error);
