@@ -88,6 +88,13 @@ When modifying code:
 8. DO NOT include HTML, just the JavaScript game code`
 };
 
+// Add this after the SystemPrompts definition
+const MODEL_SUPPORTED_PARAMETERS = {
+  'gpt-4o': ['temperature', 'max_tokens', 'top_p', 'frequency_penalty', 'presence_penalty', 'response_format'],
+  'o1': ['max_completion_tokens', 'response_format'],
+  'o3-mini': ['max_completion_tokens', 'response_format']
+};
+
 // Helper function to format model parameters for logging
 const logOpenAIParams = (config: any) => {
   return {
@@ -143,28 +150,32 @@ const logWithTimestamp = (message: string, ...args: any[]) => {
 const getModelConfig = (model: string, baseConfig: any = {}) => {
   logWithTimestamp(`Creating config for model: ${model}`);
 
-  // Start with only the essential parameters
+  // Always include model and messages
   const config: any = {
     model: model || "gpt-4o",
     messages: baseConfig.messages || []
   };
 
-  // Only include parameters that were explicitly passed from the client
+  // Get list of supported parameters for this model
+  const supportedParams = MODEL_SUPPORTED_PARAMETERS[model] || MODEL_SUPPORTED_PARAMETERS['gpt-4o'];
+
+  // Only include parameters that were explicitly passed AND are supported by the model
   if (baseConfig.parameters) {
     Object.entries(baseConfig.parameters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        // Special handling for max_tokens in o1 models
-        if (key === 'max_tokens' && model.startsWith('o1')) {
-          config.max_completion_tokens = value;
-        } else {
-          config[key] = value;
-        }
+      if (value !== undefined && value !== null && supportedParams.includes(key)) {
+        config[key] = value;
       }
     });
   }
 
-  // Always include response_format if specified, as it's required for JSON responses
-  if (baseConfig.response_format) {
+  // Handle max_tokens conversion for o1 models
+  if (model.startsWith('o1') && config.max_tokens) {
+    config.max_completion_tokens = config.max_tokens;
+    delete config.max_tokens;
+  }
+
+  // Always include response_format if it's supported and specified
+  if (baseConfig.response_format && supportedParams.includes('response_format')) {
     config.response_format = baseConfig.response_format;
   }
 
