@@ -3,13 +3,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2, ListPlus } from "lucide-react";
+import { Loader2, Wand2, ListPlus, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModelParameterControls } from "@/components/model-parameter-controls";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -85,6 +90,16 @@ export function GameDesignAssistant({
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
   const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
   const { toast } = useToast();
+
+  const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/models');
+      return res.json();
+    },
+    retry: 2,
+    staleTime: 3600000 // Cache for 1 hour
+  });
 
   const analyzeMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
@@ -179,7 +194,6 @@ export function GameDesignAssistant({
   });
 
   const handleThink = async () => {
-    // Validate all required fields are filled
     if (!requirements.gameType || !requirements.mechanics || !requirements.visualStyle || !requirements.difficulty || !requirements.specialFeatures) {
       toast({
         title: "Missing Information",
@@ -230,11 +244,52 @@ export function GameDesignAssistant({
         <div className="space-y-6">
           <h2 className="text-2xl font-bold">Game Design Assistant</h2>
 
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Model Settings
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-md">
+              <div className="space-y-2 mb-4">
+                <label className="text-sm font-medium">AI Model</label>
+                <Select
+                  value={selectedModel}
+                  onValueChange={setSelectedModel}
+                  disabled={isLoadingModels}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select a model"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {isLoadingModels ? (
+                      <SelectItem value="loading">Loading available models...</SelectItem>
+                    ) : modelsError ? (
+                      <SelectItem value="error">Error loading models</SelectItem>
+                    ) : (
+                      availableModels && Object.entries(availableModels).map(([id, name]) => (
+                        <SelectItem key={id} value={id}>
+                          {name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <ModelParameterControls
+                model={selectedModel}
+                onParametersChange={setModelParameters}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Game Type</label>
-                <Select 
+                <Select
                   value={requirements.gameType}
                   onValueChange={(value) => setRequirements(prev => ({ ...prev, gameType: value }))}
                 >
