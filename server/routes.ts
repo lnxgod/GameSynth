@@ -133,7 +133,7 @@ const getModelConfig = (model: string, baseConfig: any = {}) => {
 
   if (model.startsWith('o1')) {
     logWithTimestamp('Using o1 model configuration');
-    config.max_completion_tokens = baseConfig.max_tokens || 8000;
+    config.max_completion_tokens = baseConfig.max_completion_tokens || 8000;
     return config;
   }
 
@@ -633,16 +633,14 @@ export async function registerRoutes(app: Express) {
         throw new Error("Game design is required");
       }
 
-      const requestConfig = getModelConfig(model || "gpt-4o", {
-        max_tokens: 8000,
+      // Create base configuration without token limits
+      const baseConfig = {
         temperature: 0.7,
-        response_format: { type: "json_object" }
-      });
-
-      requestConfig.messages = [
-        {
-          role: "system",
-          content: `You are a game design assistant helping to break down game features into implementation tasks.
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `You are a game design assistant helping to break down game features into implementation tasks.
 Analyze the game design and suggest specific, implementable features that would enhance the game.
 Format your response as JSON with this structure:
 {
@@ -652,10 +650,10 @@ Format your response as JSON with this structure:
     "Feature 3: Detailed description"
   ]
 }`
-        },
-        {
-          role: "user",
-          content: `Based on this game design, suggest specific features to implement:
+          },
+          {
+            role: "user",
+            content: `Based on this game design, suggest specific features to implement:
 Game Description:
 ${gameDesign.gameDescription}
 
@@ -674,10 +672,14 @@ ${currentFeatures ? currentFeatures.map((f: any) => f.description).join("\n") : 
 Please suggest new concrete, implementable features that would enhance this game design.
 Focus on features that can be implemented using HTML5 Canvas and JavaScript.
 Each feature should be specific and actionable.`
-        }
-      ];
+          }
+        ]
+      };
 
-      logWithTimestamp('Sending request to OpenAI');
+      // Model-specific configuration handled by getModelConfig
+      const requestConfig = getModelConfig(model || "gpt-4o", baseConfig);
+
+      logWithTimestamp('Sending request to OpenAI with config:', requestConfig);
       const response = await openai.chat.completions.create(requestConfig);
       logWithTimestamp('Received response from OpenAI');
 
