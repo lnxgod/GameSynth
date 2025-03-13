@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatInterface } from "@/components/chat-interface";
 import { GameCanvas } from "@/components/game-canvas";
-import { CodeEditor } from "@/components/code-editor";
+import { EnhancedCodeEditor } from "@/components/enhanced-code-editor";
 import { DebugLogs } from "@/components/debug-logs";
 import { ApiLogs } from "@/components/api-logs";
 import { GameDesignAssistant } from "@/components/game-design-assistant";
@@ -10,7 +10,6 @@ import { AIStatusIndicator } from "@/components/ai-status-indicator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ConfigMenu } from "@/components/config-menu";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState("");
@@ -113,7 +112,6 @@ export default function Home() {
             <TabsTrigger value="preview" className="flex-1">Game Preview</TabsTrigger>
             <TabsTrigger value="code" className="flex-1" data-tab="code">Code Editor</TabsTrigger>
             <TabsTrigger value="features" className="flex-1">Features</TabsTrigger>
-            <TabsTrigger value="config" className="flex-1">Config</TabsTrigger>
             <TabsTrigger value="debug" className="flex-1">Debug Logs</TabsTrigger>
             <TabsTrigger value="api" className="flex-1">API Logs</TabsTrigger>
           </TabsList>
@@ -123,15 +121,10 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="code" className="mt-4">
-            <CodeEditor
-              ref={codeEditorRef}
-              code={gameCode}
+            <EnhancedCodeEditor
+              initialCode={gameCode}
               onCodeChange={handleCodeChange}
-              addDebugLog={addDebugLog}
-              gameDesign={gameDesign}
-              debugContext={debugContext}
-              onAiOperation={setAiOperation}
-              isNonTechnicalMode={isNonTechnicalMode}
+              readOnly={false}
             />
           </TabsContent>
 
@@ -143,10 +136,6 @@ export default function Home() {
               onAiOperation={setAiOperation}
               isNonTechnicalMode={isNonTechnicalMode}
             />
-          </TabsContent>
-
-          <TabsContent value="config" className="mt-4">
-            <ConfigMenu />
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4">
