@@ -18,6 +18,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ModelParameterControls } from "@/components/model-parameter-controls";
+import { AnalysisVisualization } from "@/components/analysis-visualization";
 
 interface GameDesignAssistantProps {
   onCodeGenerated: (code: string) => void;
@@ -378,27 +379,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
 
     return (
       <div className="space-y-4">
-        {Object.entries(requirements).map(([aspect, value]) => {
-          const analysis = analyses[aspect as keyof GameRequirements];
-          return (
-            <div key={aspect} className="space-y-2">
-              <div className="font-semibold capitalize">{aspect}:</div>
-              <div>{value}</div>
-              {analysis && (
-                <>
-                  <div className="text-sm text-muted-foreground">{analysis.analysis}</div>
-                  {analysis.implementation_details.length > 0 && (
-                    <ul className="list-disc pl-4 text-sm">
-                      {analysis.implementation_details.map((detail, index) => (
-                        <li key={index}>{detail}</li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
+        <AnalysisVisualization analyses={analyses} />
       </div>
     );
   };
