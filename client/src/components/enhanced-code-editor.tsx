@@ -1,0 +1,257 @@
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { 
+  FolderTree, 
+  FileCode, 
+  Save, 
+  Plus, 
+  X, 
+  Settings2,
+  FolderOpen,
+  Download
+} from "lucide-react";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import Prism from "prismjs";
+import "prismjs/themes/prism.css";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-jsx";
+import "prismjs/components/prism-tsx";
+
+interface CodeFile {
+  id: string;
+  name: string;
+  content: string;
+  language: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  files: CodeFile[];
+}
+
+interface EnhancedCodeEditorProps {
+  initialCode?: string;
+  onCodeChange?: (code: string) => void;
+  readOnly?: boolean;
+}
+
+export function EnhancedCodeEditor({ 
+  initialCode = "", 
+  onCodeChange,
+  readOnly = false 
+}: EnhancedCodeEditorProps) {
+  const [files, setFiles] = useState<CodeFile[]>([]);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("Untitled Project");
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (initialCode && files.length === 0) {
+      const initialFile: CodeFile = {
+        id: crypto.randomUUID(),
+        name: "main.js",
+        content: initialCode,
+        language: "javascript"
+      };
+      setFiles([initialFile]);
+      setActiveFileId(initialFile.id);
+    }
+  }, [initialCode]);
+
+  const saveProjectMutation = useMutation({
+    mutationFn: async (project: Project) => {
+      const res = await apiRequest('POST', '/api/projects', project);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Project saved successfully",
+      });
+    }
+  });
+
+  const loadProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const res = await apiRequest('GET', `/api/projects/${projectId}`);
+      return res.json();
+    },
+    onSuccess: (project: Project) => {
+      setFiles(project.files);
+      setProjectName(project.name);
+      if (project.files.length > 0) {
+        setActiveFileId(project.files[0].id);
+      }
+    }
+  });
+
+  const handleFileChange = (fileId: string, newContent: string) => {
+    setFiles(prevFiles => 
+      prevFiles.map(file => 
+        file.id === fileId 
+          ? { ...file, content: newContent }
+          : file
+      )
+    );
+
+    if (onCodeChange && fileId === activeFileId) {
+      onCodeChange(newContent);
+    }
+  };
+
+  const addNewFile = () => {
+    const newFile: CodeFile = {
+      id: crypto.randomUUID(),
+      name: "untitled.js",
+      content: "",
+      language: "javascript"
+    };
+    setFiles(prev => [...prev, newFile]);
+    setActiveFileId(newFile.id);
+  };
+
+  const removeFile = (fileId: string) => {
+    setFiles(prev => prev.filter(f => f.id !== fileId));
+    if (activeFileId === fileId) {
+      setActiveFileId(files[0]?.id || null);
+    }
+  };
+
+  const renameFile = (fileId: string, newName: string) => {
+    setFiles(prev => 
+      prev.map(file => 
+        file.id === fileId 
+          ? { ...file, name: newName }
+          : file
+      )
+    );
+  };
+
+  const saveProject = () => {
+    saveProjectMutation.mutate({
+      id: crypto.randomUUID(),
+      name: projectName,
+      files
+    });
+  };
+
+  const activeFile = files.find(f => f.id === activeFileId);
+
+  return (
+    <Card className="w-full h-[600px] overflow-hidden">
+      <ResizablePanelGroup direction="horizontal">
+        <ResizablePanel defaultSize={20} minSize={15}>
+          <div className="h-full border-r">
+            <div className="p-4 border-b">
+              <Input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="mb-2"
+              />
+              <div className="flex space-x-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={saveProject}
+                  disabled={saveProjectMutation.isPending}
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={addNewFile}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New File
+                </Button>
+              </div>
+            </div>
+            <ScrollArea className="h-[calc(100%-80px)]">
+              <div className="p-2">
+                {files.map(file => (
+                  <div
+                    key={file.id}
+                    className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                      file.id === activeFileId ? 'bg-muted' : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => setActiveFileId(file.id)}
+                  >
+                    <div className="flex items-center">
+                      <FileCode className="h-4 w-4 mr-2" />
+                      <Input
+                        value={file.name}
+                        onChange={(e) => renameFile(file.id, e.target.value)}
+                        className="h-6 px-1 bg-transparent"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(file.id);
+                      }}
+                      disabled={files.length === 1}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle />
+
+        <ResizablePanel defaultSize={80}>
+          <div className="h-full flex flex-col">
+            <div className="border-b">
+              <ScrollArea orientation="horizontal">
+                <TabsList>
+                  {files.map(file => (
+                    <TabsTrigger
+                      key={file.id}
+                      value={file.id}
+                      className={activeFileId === file.id ? 'bg-muted' : ''}
+                      onClick={() => setActiveFileId(file.id)}
+                    >
+                      {file.name}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </ScrollArea>
+            </div>
+
+            {activeFile && (
+              <div className="flex-1 p-4 bg-muted/30">
+                <textarea
+                  value={activeFile.content}
+                  onChange={(e) => handleFileChange(activeFile.id, e.target.value)}
+                  className="w-full h-full font-mono text-sm bg-transparent resize-none focus:outline-none"
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </Card>
+  );
+}

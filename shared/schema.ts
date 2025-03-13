@@ -41,17 +41,35 @@ export const features = pgTable("features", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
-// Add new table for game designs
 export const gameDesigns = pgTable("game_designs", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
-  analyses: jsonb("analyses").notNull(), // Store all aspect analyses
-  finalDesign: jsonb("final_design").notNull(), // Store the final design document
-  settings: jsonb("settings"), // Store generation settings
+  analyses: jsonb("analyses").notNull(), 
+  finalDesign: jsonb("final_design").notNull(), 
+  settings: jsonb("settings"), 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   userId: integer("user_id").references(() => users.id),
+});
+
+// Add new tables for code projects
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  userId: integer("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const projectFiles = pgTable("project_files", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id),
+  name: text("name").notNull(),
+  content: text("content").notNull(),
+  language: text("language").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Keep existing schemas
@@ -90,7 +108,6 @@ export const insertFeatureSchema = createInsertSchema(features).pick({
   completed: true,
 });
 
-// Add new schema for game designs
 export const insertGameDesignSchema = createInsertSchema(gameDesigns).pick({
   name: true,
   description: true,
@@ -99,7 +116,20 @@ export const insertGameDesignSchema = createInsertSchema(gameDesigns).pick({
   settings: true,
 });
 
-// Type exports
+// Add new schemas for projects
+export const insertProjectSchema = createInsertSchema(projects).pick({
+  name: true,
+  userId: true,
+});
+
+export const insertProjectFileSchema = createInsertSchema(projectFiles).pick({
+  projectId: true,
+  name: true,
+  content: true,
+  language: true,
+});
+
+// Add new types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertChat = z.infer<typeof insertChatSchema>;
@@ -110,3 +140,7 @@ export type InsertFeature = z.infer<typeof insertFeatureSchema>;
 export type Feature = typeof features.$inferSelect;
 export type InsertGameDesign = z.infer<typeof insertGameDesignSchema>;
 export type GameDesign = typeof gameDesigns.$inferSelect;
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+export type Project = typeof projects.$inferSelect;
+export type InsertProjectFile = z.infer<typeof insertProjectFileSchema>;
+export type ProjectFile = typeof projectFiles.$inferSelect;

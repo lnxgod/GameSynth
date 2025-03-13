@@ -1,5 +1,10 @@
 import { drizzle } from 'drizzle-orm/neon-serverless';
-import { chats, games, features, users, type Chat, type Game, type Feature, type User, type InsertChat, type InsertGame, type InsertFeature, type InsertUser } from "@shared/schema";
+import { 
+  chats, games, features, users, projects, projectFiles,
+  type Chat, type Game, type Feature, type User, 
+  type InsertChat, type InsertGame, type InsertFeature, type InsertUser,
+  type Project, type ProjectFile, type InsertProject, type InsertProjectFile
+} from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from 'drizzle-orm';
 import { db } from './db'; // Import the db instance from db.ts
@@ -7,14 +12,26 @@ import { type GameDesign, type InsertGameDesign } from '@shared/schema'; // Assu
 
 
 export interface IStorage {
-  // Add new methods to interface
+  // Add new project methods
+  createProject(project: InsertProject): Promise<Project>;
+  getProject(id: number): Promise<Project | undefined>;
+  getAllProjects(userId: number): Promise<Project[]>;
+  updateProject(id: number, name: string): Promise<Project>;
+  deleteProject(id: number): Promise<Project>;
+
+  // Add file methods
+  createProjectFile(file: InsertProjectFile): Promise<ProjectFile>;
+  getProjectFile(id: number): Promise<ProjectFile | undefined>;
+  getAllProjectFiles(projectId: number): Promise<ProjectFile[]>;
+  updateProjectFile(id: number, content: string): Promise<ProjectFile>;
+  deleteProjectFile(id: number): Promise<ProjectFile>;
+
+  // Keep existing methods
   createGameDesign(design: InsertGameDesign & { userId: number }): Promise<GameDesign>;
   getGameDesign(id: number): Promise<GameDesign | undefined>;
   getAllGameDesigns(userId: number): Promise<GameDesign[]>;
   updateGameDesign(id: number, design: Partial<InsertGameDesign>): Promise<GameDesign>;
   deleteGameDesign(id: number): Promise<GameDesign>;
-
-  // Keep existing methods
   createUser(user: InsertUser): Promise<User>;
   getUser(username: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
@@ -34,45 +51,79 @@ export interface IStorage {
 }
 
 export class PostgresStorage implements IStorage {
-  // Add new methods implementation
-  async createGameDesign(design: InsertGameDesign & { userId: number }): Promise<GameDesign> {
-    const [newDesign] = await db.insert(gameDesigns).values({
-      ...design,
-      updatedAt: new Date(),
+  // Implement new project methods
+  async createProject(project: InsertProject): Promise<Project> {
+    const [newProject] = await db.insert(projects).values({
+      ...project,
+      createdAt: new Date(),
+      updatedAt: new Date()
     }).returning();
-    return newDesign;
+    return newProject;
   }
 
-  async getGameDesign(id: number): Promise<GameDesign | undefined> {
-    const [design] = await db.select().from(gameDesigns).where(eq(gameDesigns.id, id));
-    return design;
+  async getProject(id: number): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project;
   }
 
-  async getAllGameDesigns(userId: number): Promise<GameDesign[]> {
-    return await db.select().from(gameDesigns).where(eq(gameDesigns.userId, userId));
+  async getAllProjects(userId: number): Promise<Project[]> {
+    return await db.select().from(projects).where(eq(projects.userId, userId));
   }
 
-  async updateGameDesign(id: number, design: Partial<InsertGameDesign>): Promise<GameDesign> {
-    const [updated] = await db
-      .update(gameDesigns)
-      .set({
-        ...design,
-        updatedAt: new Date(),
-      })
-      .where(eq(gameDesigns.id, id))
+  async updateProject(id: number, name: string): Promise<Project> {
+    const [project] = await db
+      .update(projects)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(projects.id, id))
       .returning();
-    return updated;
+    return project;
   }
 
-  async deleteGameDesign(id: number): Promise<GameDesign> {
-    const [deleted] = await db
-      .delete(gameDesigns)
-      .where(eq(gameDesigns.id, id))
+  async deleteProject(id: number): Promise<Project> {
+    const [project] = await db
+      .delete(projects)
+      .where(eq(projects.id, id))
       .returning();
-    return deleted;
+    return project;
   }
 
-  // Keep existing methods
+  // Implement file methods
+  async createProjectFile(file: InsertProjectFile): Promise<ProjectFile> {
+    const [newFile] = await db.insert(projectFiles).values({
+      ...file,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newFile;
+  }
+
+  async getProjectFile(id: number): Promise<ProjectFile | undefined> {
+    const [file] = await db.select().from(projectFiles).where(eq(projectFiles.id, id));
+    return file;
+  }
+
+  async getAllProjectFiles(projectId: number): Promise<ProjectFile[]> {
+    return await db.select().from(projectFiles).where(eq(projectFiles.projectId, projectId));
+  }
+
+  async updateProjectFile(id: number, content: string): Promise<ProjectFile> {
+    const [file] = await db
+      .update(projectFiles)
+      .set({ content, updatedAt: new Date() })
+      .where(eq(projectFiles.id, id))
+      .returning();
+    return file;
+  }
+
+  async deleteProjectFile(id: number): Promise<ProjectFile> {
+    const [file] = await db
+      .delete(projectFiles)
+      .where(eq(projectFiles.id, id))
+      .returning();
+    return file;
+  }
+
+  // Keep existing method implementations
   async ensureDefaultAdmin() {
     try {
       // Check if admin user exists
@@ -190,6 +241,42 @@ export class PostgresStorage implements IStorage {
       .where(eq(features.id, id))
       .returning();
     return feature;
+  }
+  async createGameDesign(design: InsertGameDesign & { userId: number }): Promise<GameDesign> {
+    const [newDesign] = await db.insert(gameDesigns).values({
+      ...design,
+      updatedAt: new Date(),
+    }).returning();
+    return newDesign;
+  }
+
+  async getGameDesign(id: number): Promise<GameDesign | undefined> {
+    const [design] = await db.select().from(gameDesigns).where(eq(gameDesigns.id, id));
+    return design;
+  }
+
+  async getAllGameDesigns(userId: number): Promise<GameDesign[]> {
+    return await db.select().from(gameDesigns).where(eq(gameDesigns.userId, userId));
+  }
+
+  async updateGameDesign(id: number, design: Partial<InsertGameDesign>): Promise<GameDesign> {
+    const [updated] = await db
+      .update(gameDesigns)
+      .set({
+        ...design,
+        updatedAt: new Date(),
+      })
+      .where(eq(gameDesigns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGameDesign(id: number): Promise<GameDesign> {
+    const [deleted] = await db
+      .delete(gameDesigns)
+      .where(eq(gameDesigns.id, id))
+      .returning();
+    return deleted;
   }
 }
 

@@ -901,7 +901,7 @@ Each feature should be specific and actionable.`
 When providing suggestions:
 1. Analyze the current game code and suggest 3specific improvements that could make the game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}
-3. Format your response as JSON with this structure:
+3. Format yourresponse as JSON with this structure:
 {
   "questions": [
     "Suggestion 1: [Brief description of the first improvement]",
@@ -1484,6 +1484,202 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     try {
       const models = await getAvailableModels();
       res.json(models);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add these new routes after existing chat routes
+  app.post("/api/projects", isAuthenticated, async (req, res) => {
+    try {
+      const { name, files } = req.body;
+      const user = (req as any).user;
+
+      // Create the project
+      const project = await storage.createProject({
+        name,
+        userId: user.id
+      });
+
+      // Create all the files
+      if (files && Array.isArray(files)) {
+        for (const file of files) {
+          await storage.createProjectFile({
+            projectId: project.id,
+            name: file.name,
+            content: file.content,
+            language: file.language
+          });
+        }
+      }
+
+      const projectWithFiles = {
+        ...project,
+        files: await storage.getAllProjectFiles(project.id)
+      };
+
+      res.json(projectWithFiles);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/projects", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const projects = await storage.getAllProjects(user.id);
+      res.json(projects);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/projects/:id", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const project = await storage.getProject(projectId);
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Check if user owns this project
+      if (project.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const files = await storage.getAllProjectFiles(projectId);
+
+      res.json({
+        ...project,
+        files
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/projects/:id", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const { name } = req.body;
+
+      const project = await storage.getProject(projectId);
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Check if user owns this project
+      if (project.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const updatedProject = await storage.updateProject(projectId, name);
+      const files = await storage.getAllProjectFiles(projectId);
+
+      res.json({
+        ...updatedProject,
+        files
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/projects/:id", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const project = await storage.getProject(projectId);
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Check if user owns this project
+      if (project.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const deleted = await storage.deleteProject(projectId);
+      res.json(deleted);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add endpoints for managing individual files within a project
+  app.post("/api/projects/:projectId/files", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      const { name, content, language } = req.body;
+
+      const project = await storage.getProject(projectId);
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Check if user owns this project
+      if (project.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const file = await storage.createProjectFile({
+        projectId,
+        name,
+        content,
+        language
+      });
+
+      res.json(file);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/projects/:projectId/files/:fileId", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      const fileId = parseInt(req.params.fileId);
+      const { content } = req.body;
+
+      const project = await storage.getProject(projectId);
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Check if user owns this project
+      if (project.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const file = await storage.updateProjectFile(fileId, content);
+      res.json(file);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/projects/:projectId/files/:fileId", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      const fileId = parseInt(req.params.fileId);
+
+      const project = await storage.getProject(projectId);
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Check if user owns this project
+      if (project.userId !== (req as any).user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const file = await storage.deleteProjectFile(fileId);
+      res.json(file);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
