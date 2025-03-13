@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
   FolderTree,
@@ -10,9 +9,6 @@ import {
   Save,
   Plus,
   X,
-  Settings2,
-  FolderOpen,
-  Download,
   ExternalLink
 } from "lucide-react";
 import {
@@ -269,23 +265,6 @@ export function EnhancedCodeEditor({
 
         <ResizablePanel defaultSize={80}>
           <div className="h-full flex flex-col">
-            <div className="border-b">
-              <ScrollArea orientation="horizontal">
-                <TabsList>
-                  {files.map(file => (
-                    <TabsTrigger
-                      key={file.id}
-                      value={file.id}
-                      className={activeFileId === file.id ? 'bg-muted' : ''}
-                      onClick={() => setActiveFileId(file.id)}
-                    >
-                      {file.name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </ScrollArea>
-            </div>
-
             {activeFile && (
               <div className="flex-1">
                 <Editor
