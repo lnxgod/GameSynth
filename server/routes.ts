@@ -116,8 +116,15 @@ function logApi(message: string, request?: any, response?: any, openAIConfig?: a
   }
 }
 
+const logWithTimestamp = (message: string, ...args: any[]) => {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`[${timestamp}] ${message}`, ...args);
+};
+
 // Helper function to get model-specific parameters
 const getModelConfig = (model: string, baseConfig: any = {}) => {
+  logWithTimestamp(`Creating config for model: ${model}`);
+
   const config: any = {
     model: model || "gpt-4o",
     messages: baseConfig.messages || [],
@@ -125,15 +132,13 @@ const getModelConfig = (model: string, baseConfig: any = {}) => {
   };
 
   if (model.startsWith('o1')) {
-    if (baseConfig.max_tokens) {
-      config.max_completion_tokens = baseConfig.max_tokens;
-      delete config.max_tokens;
-    }
+    logWithTimestamp('Using o1 model configuration');
+    config.max_completion_tokens = baseConfig.max_tokens || 8000;
     return config;
   }
 
-  // For other models
-  if (baseConfig.max_tokens && !model.startsWith('o1')) {
+  // For non-o1 models
+  if (baseConfig.max_tokens) {
     config.max_tokens = baseConfig.max_tokens;
   }
 
@@ -141,6 +146,7 @@ const getModelConfig = (model: string, baseConfig: any = {}) => {
     config.response_format = baseConfig.response_format;
   }
 
+  logWithTimestamp('Final model config:', config);
   return config;
 };
 
@@ -621,20 +627,23 @@ export async function registerRoutes(app: Express) {
   app.post("/api/design/generate-features", async (req, res) => {
     try {
       const { gameDesign, currentFeatures, model } = req.body;
+      logWithTimestamp('Feature generation request received', { model });
 
       if (!gameDesign) {
         throw new Error("Game design is required");
       }
 
-      logApi("Generating features request", { gameDesign, currentFeatures, model });
-
       const requestConfig = getModelConfig(model || "gpt-4o", {
-        messages: [
-          {
-            role: "system",
-            content: `You are a game design assistant helping to break down game features into implementation tasks.
+        max_tokens: 8000,
+        temperature: 0.7,
+        response_format: { type: "json_object" }
+      });
+
+      requestConfig.messages = [
+        {
+          role: "system",
+          content: `You are a game design assistant helping to break down game features into implementation tasks.
 Analyze the game design and suggest specific, implementable features that would enhance the game.
-Focus on concrete features that can be implemented with HTML5 Canvas and JavaScript.
 Format your response as JSON with this structure:
 {
   "features": [
@@ -643,10 +652,10 @@ Format your response as JSON with this structure:
     "Feature 3: Detailed description"
   ]
 }`
-          },
-          {
-            role: "user",
-            content: `Based on this game design, suggest specific features to implement:
+        },
+        {
+          role: "user",
+          content: `Based on this game design, suggest specific features to implement:
 Game Description:
 ${gameDesign.gameDescription}
 
@@ -665,20 +674,23 @@ ${currentFeatures ? currentFeatures.map((f: any) => f.description).join("\n") : 
 Please suggest new concrete, implementable features that would enhance this game design.
 Focus on features that can be implemented using HTML5 Canvas and JavaScript.
 Each feature should be specific and actionable.`
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.7
-      });
+        }
+      ];
 
+      logWithTimestamp('Sending request to OpenAI');
       const response = await openai.chat.completions.create(requestConfig);
-      const suggestions = JSON.parse(response.choices[0].message.content || "{}");
+      logWithTimestamp('Received response from OpenAI');
 
-      logApi("Feature suggestions generated", { gameDesign }, suggestions);
+      const suggestions = JSON.parse(response.choices[0].message.content || "{}");
+      logWithTimestamp('Parsed suggestions:', suggestions);
+
       res.json(suggestions);
     } catch (error: any) {
-      logApi("Error generating feature suggestions", req.body, { error: error.message });
-      res.status(500).json({ error: error.message });
+      logWithTimestamp('Error in feature generation:', error);
+      res.status(500).json({ 
+        error: error.message,
+        details: "Check server logs for more information" 
+      });
     }
   });
 
@@ -893,7 +905,7 @@ Each feature should be specific and actionable.`
         messages: [
           {
             role: "system",
-content: `You are a game development assistant specialized in improving HTML5 Canvas games.
+            content: `You are a game development assistant specialized in improving HTML5 Canvas games.
 When providing suggestions:
 1. Analyze the current game code and suggest 3 specific improvements that could make the game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}

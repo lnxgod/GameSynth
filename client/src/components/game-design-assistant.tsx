@@ -159,6 +159,7 @@ export function GameDesignAssistant({
 
   const generateFeaturesMutation = useMutation({
     mutationFn: async () => {
+      console.log('Starting feature generation with model:', selectedModel);
       const res = await apiRequest('POST', '/api/design/generate-features', {
         gameDesign: finalDesign,
         currentFeatures: generatedFeatures,
@@ -167,11 +168,23 @@ export function GameDesignAssistant({
       return res.json();
     },
     onSuccess: (data) => {
+      console.log('Feature generation succeeded:', data);
+      if (!data.features || !Array.isArray(data.features)) {
+        throw new Error("Invalid response format from server");
+      }
       setGeneratedFeatures(prev => [...prev, ...data.features]);
       onFeaturesGenerated([...generatedFeatures, ...data.features]);
       toast({
         title: "Features Generated",
         description: `Added ${data.features.length} new features to the game design.`,
+      });
+    },
+    onError: (error: any) => {
+      console.error('Feature generation failed:', error);
+      toast({
+        title: "Error Generating Features",
+        description: error.message || "Failed to generate features. Please try again.",
+        variant: "destructive",
       });
     }
   });
@@ -573,7 +586,7 @@ ${Object.entries(followUpAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")
                 <Button
                   variant="secondary"
                   onClick={() => generateFeaturesMutation.mutate()}
-                  disabled={generateFeaturesMutation.isPending}
+                  disabled={generateFeaturesMutation.isPending || !finalDesign}
                   className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
                 >
                   {generateFeaturesMutation.isPending ? (
