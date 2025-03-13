@@ -10,6 +10,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModelParameterControls } from "@/components/model-parameter-controls";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
+import { Progress } from "@/components/ui/progress";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,6 +37,13 @@ interface AnalyzedAspect {
   implementation_details: string[];
   technical_considerations: string[];
 }
+
+interface AnalysisProgress {
+  status: 'idle' | 'analyzing' | 'complete' | 'error';
+  progress: number;
+}
+
+type AspectProgress = Record<keyof GameRequirements, AnalysisProgress>;
 
 const gameTypes = [
   "Platformer",
@@ -89,6 +97,13 @@ export function GameDesignAssistant({
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
   const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
+  const [analysisProgress, setAnalysisProgress] = useState<AspectProgress>({
+    gameType: { status: 'idle', progress: 0 },
+    mechanics: { status: 'idle', progress: 0 },
+    visualStyle: { status: 'idle', progress: 0 },
+    difficulty: { status: 'idle', progress: 0 },
+    specialFeatures: { status: 'idle', progress: 0 }
+  });
   const { toast } = useToast();
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery({
@@ -103,20 +118,56 @@ export function GameDesignAssistant({
 
   const analyzeMutation = useMutation({
     mutationFn: async (aspect: keyof GameRequirements) => {
-      const res = await apiRequest('POST', '/api/design/analyze', {
-        aspect,
-        content: requirements[aspect],
-        sessionId,
-        model: selectedModel,
-        parameters: modelParameters
-      });
-      return res.json();
+      setAnalysisProgress(prev => ({
+        ...prev,
+        [aspect]: { status: 'analyzing', progress: 0 }
+      }));
+
+      const progressInterval = setInterval(() => {
+        setAnalysisProgress(prev => ({
+          ...prev,
+          [aspect]: {
+            ...prev[aspect],
+            progress: Math.min(95, (prev[aspect].progress || 0) + 10)
+          }
+        }));
+      }, 500);
+
+      try {
+        const res = await apiRequest('POST', '/api/design/analyze', {
+          aspect,
+          content: requirements[aspect],
+          sessionId,
+          model: selectedModel,
+          parameters: modelParameters
+        });
+        clearInterval(progressInterval);
+        return res.json();
+      } catch (error) {
+        clearInterval(progressInterval);
+        throw error;
+      }
     },
     onSuccess: (data, aspect) => {
       setAnalyses(prev => ({
         ...prev,
         [aspect]: data
       }));
+      setAnalysisProgress(prev => ({
+        ...prev,
+        [aspect]: { status: 'complete', progress: 100 }
+      }));
+    },
+    onError: (error, aspect) => {
+      setAnalysisProgress(prev => ({
+        ...prev,
+        [aspect]: { status: 'error', progress: 0 }
+      }));
+      toast({
+        title: `Error Analyzing ${aspect}`,
+        description: error.message,
+        variant: "destructive"
+      });
     }
   });
 
@@ -234,6 +285,28 @@ export function GameDesignAssistant({
     return (
       <div className="space-y-4">
         <AnalysisVisualization analyses={analyses} />
+      </div>
+    );
+  };
+
+  const AspectProgressIndicator = ({ aspect }: { aspect: keyof GameRequirements }) => {
+    const progress = analysisProgress[aspect];
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-between text-sm">
+          <span className="capitalize">{aspect}</span>
+          <span>{progress.status === 'complete' ? '100%' : `${progress.progress}%`}</span>
+        </div>
+        <Progress
+          value={progress.progress}
+          className={`h-2 ${
+            progress.status === 'error'
+              ? 'bg-red-200 [&>div]:bg-red-500'
+              : progress.status === 'complete'
+                ? 'bg-green-200 [&>div]:bg-green-500'
+                : ''
+          }`}
+        />
       </div>
     );
   };
@@ -363,6 +436,23 @@ export function GameDesignAssistant({
           </div>
 
           <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="p-4 space-y-4">
+                <h3 className="font-semibold">Analysis Progress</h3>
+                {Object.keys(requirements).map((aspect) => (
+                  <AspectProgressIndicator
+                    key={aspect}
+                    aspect={aspect as keyof GameRequirements}
+                  />
+                ))}
+              </Card>
+              <Card className="p-4">
+                <ScrollArea className="h-[300px]">
+                  {renderCurrentPrompt()}
+                </ScrollArea>
+              </Card>
+            </div>
+
             <div className="flex justify-end space-x-4">
               <Button
                 variant="secondary"
@@ -420,9 +510,7 @@ export function GameDesignAssistant({
             </div>
 
             <div className="space-y-4">
-              <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-                {renderCurrentPrompt()}
-              </ScrollArea>
+              
             </div>
           </div>
 
