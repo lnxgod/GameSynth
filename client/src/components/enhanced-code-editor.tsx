@@ -4,15 +4,16 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { 
-  FolderTree, 
-  FileCode, 
-  Save, 
-  Plus, 
-  X, 
+import {
+  FolderTree,
+  FileCode,
+  Save,
+  Plus,
+  X,
   Settings2,
   FolderOpen,
-  Download
+  Download,
+  ExternalLink
 } from "lucide-react";
 import {
   ResizableHandle,
@@ -22,12 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import Prism from "prismjs";
-import "prismjs/themes/prism.css";
-import "prismjs/components/prism-javascript";
-import "prismjs/components/prism-typescript";
-import "prismjs/components/prism-jsx";
-import "prismjs/components/prism-tsx";
+import Editor from "@monaco-editor/react";
 
 interface CodeFile {
   id: string;
@@ -48,10 +44,10 @@ interface EnhancedCodeEditorProps {
   readOnly?: boolean;
 }
 
-export function EnhancedCodeEditor({ 
-  initialCode = "", 
+export function EnhancedCodeEditor({
+  initialCode = "",
   onCodeChange,
-  readOnly = false 
+  readOnly = false
 }: EnhancedCodeEditorProps) {
   const [files, setFiles] = useState<CodeFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
@@ -76,11 +72,12 @@ export function EnhancedCodeEditor({
       const res = await apiRequest('POST', '/api/projects', project);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Success",
         description: "Project saved successfully",
       });
+      window.history.pushState({}, '', `/editor/${data.id}`);
     }
   });
 
@@ -99,9 +96,9 @@ export function EnhancedCodeEditor({
   });
 
   const handleFileChange = (fileId: string, newContent: string) => {
-    setFiles(prevFiles => 
-      prevFiles.map(file => 
-        file.id === fileId 
+    setFiles(prevFiles =>
+      prevFiles.map(file =>
+        file.id === fileId
           ? { ...file, content: newContent }
           : file
       )
@@ -131,12 +128,29 @@ export function EnhancedCodeEditor({
   };
 
   const renameFile = (fileId: string, newName: string) => {
-    setFiles(prev => 
-      prev.map(file => 
-        file.id === fileId 
-          ? { ...file, name: newName }
-          : file
-      )
+    setFiles(prev =>
+      prev.map(file => {
+        if (file.id === fileId) {
+          // Update language based on file extension
+          const extension = newName.split('.').pop()?.toLowerCase() || '';
+          const languageMap: Record<string, string> = {
+            'js': 'javascript',
+            'ts': 'typescript',
+            'jsx': 'javascript',
+            'tsx': 'typescript',
+            'css': 'css',
+            'html': 'html',
+            'json': 'json',
+            'md': 'markdown',
+          };
+          return {
+            ...file,
+            name: newName,
+            language: languageMap[extension] || file.language
+          };
+        }
+        return file;
+      })
     );
   };
 
@@ -148,7 +162,28 @@ export function EnhancedCodeEditor({
     });
   };
 
+  const openFileInNewTab = (file: CodeFile) => {
+    const blob = new Blob([file.content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  };
+
   const activeFile = files.find(f => f.id === activeFileId);
+
+  const determineLanguage = (filename: string): string => {
+    const extension = filename.split('.').pop()?.toLowerCase() || '';
+    const languageMap: Record<string, string> = {
+      'js': 'javascript',
+      'ts': 'typescript',
+      'jsx': 'javascript',
+      'tsx': 'typescript',
+      'css': 'css',
+      'html': 'html',
+      'json': 'json',
+      'md': 'markdown',
+    };
+    return languageMap[extension] || 'plaintext';
+  };
 
   return (
     <Card className="w-full h-[600px] overflow-hidden">
@@ -162,8 +197,8 @@ export function EnhancedCodeEditor({
                 className="mb-2"
               />
               <div className="flex space-x-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={saveProject}
                   disabled={saveProjectMutation.isPending}
@@ -200,17 +235,29 @@ export function EnhancedCodeEditor({
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFile(file.id);
-                      }}
-                      disabled={files.length === 1}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openFileInNewTab(file);
+                        }}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile(file.id);
+                        }}
+                        disabled={files.length === 1}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -240,12 +287,23 @@ export function EnhancedCodeEditor({
             </div>
 
             {activeFile && (
-              <div className="flex-1 p-4 bg-muted/30">
-                <textarea
+              <div className="flex-1">
+                <Editor
+                  height="100%"
+                  defaultLanguage={determineLanguage(activeFile.name)}
+                  language={determineLanguage(activeFile.name)}
                   value={activeFile.content}
-                  onChange={(e) => handleFileChange(activeFile.id, e.target.value)}
-                  className="w-full h-full font-mono text-sm bg-transparent resize-none focus:outline-none"
-                  readOnly={readOnly}
+                  onChange={(value) => handleFileChange(activeFile.id, value || '')}
+                  options={{
+                    minimap: { enabled: true },
+                    fontSize: 14,
+                    lineNumbers: "on",
+                    readOnly: readOnly,
+                    automaticLayout: true,
+                    scrollBeyondLastLine: false,
+                    wordWrap: "on",
+                    theme: "vs-dark"
+                  }}
                 />
               </div>
             )}

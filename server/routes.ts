@@ -899,7 +899,7 @@ Each feature should be specific and actionable.`
             role: "system",
             content: `You are a game development assistant specialized in improving HTML5 Canvas games.
 When providing suggestions:
-1. Analyze the current game code and suggest 3specific improvements that could make the game more engaging
+1. Analyze the current game code and suggest 3specific improvements that could makethe game more engaging
 2. Focus on implementing these remaining features: ${features?.join(", ")}
 3. Format yourresponse as JSON with this structure:
 {
@@ -1680,6 +1680,38 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
       const file = await storage.deleteProjectFile(fileId);
       res.json(file);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add this new endpoint after the existing project endpoints
+  app.get("/api/files/:fileId/raw", async (req, res) => {
+    try {
+      const fileId = parseInt(req.params.fileId);
+      const file = await storage.getProjectFile(fileId);
+
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Set content-type based on file extension
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        'js': 'application/javascript',
+        'ts': 'application/typescript',
+        'jsx': 'application/javascript',
+        'tsx': 'application/typescript',
+        'css': 'text/css',
+        'html': 'text/html',
+        'json': 'application/json',
+        'md': 'text/markdown',
+        'txt': 'text/plain'
+      };
+
+      res.setHeader('Content-Type', mimeTypes[extension || ''] || 'text/plain');
+      res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
+      res.send(file.content);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
