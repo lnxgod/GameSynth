@@ -5,13 +5,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import {
-  FolderTree,
   FileCode,
   Save,
   Plus,
   X,
   ExternalLink,
-  FolderOpen,
+  GitBranch,
+  History,
+  RotateCcw,
   Loader2
 } from "lucide-react";
 import {
@@ -20,21 +21,25 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import Editor from "@monaco-editor/react";
 
-interface CodeFile {
+interface Version {
+  timestamp: number;
+  files: FileVersion[];
+}
+
+interface FileVersion {
   id: string;
   name: string;
   content: string;
   language: string;
 }
 
-interface Project {
-  id: number;
+interface CodeFile {
+  id: string;
   name: string;
-  files: CodeFile[];
+  content: string;
+  language: string;
 }
 
 interface EnhancedCodeEditorProps {
@@ -49,11 +54,11 @@ export function EnhancedCodeEditor({
   readOnly = false
 }: EnhancedCodeEditorProps) {
   const { auth } = useAuth();
-  const queryClient = useQueryClient();
   const [files, setFiles] = useState<CodeFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled Project");
-  const [showProjectList, setShowProjectList] = useState(false);
+  const [versions, setVersions] = useState<Version[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -66,71 +71,22 @@ export function EnhancedCodeEditor({
       };
       setFiles([initialFile]);
       setActiveFileId(initialFile.id);
+      createVersion([initialFile]); // Create initial version
     }
   }, [initialCode]);
 
-  const saveProjectMutation = useMutation({
-    mutationFn: async (project: { name: string; files: CodeFile[] }) => {
-      const res = await apiRequest('POST', '/api/projects', project);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Success",
-        description: "Project saved successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      window.history.pushState({}, '', `/editor/${data.id}`);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save project",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
-    queryKey: ['projects'],
-    queryFn: async () => {
-      if (!auth.isAuthenticated) {
-        return [];
-      }
-      const res = await apiRequest('GET', '/api/projects');
-      return res.json();
-    },
-    enabled: auth.isAuthenticated,
-  });
-
-  const loadProjectMutation = useMutation({
-    mutationFn: async (projectId: number) => {
-      const res = await apiRequest('GET', `/api/projects/${projectId}`);
-      const data = await res.json();
-      return data;
-    },
-    onSuccess: (project: Project) => {
-      setFiles(project.files);
-      setProjectName(project.name);
-      if (project.files.length > 0) {
-        setActiveFileId(project.files[0].id);
-        if (onCodeChange) {
-          onCodeChange(project.files[0].content);
-        }
-      }
-      toast({
-        title: "Success",
-        description: "Project loaded successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load project",
-        variant: "destructive"
-      });
-    }
-  });
+  const createVersion = (currentFiles: CodeFile[]) => {
+    const newVersion: Version = {
+      timestamp: Date.now(),
+      files: currentFiles.map(file => ({
+        id: file.id,
+        name: file.name,
+        content: file.content,
+        language: file.language
+      }))
+    };
+    setVersions(prev => [...prev, newVersion]);
+  };
 
   const handleFileChange = (fileId: string, newContent: string) => {
     setFiles(prevFiles =>
@@ -190,25 +146,27 @@ export function EnhancedCodeEditor({
     );
   };
 
-  const saveProject = () => {
-    if (!auth.isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to save projects",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    saveProjectMutation.mutate({
-      name: projectName,
-      files
+  const saveVersion = () => {
+    createVersion(files);
+    toast({
+      title: "Version Saved",
+      description: "Current state has been saved to version history",
     });
   };
 
-  const loadProject = (projectId: number) => {
-    loadProjectMutation.mutate(projectId);
-    setShowProjectList(false);
+  const restoreVersion = (version: Version) => {
+    setFiles(version.files);
+    if (version.files.length > 0) {
+      setActiveFileId(version.files[0].id);
+      if (onCodeChange) {
+        onCodeChange(version.files[0].content);
+      }
+    }
+    setShowHistory(false);
+    toast({
+      title: "Version Restored",
+      description: "Files have been restored to selected version",
+    });
   };
 
   const openFileInNewTab = (file: CodeFile) => {
@@ -216,8 +174,6 @@ export function EnhancedCodeEditor({
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
   };
-
-  const activeFile = files.find(f => f.id === activeFileId);
 
   const determineLanguage = (filename: string): string => {
     const extension = filename.split('.').pop()?.toLowerCase() || '';
@@ -234,6 +190,8 @@ export function EnhancedCodeEditor({
     return languageMap[extension] || 'plaintext';
   };
 
+  const activeFile = files.find(f => f.id === activeFileId);
+
   return (
     <Card className="w-full h-[600px] overflow-hidden">
       <ResizablePanelGroup direction="horizontal">
@@ -249,24 +207,18 @@ export function EnhancedCodeEditor({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={saveProject}
-                  disabled={saveProjectMutation.isPending || !auth.isAuthenticated}
+                  onClick={saveVersion}
                 >
-                  {saveProjectMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-1" />
-                  )}
-                  Save
+                  <Save className="h-4 w-4 mr-1" />
+                  Save Version
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowProjectList(!showProjectList)}
-                  disabled={!auth.isAuthenticated}
+                  onClick={() => setShowHistory(!showHistory)}
                 >
-                  <FolderOpen className="h-4 w-4 mr-1" />
-                  Load
+                  <History className="h-4 w-4 mr-1" />
+                  History
                 </Button>
                 <Button
                   variant="outline"
@@ -280,76 +232,83 @@ export function EnhancedCodeEditor({
             </div>
             <ScrollArea className="h-[calc(100%-80px)]">
               <div className="p-2">
-                {showProjectList && (
+                {showHistory ? (
                   <div className="mb-4 space-y-2">
-                    <h3 className="font-semibold px-2">Available Projects</h3>
-                    {isLoadingProjects ? (
-                      <div className="flex items-center justify-center p-4">
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Loading projects...
-                      </div>
-                    ) : projects.length === 0 ? (
-                      <div className="text-sm text-muted-foreground px-2">
-                        No projects found
-                      </div>
-                    ) : (
-                      projects.map((project: Project) => (
-                        <div
-                          key={project.id}
-                          className="flex items-center justify-between p-2 hover:bg-muted/50 rounded cursor-pointer"
-                          onClick={() => loadProject(project.id)}
-                        >
-                          <div className="flex items-center">
-                            <FolderTree className="h-4 w-4 mr-2" />
-                            <span>{project.name}</span>
+                    <h3 className="font-semibold px-2">Version History</h3>
+                    {versions.map((version, index) => (
+                      <div
+                        key={version.timestamp}
+                        className="flex items-center justify-between p-2 hover:bg-muted/50 rounded cursor-pointer"
+                        onClick={() => restoreVersion(version)}
+                      >
+                        <div className="flex items-center">
+                          <GitBranch className="h-4 w-4 mr-2" />
+                          <div>
+                            <div className="text-sm font-medium">
+                              Version {versions.length - index}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(version.timestamp).toLocaleString()}
+                            </div>
                           </div>
                         </div>
-                      ))
-                    )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            restoreVersion(version);
+                          }}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
+                ) : (
+                  files.map(file => (
+                    <div
+                      key={file.id}
+                      className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                        file.id === activeFileId ? 'bg-muted' : 'hover:bg-muted/50'
+                      }`}
+                      onClick={() => setActiveFileId(file.id)}
+                    >
+                      <div className="flex items-center">
+                        <FileCode className="h-4 w-4 mr-2" />
+                        <Input
+                          value={file.name}
+                          onChange={(e) => renameFile(file.id, e.target.value)}
+                          className="h-6 px-1 bg-transparent"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openFileInNewTab(file);
+                          }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFile(file.id);
+                          }}
+                          disabled={files.length === 1}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
                 )}
-                {files.map(file => (
-                  <div
-                    key={file.id}
-                    className={`flex items-center justify-between p-2 rounded cursor-pointer ${
-                      file.id === activeFileId ? 'bg-muted' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => setActiveFileId(file.id)}
-                  >
-                    <div className="flex items-center">
-                      <FileCode className="h-4 w-4 mr-2" />
-                      <Input
-                        value={file.name}
-                        onChange={(e) => renameFile(file.id, e.target.value)}
-                        className="h-6 px-1 bg-transparent"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                    <div className="flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openFileInNewTab(file);
-                        }}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFile(file.id);
-                        }}
-                        disabled={files.length === 1}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </ScrollArea>
           </div>
