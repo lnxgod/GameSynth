@@ -33,26 +33,30 @@ export function ModelParameterControls({
     enabled: !!model
   });
 
+  // Reset state when model changes
   useEffect(() => {
     if (parameters) {
-      // Reset parameters when model changes
       const newValues: Record<string, any> = {};
       const newEnabled: Record<string, boolean> = {};
-      
+
       Object.entries(parameters).forEach(([param, config]: [string, any]) => {
         newValues[param] = config.default;
         newEnabled[param] = false;
       });
-      
+
       setParameterValues(newValues);
       setEnabledParameters(newEnabled);
+
+      // Only send empty parameters object when model changes
+      onParametersChange({});
     }
   }, [parameters]);
 
+  // Only send enabled parameters to parent
   useEffect(() => {
     const activeParams: Record<string, any> = {};
     Object.entries(enabledParameters).forEach(([param, isEnabled]) => {
-      if (isEnabled) {
+      if (isEnabled && parameterValues[param] !== undefined) {
         activeParams[param] = parameterValues[param];
       }
     });
@@ -87,6 +91,15 @@ export function ModelParameterControls({
                     ...prev,
                     [param]: checked as boolean
                   }));
+
+                  // If unchecked, immediately remove from active parameters
+                  if (!checked) {
+                    onParametersChange(Object.fromEntries(
+                      Object.entries(parameterValues).filter(
+                        ([key, value]) => key !== param && enabledParameters[key]
+                      )
+                    ));
+                  }
                 }}
               />
               <label
