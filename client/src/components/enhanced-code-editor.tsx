@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/lib/auth";
 import {
   FolderTree,
   FileCode,
@@ -46,6 +47,7 @@ export function EnhancedCodeEditor({
   onCodeChange,
   readOnly = false
 }: EnhancedCodeEditorProps) {
+  const { auth } = useAuth();
   const [files, setFiles] = useState<CodeFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled Project");
@@ -79,13 +81,17 @@ export function EnhancedCodeEditor({
     }
   });
 
-  // Add query for fetching projects
+  // Add query for fetching projects with auth check
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
+      if (!auth.isAuthenticated) {
+        throw new Error("Authentication required");
+      }
       const res = await apiRequest('GET', '/api/projects');
       return res.json();
-    }
+    },
+    enabled: auth.isAuthenticated // Only fetch when authenticated
   });
 
   const loadProjectMutation = useMutation({
@@ -142,7 +148,6 @@ export function EnhancedCodeEditor({
     setFiles(prev =>
       prev.map(file => {
         if (file.id === fileId) {
-          // Update language based on file extension
           const extension = newName.split('.').pop()?.toLowerCase() || '';
           const languageMap: Record<string, string> = {
             'js': 'javascript',
@@ -166,6 +171,15 @@ export function EnhancedCodeEditor({
   };
 
   const saveProject = () => {
+    if (!auth.isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to save projects",
+        variant: "destructive"
+      });
+      return;
+    }
+
     saveProjectMutation.mutate({
       id: crypto.randomUUID(),
       name: projectName,
@@ -217,7 +231,7 @@ export function EnhancedCodeEditor({
                   variant="outline"
                   size="sm"
                   onClick={saveProject}
-                  disabled={saveProjectMutation.isPending}
+                  disabled={saveProjectMutation.isPending || !auth.isAuthenticated}
                 >
                   <Save className="h-4 w-4 mr-1" />
                   Save
@@ -226,6 +240,7 @@ export function EnhancedCodeEditor({
                   variant="outline"
                   size="sm"
                   onClick={() => setShowProjectList(!showProjectList)}
+                  disabled={!auth.isAuthenticated}
                 >
                   <FolderOpen className="h-4 w-4 mr-1" />
                   Load
@@ -245,18 +260,24 @@ export function EnhancedCodeEditor({
                 {showProjectList && (
                   <div className="mb-4 space-y-2">
                     <h3 className="font-semibold px-2">Available Projects</h3>
-                    {projects.map((project: Project) => (
-                      <div
-                        key={project.id}
-                        className="flex items-center justify-between p-2 hover:bg-muted/50 rounded cursor-pointer"
-                        onClick={() => loadProject(project.id)}
-                      >
-                        <div className="flex items-center">
-                          <FolderTree className="h-4 w-4 mr-2" />
-                          <span>{project.name}</span>
-                        </div>
+                    {projects.length === 0 ? (
+                      <div className="text-sm text-muted-foreground px-2">
+                        No projects found
                       </div>
-                    ))}
+                    ) : (
+                      projects.map((project: Project) => (
+                        <div
+                          key={project.id}
+                          className="flex items-center justify-between p-2 hover:bg-muted/50 rounded cursor-pointer"
+                          onClick={() => loadProject(project.id)}
+                        >
+                          <div className="flex items-center">
+                            <FolderTree className="h-4 w-4 mr-2" />
+                            <span>{project.name}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
                 {files.map(file => (
