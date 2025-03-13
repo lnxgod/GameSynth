@@ -15,6 +15,25 @@ import { db } from './db';
 import { eq } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
 
+// Add this helper function at the top of the file after imports
+async function makeOpenAIRequest(config: any) {
+  try {
+    return await openai.chat.completions.create(config);
+  } catch (error: any) {
+    if (error.message?.includes("'max_tokens' is not supported with this model")) {
+      logWithTimestamp('Retrying request with max_completion_tokens instead of max_tokens');
+      // Convert max_tokens to max_completion_tokens
+      const retryConfig = { ...config };
+      if (retryConfig.max_tokens) {
+        retryConfig.max_completion_tokens = retryConfig.max_tokens;
+        delete retryConfig.max_tokens;
+      }
+      return await openai.chat.completions.create(retryConfig);
+    }
+    throw error;
+  }
+}
+
 // Store prompts in memory with defaults
 const SystemPrompts = {
   DESIGN_ASSISTANT_PROMPT: `You are a game design assistant helping users create HTML5 Canvas games. 
@@ -131,15 +150,13 @@ const getModelConfig = (model: string, baseConfig: any = {}) => {
     temperature: baseConfig.temperature || 0.7,
   };
 
-  if (model.startsWith('o1')) {
-    logWithTimestamp('Using o1 model configuration');
-    config.max_completion_tokens = baseConfig.max_completion_tokens || 8000;
-    return config;
-  }
-
-  // For non-o1 models
+  // Handle token limits based on model
   if (baseConfig.max_tokens) {
-    config.max_tokens = baseConfig.max_tokens;
+    if (model.startsWith('o1')) {
+      config.max_completion_tokens = baseConfig.max_tokens;
+    } else {
+      config.max_tokens = baseConfig.max_tokens;
+    }
   }
 
   if (baseConfig.response_format) {
@@ -556,7 +573,7 @@ export async function registerRoutes(app: Express) {
         temperature: 0.7
       };
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
       const analysis = JSON.parse(response.choices[0].message.content || "{}");
 
       history.push({
@@ -603,7 +620,7 @@ export async function registerRoutes(app: Express) {
       };
 
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
 
       const finalDesign = JSON.parse(response.choices[0].message.content || "{}");
 
@@ -633,9 +650,9 @@ export async function registerRoutes(app: Express) {
         throw new Error("Game design is required");
       }
 
-      // Create base configuration without token limits
       const baseConfig = {
         temperature: 0.7,
+        max_tokens: 8000,
         response_format: { type: "json_object" },
         messages: [
           {
@@ -676,11 +693,10 @@ Each feature should be specific and actionable.`
         ]
       };
 
-      // Model-specific configuration handled by getModelConfig
       const requestConfig = getModelConfig(model || "gpt-4o", baseConfig);
-
       logWithTimestamp('Sending request to OpenAI with config:', requestConfig);
-      const response = await openai.chat.completions.create(requestConfig);
+
+      const response = await makeOpenAIRequest(requestConfig);
       logWithTimestamp('Received response from OpenAI');
 
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
@@ -755,7 +771,7 @@ Each feature should be specific and actionable.`
         ...tokenParams
       };
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const code = extractGameCode(content);
@@ -793,7 +809,7 @@ Each feature should be specific and actionable.`
 
       logApi("Chat request configuration", null, null, logOpenAIParams(requestConfig));
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
       const content = response.choices[0].message.content || "";
       const code = extractGameCode(content);
 
@@ -879,7 +895,7 @@ Each feature should be specific and actionable.`
         max_tokens: 16000
       };
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
 
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
@@ -929,7 +945,7 @@ When providing suggestions:
         temperature: 0.7
       };
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
       const suggestions = JSON.parse(response.choices[0].message.content || "{}");
 
       logApi("Remix suggestions generated", { code }, suggestions);
@@ -975,7 +991,7 @@ When providing suggestions:
 
       logApi("Debug request configuration", null, null, logOpenAIParams(requestConfig));
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
 
@@ -1060,7 +1076,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
         max_tokens: 100
       };
 
-      const response = await openai.chat.completions.create(requestConfig);
+      const response = await makeOpenAIRequest(requestConfig);
 
       const hint = response.choices[0].message.content || "Keep up the great work! 🎮";
 
