@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Play, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { gameEvents } from "@/lib/EventManager";
 
 interface GameCanvasProps {
   code: string;
@@ -22,6 +23,8 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
       frameRef.current = undefined;
     }
     setIsRunning(false);
+    gameEvents.clear(); // Clear all event listeners
+    gameEvents.disable(); // Disable event system
     onDebugLog?.("🛑 Game stopped");
   };
 
@@ -77,14 +80,48 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
     // Clean up any previous game state
     stopGame();
     resetCanvas();
+    gameEvents.enable(); // Enable event system for new game
 
     onDebugLog?.("🎮 Starting game...");
     onDebugLog?.(`📐 Canvas size: ${canvas.width}x${canvas.height}`);
 
     try {
+      // Create a safer environment for the game code
+      const gameEnvironment = {
+        canvas,
+        ctx,
+        // Wrap requestAnimationFrame to maintain our frame reference
+        requestAnimationFrame: (callback: FrameRequestCallback) => {
+          frameRef.current = requestAnimationFrame(callback);
+          return frameRef.current;
+        },
+        cancelAnimationFrame: (id: number) => {
+          if (frameRef.current === id) {
+            cancelAnimationFrame(id);
+            frameRef.current = undefined;
+          }
+        },
+        // Provide safe event handling methods
+        addEventListener: (event: string, callback: Function) => {
+          gameEvents.on(event, callback);
+        },
+        removeEventListener: (event: string, callback: Function) => {
+          gameEvents.off(event, callback);
+        },
+        // Provide one-time event handling
+        once: (event: string, callback: Function) => {
+          gameEvents.once(event, callback);
+        },
+        // Access to emit events (useful for custom game events)
+        emit: (event: string, ...args: any[]) => {
+          gameEvents.emit(event, ...args);
+        }
+      };
+
       // Wrap game code in error handling
       const wrappedCode = `
         try {
+          const { canvas, ctx, addEventListener, removeEventListener, once, emit, requestAnimationFrame, cancelAnimationFrame } = gameEnv;
           ${code}
         } catch (error) {
           throw new Error(JSON.stringify({
@@ -97,33 +134,14 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
       `;
 
       // Create game function with error boundary
-      const gameFunction = new Function("canvas", "ctx", "requestAnimationFrame", "cancelAnimationFrame", wrappedCode);
+      const gameFunction = new Function("gameEnv", wrappedCode);
 
       // Set up error event listener
       window.addEventListener('error', handleGameError);
 
       // Run the game with error handling
       try {
-        gameFunction(
-          canvas,
-          ctx,
-          (callback: FrameRequestCallback) => {
-            try {
-              frameRef.current = requestAnimationFrame(callback);
-              return frameRef.current;
-            } catch (error) {
-              handleGameError(error);
-              return 0;
-            }
-          },
-          (id: number) => {
-            if (frameRef.current === id) {
-              cancelAnimationFrame(id);
-              frameRef.current = undefined;
-            }
-          }
-        );
-
+        gameFunction(gameEnvironment);
         setIsRunning(true);
         onDebugLog?.("✅ Game started successfully");
       } catch (error) {
@@ -136,14 +154,11 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
 
   // Cleanup on unmount or code change
   useEffect(() => {
-    // Remove error event listener on cleanup
-    const cleanup = () => {
-      window.removeEventListener('error', handleGameError);
+    return () => {
       stopGame();
       resetCanvas();
+      window.removeEventListener('error', handleGameError);
     };
-
-    return cleanup;
   }, [code]);
 
   return (
@@ -168,7 +183,6 @@ export function GameCanvas({ code, onDebugLog }: GameCanvasProps) {
           height={600}
           className="w-full h-[600px] border border-border rounded-md bg-black"
           style={{ aspectRatio: "4/3" }}
-          onError={handleGameError}
         />
       </div>
     </Card>
