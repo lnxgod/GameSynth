@@ -9,7 +9,8 @@ import {
   Save,
   Plus,
   X,
-  ExternalLink
+  ExternalLink,
+  FolderOpen,
 } from "lucide-react";
 import {
   ResizableHandle,
@@ -48,6 +49,7 @@ export function EnhancedCodeEditor({
   const [files, setFiles] = useState<CodeFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled Project");
+  const [showProjectList, setShowProjectList] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -77,6 +79,15 @@ export function EnhancedCodeEditor({
     }
   });
 
+  // Add query for fetching projects
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/projects');
+      return res.json();
+    }
+  });
+
   const loadProjectMutation = useMutation({
     mutationFn: async (projectId: string) => {
       const res = await apiRequest('GET', `/api/projects/${projectId}`);
@@ -88,6 +99,10 @@ export function EnhancedCodeEditor({
       if (project.files.length > 0) {
         setActiveFileId(project.files[0].id);
       }
+      toast({
+        title: "Success",
+        description: "Project loaded successfully",
+      });
     }
   });
 
@@ -158,6 +173,11 @@ export function EnhancedCodeEditor({
     });
   };
 
+  const loadProject = (projectId: string) => {
+    loadProjectMutation.mutate(projectId);
+    setShowProjectList(false);
+  };
+
   const openFileInNewTab = (file: CodeFile) => {
     const blob = new Blob([file.content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -205,6 +225,14 @@ export function EnhancedCodeEditor({
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setShowProjectList(!showProjectList)}
+                >
+                  <FolderOpen className="h-4 w-4 mr-1" />
+                  Load
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={addNewFile}
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -214,6 +242,23 @@ export function EnhancedCodeEditor({
             </div>
             <ScrollArea className="h-[calc(100%-80px)]">
               <div className="p-2">
+                {showProjectList && (
+                  <div className="mb-4 space-y-2">
+                    <h3 className="font-semibold px-2">Available Projects</h3>
+                    {projects.map((project: Project) => (
+                      <div
+                        key={project.id}
+                        className="flex items-center justify-between p-2 hover:bg-muted/50 rounded cursor-pointer"
+                        onClick={() => loadProject(project.id)}
+                      >
+                        <div className="flex items-center">
+                          <FolderTree className="h-4 w-4 mr-2" />
+                          <span>{project.name}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {files.map(file => (
                   <div
                     key={file.id}
