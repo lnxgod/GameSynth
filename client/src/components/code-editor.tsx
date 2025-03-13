@@ -10,6 +10,8 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BuildControls } from "@/components/build-controls";
+import crypto from 'crypto';
+
 
 interface ProjectState {
   name: string;
@@ -40,6 +42,16 @@ interface CodeEditorProps {
   onAiOperation?: (op: { type: string; active: boolean }) => void;
 }
 
+interface Version {
+  timestamp: number;
+  files: {
+    id: string;
+    name: string;
+    content: string;
+    language: string;
+  }[];
+}
+
 export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => void }, CodeEditorProps>(
   ({ code, onCodeChange, addDebugLog, gameDesign, debugContext, onAiOperation }, ref) => {
     const [localCode, setLocalCode] = useState(code);
@@ -57,6 +69,7 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
     const [enabledParameters, setEnabledParameters] = useState<any>(null);
     const [selectedModel, setSelectedModel] = useState<any>(null);
     const [modelParameters, setModelParameters] = useState<any>(null);
+    const [versions, setVersions] = useState<Version[]>([]);
 
 
     useEffect(() => {
@@ -107,6 +120,19 @@ export const CodeEditor = forwardRef<{ handleDebug: (errorMessage?: string) => v
       onSuccess: (data) => {
         setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
         if (data.updatedCode) {
+          // Save current version before updating
+          const currentVersion: Version = {
+            timestamp: Date.now(),
+            files: [{
+              id: crypto.randomUUID(),
+              name: 'game.js',
+              content: localCode,
+              language: 'javascript'
+            }]
+          };
+          setVersions(prev => [...prev, currentVersion]);
+
+          // Update code
           setLocalCode(data.updatedCode);
           onCodeChange(data.updatedCode);
           addDebugLog?.("Code updated via chat");
