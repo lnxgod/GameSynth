@@ -10,6 +10,7 @@ import { AIStatusIndicator } from "@/components/ai-status-indicator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { ThemeSwitcher } from "@/components/ui/theme-switcher";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState("");
@@ -67,16 +68,19 @@ export default function Home() {
         <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
           AI Game Creator
         </h1>
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="non-technical-mode"
-            checked={isNonTechnicalMode}
-            onCheckedChange={setIsNonTechnicalMode}
-            className="data-[state=checked]:bg-primary"
-          />
-          <Label htmlFor="non-technical-mode" className="text-sm">
-            {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
-          </Label>
+        <div className="flex items-center space-x-4">
+          <ThemeSwitcher />
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="non-technical-mode"
+              checked={isNonTechnicalMode}
+              onCheckedChange={setIsNonTechnicalMode}
+              className="data-[state=checked]:bg-primary"
+            />
+            <Label htmlFor="non-technical-mode" className="text-sm">
+              {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
+            </Label>
+          </div>
         </div>
       </div>
 

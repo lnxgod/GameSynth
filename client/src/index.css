@@ -11,3 +11,18 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+:root {
+  --transition-duration: 200ms;
+}
+
+:root * {
+  transition: background-color var(--transition-duration) ease-in-out,
+              border-color var(--transition-duration) ease-in-out,
+              color var(--transition-duration) ease-in-out;
+}
+
+/* Prevent transition on page load */
+.no-transitions * {
+  transition: none !important;
+}
