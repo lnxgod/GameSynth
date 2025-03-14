@@ -64,23 +64,21 @@ export default function Home() {
 
   return (
     <div className="container mx-auto p-4 min-h-screen">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+      <div className="flex items-center mb-8">
+        <ThemeSwitcher className="mr-4" />
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent flex-1">
           AI Game Creator
         </h1>
-        <div className="flex items-center space-x-4">
-          <ThemeSwitcher />
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="non-technical-mode"
-              checked={isNonTechnicalMode}
-              onCheckedChange={setIsNonTechnicalMode}
-              className="data-[state=checked]:bg-primary"
-            />
-            <Label htmlFor="non-technical-mode" className="text-sm">
-              {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
-            </Label>
-          </div>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="non-technical-mode"
+            checked={isNonTechnicalMode}
+            onCheckedChange={setIsNonTechnicalMode}
+            className="data-[state=checked]:bg-primary"
+          />
+          <Label htmlFor="non-technical-mode" className="text-sm">
+            {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
+          </Label>
         </div>
       </div>
 
