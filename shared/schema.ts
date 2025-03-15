@@ -88,6 +88,17 @@ export const projectFiles = pgTable("project_files", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Add after existing tables
+export const prompts = pgTable("prompts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  content: text("content").notNull(),
+  category: text("category").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Keep existing schemas
 export const insertUserSchema = createInsertSchema(users)
   .pick({
@@ -144,6 +155,14 @@ export const insertProjectFileSchema = createInsertSchema(projectFiles).pick({
   language: true,
 });
 
+// Add after existing schemas
+export const insertPromptSchema = createInsertSchema(prompts).pick({
+  name: true,
+  description: true,
+  content: true,
+  category: true,
+});
+
 // Add new schema for game templates
 export const insertGameTemplateSchema = createInsertSchema(gameTemplates)
   .pick({
@@ -174,6 +193,9 @@ export type Project = typeof projects.$inferSelect;
 export type InsertProjectFile = z.infer<typeof insertProjectFileSchema>;
 export type ProjectFile = typeof projectFiles.$inferSelect;
 
-// Add new type for game templates
+// Add after existing types
+export type InsertPrompt = z.infer<typeof insertPromptSchema>;
+export type Prompt = typeof prompts.$inferSelect;
+
 export type InsertGameTemplate = z.infer<typeof insertGameTemplateSchema>;
 export type GameTemplate = typeof gameTemplates.$inferSelect;

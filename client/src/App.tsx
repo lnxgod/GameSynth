@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Run from "@/pages/run";
+import PromptsSetup from "@/pages/prompts-setup";
 import { NavBar } from "@/components/nav-bar";
 
 function Router() {
@@ -13,6 +14,7 @@ function Router() {
       <NavBar />
       <Switch>
         <Route path="/run" component={Run} />
+        <Route path="/prompts-setup" component={PromptsSetup} />
         <Route path="/" component={Home} />
         <Route component={NotFound} />
       </Switch>

@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Play } from "lucide-react";
+import { Play, Settings } from "lucide-react";
 
 export function NavBar() {
   return (
@@ -13,6 +13,12 @@ export function NavBar() {
         </div>
         <div className="flex-1" />
         <div className="flex items-center space-x-4">
+          <Link href="/prompts-setup">
+            <Button variant="ghost">
+              <Settings className="mr-2 h-4 w-4" />
+              Prompts Setup
+            </Button>
+          </Link>
           <Link href="/run">
             <Button variant="ghost">
               <Play className="mr-2 h-4 w-4" />

@@ -1536,6 +1536,50 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
+  // Add these endpoints after existing routes, before the httpServer is created
+  // Prompts Management Routes
+  app.get("/api/prompts", async (req, res) => {
+    try {
+      const prompts = await storage.getAllPrompts();
+      res.json(prompts);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/prompts/:id", async (req, res) => {
+    try {
+      const promptId = parseInt(req.params.id);
+      const prompt = await storage.getPrompt(promptId);
+
+      if (!prompt) {
+        return res.status(404).json({ error: "Prompt not found" });
+      }
+
+      res.json(prompt);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/prompts/:id", async (req, res) => {
+    try {
+      const promptId = parseInt(req.params.id);
+      const { content } = req.body;
+
+      const prompt = await storage.getPrompt(promptId);
+
+      if (!prompt) {
+        return res.status(404).json({ error: "Prompt not found" });
+      }
+
+      const updatedPrompt = await storage.updatePrompt(promptId, content);
+      res.json(updatedPrompt);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Add endpoints for managing individual files within a project
   app.post("/api/projects/:projectId/files", async (req, res) => {
     try {
@@ -1614,7 +1658,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   });
 
   // Add these routes after existing routes, before the httpServer is created
-
   // Template Library Routes
   app.get("/api/templates", async (req, res) => {
     try {
@@ -1799,44 +1842,10 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       );
 
       res.json(templates);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error: any) {      res.status(500).json({ error: error.message });
     }
   });
 
-  // Add this new endpoint after the existing project endpoints
-  app.get("/api/files/:fileId/raw", async (req, res) => {
-    try {
-      const fileId = parseInt(req.params.fileId);
-      const file = await storage.getProjectFile(fileId);
-
-      if (!file) {
-        return res.status(404).json({ error: "File not found" });
-      }
-
-      // Set content-type based on file extension
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      const mimeTypes: Record<string, string> = {
-        'js': 'application/javascript',
-        'ts': 'application/typescript',
-        'jsx': 'application/javascript',
-        'tsx': 'application/typescript',
-        'css': 'text/css',
-        'html': 'text/html',
-        'json': 'application/json',
-        'md': 'text/markdown',
-        'txt': 'text/plain'
-      };
-
-      res.setHeader('Content-Type', mimeTypes[extension || ''] || 'text/plain');
-      res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
-      res.send(file.content);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Add this to the existing routes in server/routes.ts
   app.delete("/api/templates/:id", async (req, res) => {
     try {
       // Get user from request
@@ -1870,6 +1879,38 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       }
 
       res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
+  // Add this new endpoint after the existing project endpoints
+  app.get("/api/files/:fileId/raw", async (req, res) => {
+    try {
+      const fileId = parseInt(req.params.fileId);
+      const file = await storage.getProjectFile(fileId);
+
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Set content-type based on file extension
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        'js': 'application/javascript',
+        'ts': 'application/typescript',
+        'jsx': 'application/javascript',
+        'tsx': 'application/typescript',
+        'css': 'text/css',
+        'html': 'text/html',
+        'json': 'application/json',
+        'md': 'text/markdown',
+        'txt': 'text/plain'
+      };
+
+      res.setHeader('Content-Type', mimeTypes[extension || ''] || 'text/plain');
+      res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
+      res.send(file.content);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

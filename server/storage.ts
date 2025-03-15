@@ -4,7 +4,8 @@ import {
   type Chat, type Game, type Feature, type User, 
   type InsertChat, type InsertGame, type InsertFeature, type InsertUser,
   type Project, type ProjectFile, type InsertProject, type InsertProjectFile,
-  type GameTemplate, type InsertGameTemplate, type GameDesign, type InsertGameDesign
+  type GameTemplate, type InsertGameTemplate, type GameDesign, type InsertGameDesign,
+  type Prompt, type InsertPrompt
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from 'drizzle-orm';
@@ -49,6 +50,12 @@ export interface IStorage {
   updateFeatureStatus(id: number, completed: boolean): Promise<Feature>;
   updateUserModelPreferences(id: number, analysis_model: string, code_gen_model: string): Promise<User>;
   deleteTemplate(templateId: number): Promise<GameTemplate>;
+
+  // Add prompt methods
+  createPrompt(prompt: InsertPrompt): Promise<Prompt>;
+  getPrompt(id: number): Promise<Prompt | undefined>;
+  getAllPrompts(): Promise<Prompt[]>;
+  updatePrompt(id: number, content: string): Promise<Prompt>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -312,6 +319,36 @@ export class PostgresStorage implements IStorage {
       console.error('Error deleting template:', error);
       throw error;
     }
+  }
+  // Add prompt methods implementation
+  async createPrompt(prompt: InsertPrompt): Promise<Prompt> {
+    const [newPrompt] = await db.insert(prompts).values({
+      ...prompt,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newPrompt;
+  }
+
+  async getPrompt(id: number): Promise<Prompt | undefined> {
+    const [prompt] = await db.select().from(prompts).where(eq(prompts.id, id));
+    return prompt;
+  }
+
+  async getAllPrompts(): Promise<Prompt[]> {
+    return await db.select().from(prompts);
+  }
+
+  async updatePrompt(id: number, content: string): Promise<Prompt> {
+    const [prompt] = await db
+      .update(prompts)
+      .set({ 
+        content,
+        updatedAt: new Date()
+      })
+      .where(eq(prompts.id, id))
+      .returning();
+    return prompt;
   }
 }
 
