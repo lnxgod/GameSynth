@@ -207,6 +207,7 @@ export function GameDesignAssistant({
       setMessages(data.history);
       setFinalDesign(data);
       setEditableDesign(data.description || "");
+      onDesignGenerated(data);
       toast({
         title: "Design Ready",
         description: "Game design is complete and ready for implementation!",
@@ -311,80 +312,9 @@ export function GameDesignAssistant({
 
     try {
       const aspects = Object.keys(requirements) as (keyof GameRequirements)[];
-      const analysisPromises = aspects.map(aspect => {
-        setAnalysisProgress(prev => ({
-          ...prev,
-          [aspect]: { status: 'analyzing', progress: 0 }
-        }));
-
-        return new Promise<{ aspect: keyof GameRequirements, data: any }>(async (resolve, reject) => {
-          const progressInterval = setInterval(() => {
-            setAnalysisProgress(prev => ({
-              ...prev,
-              [aspect]: {
-                ...prev[aspect],
-                progress: Math.min(95, (prev[aspect].progress || 0) + 10)
-              }
-            }));
-          }, 500);
-
-          try {
-            const res = await apiRequest('POST', '/api/design/analyze', {
-              aspect,
-              content: requirements[aspect],
-              sessionId,
-              model: selectedModel,
-              parameters: modelParameters
-            });
-            clearInterval(progressInterval);
-            const data = await res.json();
-            setAnalysisProgress(prev => ({
-              ...prev,
-              [aspect]: { status: 'complete', progress: 100 }
-            }));
-            resolve({ aspect, data });
-          } catch (error) {
-            clearInterval(progressInterval);
-            setAnalysisProgress(prev => ({
-              ...prev,
-              [aspect]: { status: 'error', progress: 0 }
-            }));
-            reject({ aspect, error });
-          }
-        });
-      });
-
-      const results = await Promise.allSettled(analysisPromises);
-
-      const successfulResults = results
-        .filter((result): result is PromiseFulfilledResult<{ aspect: keyof GameRequirements, data: any }> =>
-          result.status === 'fulfilled'
-        )
-        .map(result => result.value);
-
-      const newAnalyses = successfulResults.reduce((acc, { aspect, data }) => ({
-        ...acc,
-        [aspect]: data
-      }), {});
-
-      setAnalyses(newAnalyses);
-
-      const failedResults = results
-        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-        .map(result => result.reason);
-
-      failedResults.forEach(({ aspect, error }) => {
-        toast({
-          title: `Error Analyzing ${aspect}`,
-          description: error.message,
-          variant: "destructive"
-        });
-      });
-
-      if (successfulResults.length > 0) {
-        await finalizeMutation.mutateAsync();
-      }
-
+      const analysisPromises = aspects.map(aspect => analyzeMutation.mutateAsync(aspect));
+      await Promise.all(analysisPromises);
+      await finalizeMutation.mutateAsync();
     } catch (error) {
       toast({
         title: "Analysis Error",
