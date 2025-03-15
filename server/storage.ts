@@ -126,11 +126,11 @@ export class PostgresStorage implements IStorage {
   // Keep existing method implementations
   async ensureDefaultAdmin() {
     try {
-      // Check if admin user exists
+      // Check if admin user exists using lowercase
       const admin = await this.getUser('admin');
       if (!admin) {
         // Create default admin if doesn't exist
-        const hashedPassword = await bcrypt.hash('Password123', 10);
+        const hashedPassword = await bcrypt.hash('admin', 10); // Changed default password to 'admin'
         const [newAdmin] = await db.insert(users).values({
           username: 'admin',
           password: hashedPassword,
@@ -150,6 +150,7 @@ export class PostgresStorage implements IStorage {
     const hashedPassword = await bcrypt.hash(user.password, 10);
     const [newUser] = await db.insert(users).values({
       ...user,
+      username: user.username.toLowerCase(), // Ensure username is stored lowercase
       password: hashedPassword,
       forcePasswordChange: true,
     }).returning();
@@ -157,7 +158,7 @@ export class PostgresStorage implements IStorage {
   }
 
   async getUser(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(eq(users.username, username.toLowerCase()));
     return user;
   }
 
