@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Settings2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
-import { sendChatMessage } from "@/lib/openai";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -12,6 +12,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ChatInterfaceProps {
@@ -30,20 +37,35 @@ When providing code:
 export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
   const [prompt, setPrompt] = useState("");
   const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(16000); 
+  const [maxTokens, setMaxTokens] = useState(16000);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("gpt-4o"); // Default to latest model
   const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: (variables: { prompt: string; temperature: number; maxTokens: number }) =>
-      sendChatMessage(variables.prompt, variables.temperature, variables.maxTokens),
+    mutationFn: async (variables: { 
+      prompt: string; 
+      temperature: number; 
+      maxTokens: number;
+      model: string;
+    }) => {
+      const response = await apiRequest("POST", "/api/chat", {
+        prompt: variables.prompt,
+        modelConfig: {
+          model: variables.model,
+          temperature: variables.temperature,
+          max_tokens: variables.maxTokens
+        }
+      });
+      return await response.json();
+    },
     onSuccess: (data) => {
       if (data.code) {
         onCodeReceived(data.code);
       }
       toast({
         title: "Response received",
-        description: "ChatGPT has generated your game code",
+        description: "AI has generated your game code",
       });
     },
     onError: (error) => {
@@ -58,7 +80,12 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
-    mutation.mutate({ prompt, temperature, maxTokens });
+    mutation.mutate({ 
+      prompt, 
+      temperature, 
+      maxTokens,
+      model: selectedModel
+    });
   };
 
   return (
@@ -75,6 +102,21 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 mt-4">
                 <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Model Selection</label>
+                    <Select
+                      value={selectedModel}
+                      onValueChange={setSelectedModel}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gpt-4o">GPT-4 Optimized (Latest)</SelectItem>
+                        <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">System Prompt</label>
                     <ScrollArea className="h-[200px] w-full rounded-md border p-4">
@@ -110,7 +152,7 @@ export function ChatInterface({ onCodeReceived }: ChatInterfaceProps) {
                       step={1000}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Maximum length of the generated response (maximum supported by the model)
+                      Maximum length of the generated response
                     </p>
                   </div>
                 </div>
