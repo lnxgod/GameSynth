@@ -3,7 +3,8 @@ import {
   chats, games, features, users, projects, projectFiles,
   type Chat, type Game, type Feature, type User, 
   type InsertChat, type InsertGame, type InsertFeature, type InsertUser,
-  type Project, type ProjectFile, type InsertProject, type InsertProjectFile
+  type Project, type ProjectFile, type InsertProject, type InsertProjectFile,
+  type GameTemplate, type InsertGameTemplate
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from 'drizzle-orm';
@@ -48,7 +49,8 @@ export interface IStorage {
   getFeature(id: number): Promise<Feature | undefined>;
   getAllFeatures(gameId?: number): Promise<Feature[]>;
   updateFeatureStatus(id: number, completed: boolean): Promise<Feature>;
-    updateUserModelPreferences(id: number, analysis_model: string, code_gen_model: string): Promise<User>;
+  updateUserModelPreferences(id: number, analysis_model: string, code_gen_model: string): Promise<User>;
+  deleteTemplate(templateId: number): Promise<GameTemplate>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -291,6 +293,18 @@ export class PostgresStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+  async deleteTemplate(templateId: number): Promise<GameTemplate> {
+    const [deletedTemplate] = await db
+      .delete(gameTemplates)
+      .where(eq(gameTemplates.id, templateId))
+      .returning();
+
+    if (!deletedTemplate) {
+      throw new Error('Template not found');
+    }
+
+    return deletedTemplate;
   }
 }
 

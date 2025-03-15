@@ -526,7 +526,6 @@ export async function registerRoutes(app: Express) {
         parameters
       };
 
-
       const response = await makeOpenAIRequest(requestConfig);
 
       const finalDesign = JSON.parse(response.choices[0].message.content || "{}");
@@ -908,9 +907,10 @@ When providing suggestions:
     } catch (error: any) {
       console.error('Debug endpoint error:', error);
       res.status(500).json({
-        error: "Debug Helper Error",
-        message: "I couldn't analyze the game properly. Please try running the game again to get fresh error information.",
-        details: error.message      });
+        error: "Debug HelperError",
+        message: "I couldn't analyze the game properly. Please try running the game again toget fresh error information.",
+        details: error.message
+      });
     }
   });
 
@@ -1836,6 +1836,28 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
+  // Add this to the existing routes in server/routes.ts
+  app.delete("/api/templates/:id", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "Only admins can delete templates" });
+      }
+
+      const templateId = parseInt(req.params.id);
+      const deleted = await storage.deleteTemplate(templateId);
+      logApi("Template deleted", { templateId }, deleted);
+      res.json(deleted);
+    } catch (error: any) {
+      console.error('Error deleting template:', error);
+      if (error.message === 'Template not found') {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      logApi("Error deleting template", req.body, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
@@ -1851,7 +1873,7 @@ async function getAvailableModels() {
 const insertGameTemplateSchema = z.object({
   name: z.string(),
   description: z.string(),
-category: z.string(),
+  category: z.string(),
   tags: z.array(z.string()),
   code: z.string(),
   isPublic: z.boolean().optional()

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,19 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, Trash2 } from "lucide-react";
 import type { GameTemplate } from "@shared/schema";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface TemplateLibraryProps {
   onTemplateSelect: (code: string, settings?: TemplateSettings) => void;
@@ -32,10 +43,37 @@ interface TemplateSettings {
 export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [templateToDelete, setTemplateToDelete] = useState<GameTemplate | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: templates, isLoading } = useQuery<GameTemplate[]>({
     queryKey: ["/api/templates"],
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (templateId: number) => {
+      const response = await fetch(`/api/templates/${templateId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete template');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({
+        title: "Template Deleted",
+        description: "The template has been successfully deleted.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to delete template. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const filteredTemplates = templates?.filter(template => {
@@ -48,15 +86,22 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
   const categories = templates ? Array.from(new Set(templates.map(t => t.category))) : [];
 
   const handleTemplateSelect = (template: GameTemplate) => {
-    // Extract default settings if they exist
     const settings = template.defaultSettings as TemplateSettings | undefined;
-
     onTemplateSelect(template.code, settings);
 
     toast({
       title: "Template Selected",
       description: `Loading ${template.name} template...`,
     });
+  };
+
+  const handleDeleteTemplate = async (template: GameTemplate) => {
+    try {
+      await deleteMutation.mutateAsync(template.id);
+      setTemplateToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete template:', error);
+    }
   };
 
   if (isLoading) {
@@ -97,22 +142,60 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
       <ScrollArea className="h-[500px]">
         <div className="grid grid-cols-2 gap-4">
           {filteredTemplates?.map(template => (
-            <Card key={template.id} className="p-4 hover:bg-accent cursor-pointer" onClick={() => handleTemplateSelect(template)}>
-              {template.previewImageUrl && (
-                <img
-                  src={template.previewImageUrl}
-                  alt={template.name}
-                  className="w-full h-32 object-cover rounded-md mb-3"
-                />
-              )}
-              <h3 className="font-semibold mb-1">{template.name}</h3>
-              <p className="text-sm text-muted-foreground mb-2">{template.description}</p>
-              <div className="flex flex-wrap gap-1">
-                {template.tags?.map(tag => (
-                  <span key={tag} className="text-xs bg-primary/10 text-primary rounded-full px-2 py-1">
-                    {tag}
-                  </span>
-                ))}
+            <Card key={template.id} className="p-4 hover:bg-accent relative group">
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTemplateToDelete(template);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete "{template.name}"? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setTemplateToDelete(null)}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDeleteTemplate(template)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+              <div onClick={() => handleTemplateSelect(template)} className="cursor-pointer">
+                {template.previewImageUrl && (
+                  <img
+                    src={template.previewImageUrl}
+                    alt={template.name}
+                    className="w-full h-32 object-cover rounded-md mb-3"
+                  />
+                )}
+                <h3 className="font-semibold mb-1">{template.name}</h3>
+                <p className="text-sm text-muted-foreground mb-2">{template.description}</p>
+                <div className="flex flex-wrap gap-1">
+                  {template.tags?.map(tag => (
+                    <span key={tag} className="text-xs bg-primary/10 text-primary rounded-full px-2 py-1">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               </div>
             </Card>
           ))}
