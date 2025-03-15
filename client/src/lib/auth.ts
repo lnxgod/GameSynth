@@ -6,6 +6,8 @@ interface AuthState {
   username: string | null;
   role: string | null;
   forcePasswordChange: boolean;
+  analysis_model: string | null;
+  code_gen_model: string | null;
 }
 
 interface AuthContextType {
@@ -20,6 +22,8 @@ const initialState: AuthState = {
   username: null,
   role: null,
   forcePasswordChange: false,
+  analysis_model: null,
+  code_gen_model: null,
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -38,13 +42,15 @@ export function useAuthProvider() {
   const login = async (username: string, password: string) => {
     const res = await apiRequest("POST", "/api/auth/login", { username, password });
     const data = await res.json();
-    
+
     if (res.ok) {
       setAuth({
         isAuthenticated: true,
         username: data.username,
         role: data.role,
-        forcePasswordChange: data.forcePasswordChange
+        forcePasswordChange: data.forcePasswordChange,
+        analysis_model: data.analysis_model || null,
+        code_gen_model: data.code_gen_model || null
       });
     } else {
       throw new Error(data.error);
@@ -61,7 +67,7 @@ export function useAuthProvider() {
       currentPassword,
       newPassword,
     });
-    
+
     if (res.ok) {
       setAuth(prev => ({ ...prev, forcePasswordChange: false }));
     } else {

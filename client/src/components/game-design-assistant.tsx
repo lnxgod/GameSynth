@@ -41,6 +41,8 @@ interface AnalyzedAspect {
   technical_considerations: string[];
 }
 
+type AnalysisResults = Record<keyof GameRequirements, AnalyzedAspect>;
+
 interface AnalysisProgress {
   status: 'idle' | 'analyzing' | 'complete' | 'error';
   progress: number;
@@ -275,12 +277,12 @@ export function GameDesignAssistant({
       const res = await apiRequest('POST', '/api/design/generate', {
         sessionId,
         analyses: Object.fromEntries(
-          Object.entries(analyses).map(([key, value]) => [
+          Object.entries(analyses as AnalysisResults).map(([key, value]) => [
             key,
             {
-              analysis: value?.analysis,
-              implementation_details: value?.implementation_details,
-              technical_considerations: value?.technical_considerations
+              analysis: value.analysis,
+              implementation_details: value.implementation_details,
+              technical_considerations: value.technical_considerations
             }
           ])
         ),
