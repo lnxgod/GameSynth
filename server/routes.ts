@@ -7,10 +7,11 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from "path";
 import fs from "fs/promises";
-import { chats, games, features, users } from "@shared/schema";
+import { chats, games, features, users, gameTemplates } from "@shared/schema";
 import { db } from './db';
 import { eq } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
+import { z } from 'zod';
 
 // Helper function to make OpenAI requests with strict parameter control
 async function makeOpenAIRequest(config: any) {
@@ -909,8 +910,7 @@ When providing suggestions:
       res.status(500).json({
         error: "Debug Helper Error",
         message: "I couldn't analyze the game properly. Please try running the game again to get fresh error information.",
-        details: error.message
-      });
+        details: error.message      });
     }
   });
 
@@ -1613,6 +1613,197 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
+  // Add these routes after existing routes, before the httpServer is created
+
+  // Template Library Routes
+  app.get("/api/templates", async (req, res) => {
+    try {
+      const templates = await db.select().from(gameTemplates);
+      res.json(templates);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/templates", async (req, res) => {
+    try {
+      const templateData = insertGameTemplateSchema.parse(req.body);
+      const [template] = await db
+        .insert(gameTemplates)
+        .values(templateData)
+        .returning();
+      res.json(template);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/templates/:id", async (req, res) => {
+    try {
+      const templateId = parseInt(req.params.id);
+      const [template] = await db
+        .select()
+        .from(gameTemplates)
+        .where(eq(gameTemplates.id, templateId));
+
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+
+      res.json(template);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add some initial templates
+  app.post("/api/templates/seed", async (req, res) => {
+    try {
+      const initialTemplates = [
+        {
+          name: "Simple Platformer",
+          description: "A basic platformer game with jumping mechanics",
+          category: "Platformer",
+          tags: ["2D", "Beginner", "Arcade"],
+          code: `
+            // Player setup
+            const player = {
+              x: canvas.width / 2,
+              y: canvas.height - 50,
+              width: 32,
+              height: 32,
+              speed: 5,
+              jumpForce: -12,
+              velocity: 0,
+              grounded: false
+            };
+
+            // Game loop
+            function gameLoop() {
+              // Clear canvas
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+              // Update player
+              if (!player.grounded) {
+                player.velocity += 0.5; // Gravity
+                player.y += player.velocity;
+              }
+
+              // Ground collision
+              if (player.y + player.height > canvas.height) {
+                player.y = canvas.height - player.height;
+                player.velocity = 0;
+                player.grounded = true;
+              }
+
+              // Draw player
+              ctx.fillStyle = 'blue';
+              ctx.fillRect(player.x, player.y, player.width, player.height);
+
+              requestAnimationFrame(gameLoop);
+            }
+
+            // Controls
+            window.addEventListener('keydown', (e) => {
+              if (e.code === 'Space' && player.grounded) {
+                player.velocity = player.jumpForce;
+                player.grounded = false;
+              }
+              if (e.code === 'ArrowLeft') player.x -= player.speed;
+              if (e.code === 'ArrowRight') player.x += player.speed;
+            });
+
+            gameLoop();
+          `,
+          isPublic: true
+        },
+        {
+          name: "Space Shooter",
+          description: "Classic space shooting game with enemies and projectiles",
+          category: "Shooter",
+          tags: ["Space", "Arcade", "Action"],
+          code: `
+            // Game objects
+            const player = {
+              x: canvas.width / 2,
+              y: canvas.height - 50,
+              width: 32,
+              height: 32,
+              speed: 5
+            };
+
+            const bullets = [];
+            const enemies = [];
+
+            // Game loop
+            function gameLoop() {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+              // Update and draw bullets
+              bullets.forEach((bullet, i) => {
+                bullet.y -= 7;
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(bullet.x, bullet.y, 4, 10);
+
+                if (bullet.y < 0) bullets.splice(i, 1);
+              });
+
+              // Spawn enemies
+              if (Math.random() < 0.02) {
+                enemies.push({
+                  x: Math.random() * (canvas.width - 30),
+                  y: 0,
+                  width: 30,
+                  height: 30
+                });
+              }
+
+              // Update and draw enemies
+              enemies.forEach((enemy, i) => {
+                enemy.y += 2;
+                ctx.fillStyle = 'red';
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+                if (enemy.y > canvas.height) enemies.splice(i, 1);
+              });
+
+              // Draw player
+              ctx.fillStyle = 'green';
+              ctx.fillRect(player.x, player.y, player.width, player.height);
+
+              requestAnimationFrame(gameLoop);
+            }
+
+            // Controls
+            window.addEventListener('keydown', (e) => {
+              if (e.code === 'Space') {
+                bullets.push({
+                  x: player.x + player.width / 2,
+                  y: player.y
+                });
+              }
+              if (e.code === 'ArrowLeft') player.x -= player.speed;
+              if (e.code === 'ArrowRight') player.x += player.speed;
+            });
+
+            gameLoop();
+          `,
+          isPublic: true
+        }
+      ];
+
+      const templates = await Promise.all(
+        initialTemplates.map(template =>
+          db.insert(gameTemplates).values(template).returning()
+        )
+      );
+
+      res.json(templates);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Add this new endpoint after the existing project endpoints
   app.get("/api/files/:fileId/raw", async (req, res) => {
     try {
@@ -1656,3 +1847,12 @@ const logOpenAIParams = (config: any) => {
 async function getAvailableModels() {
     return DEFAULT_MODELS;
 }
+
+const insertGameTemplateSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+category: z.string(),
+  tags: z.array(z.string()),
+  code: z.string(),
+  isPublic: z.boolean().optional()
+});

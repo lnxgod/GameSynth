@@ -16,6 +16,23 @@ export const users = pgTable("users", {
   code_gen_model: text("code_gen_model").default('gpt-4o'),
 });
 
+// Add new game templates table
+export const gameTemplates = pgTable("game_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  code: text("code").notNull(),
+  category: text("category").notNull(),
+  tags: text("tags").array(),
+  previewImageUrl: text("preview_image_url"),
+  defaultSettings: jsonb("default_settings"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+  isPublic: boolean("is_public").default(true),
+});
+
+// Keep existing tables
 export const chats = pgTable("chats", {
   id: serial("id").primaryKey(),
   prompt: text("prompt").notNull(),
@@ -53,7 +70,6 @@ export const gameDesigns = pgTable("game_designs", {
   userId: integer("user_id").references(() => users.id),
 });
 
-// Add new tables for code projects
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -116,7 +132,6 @@ export const insertGameDesignSchema = createInsertSchema(gameDesigns).pick({
   settings: true,
 });
 
-// Add new schemas for projects
 export const insertProjectSchema = createInsertSchema(projects).pick({
   name: true,
   userId: true,
@@ -129,7 +144,21 @@ export const insertProjectFileSchema = createInsertSchema(projectFiles).pick({
   language: true,
 });
 
-// Add new types
+// Add new schema for game templates
+export const insertGameTemplateSchema = createInsertSchema(gameTemplates)
+  .pick({
+    name: true,
+    description: true,
+    code: true,
+    category: true,
+    tags: true,
+    previewImageUrl: true,
+    defaultSettings: true,
+    createdBy: true,
+    isPublic: true,
+  });
+
+// Keep existing types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertChat = z.infer<typeof insertChatSchema>;
@@ -144,3 +173,7 @@ export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
 export type InsertProjectFile = z.infer<typeof insertProjectFileSchema>;
 export type ProjectFile = typeof projectFiles.$inferSelect;
+
+// Add new type for game templates
+export type InsertGameTemplate = z.infer<typeof insertGameTemplateSchema>;
+export type GameTemplate = typeof gameTemplates.$inferSelect;

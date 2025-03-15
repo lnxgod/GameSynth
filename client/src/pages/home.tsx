@@ -6,6 +6,7 @@ import { ApiLogs } from "@/components/api-logs";
 import { GameDesignAssistant } from "@/components/game-design-assistant";
 import { FeatureChecklist } from "@/components/feature-checklist";
 import { AIStatusIndicator } from "@/components/ai-status-indicator";
+import { TemplateLibrary } from "@/components/template-library";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -46,6 +47,11 @@ export default function Home() {
     }
   }, []);
 
+  const handleTemplateSelect = (code: string) => {
+    setGameCode(code);
+    addDebugLog("Loaded code from template");
+  };
+
   return (
     <div className="container mx-auto p-4 min-h-screen">
       <div className="flex items-center mb-8">
@@ -66,11 +72,16 @@ export default function Home() {
       </div>
 
       <div className="space-y-8">
-        <Tabs defaultValue="assistant" className="w-full">
+        <Tabs defaultValue="templates" className="w-full">
           <TabsList className="w-full">
+            <TabsTrigger value="templates" className="flex-1">Templates</TabsTrigger>
             <TabsTrigger value="assistant" className="flex-1">Design Assistant</TabsTrigger>
             <TabsTrigger value="direct" className="flex-1">Direct Input</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="templates" className="mt-4">
+            <TemplateLibrary onTemplateSelect={handleTemplateSelect} />
+          </TabsContent>
 
           <TabsContent value="assistant" className="mt-4">
             <GameDesignAssistant
