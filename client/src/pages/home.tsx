@@ -122,6 +122,12 @@ export default function Home() {
           <TabsContent value="direct" className="mt-4">
             <ChatInterface 
               onCodeReceived={setGameCode}
+              selectedModel={selectedModel}
+              onSelectedModelChange={setSelectedModel}
+              modelParameters={modelParameters}
+              onModelParametersChange={setModelParameters}
+              systemPrompt={systemPrompt}
+              onSystemPromptChange={setSystemPrompt}
               onAiOperation={setAiOperation}
               isNonTechnicalMode={isNonTechnicalMode}
             />
