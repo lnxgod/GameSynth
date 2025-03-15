@@ -1,16 +1,14 @@
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import { 
-  chats, games, features, users, projects, projectFiles, gameTemplates,
+  chats, games, features, users, projects, projectFiles, gameTemplates, gameDesigns,
   type Chat, type Game, type Feature, type User, 
   type InsertChat, type InsertGame, type InsertFeature, type InsertUser,
   type Project, type ProjectFile, type InsertProject, type InsertProjectFile,
-  type GameTemplate, type InsertGameTemplate
+  type GameTemplate, type InsertGameTemplate, type GameDesign, type InsertGameDesign
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from 'drizzle-orm';
 import { db } from './db'; // Import the db instance from db.ts
-import { type GameDesign, type InsertGameDesign } from '@shared/schema'; // Assuming this import is needed
-
 
 export interface IStorage {
   // Add new project methods
@@ -187,7 +185,10 @@ export class PostgresStorage implements IStorage {
   async updateUserLastLogin(id: number): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ lastLogin: new Date() })
+      .set({ 
+        lastLogin: new Date(),
+        updatedAt: new Date()
+      })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -249,7 +250,8 @@ export class PostgresStorage implements IStorage {
   async createGameDesign(design: InsertGameDesign & { userId: number }): Promise<GameDesign> {
     const [newDesign] = await db.insert(gameDesigns).values({
       ...design,
-      updatedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
     }).returning();
     return newDesign;
   }
@@ -268,7 +270,7 @@ export class PostgresStorage implements IStorage {
       .update(gameDesigns)
       .set({
         ...design,
-        updatedAt: new Date(),
+        updatedAt: new Date()
       })
       .where(eq(gameDesigns.id, id))
       .returning();
@@ -315,3 +317,6 @@ export class PostgresStorage implements IStorage {
 
 // Export storage instance
 export const storage = new PostgresStorage();
+
+// Ensure admin user exists on startup
+storage.ensureDefaultAdmin().catch(console.error);
