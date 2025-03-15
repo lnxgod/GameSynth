@@ -55,22 +55,31 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
     mutationFn: async (templateId: number) => {
       const response = await fetch(`/api/templates/${templateId}`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
+
       if (!response.ok) {
-        throw new Error('Failed to delete template');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete template');
       }
+
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       toast({
-        title: "Template Deleted",
-        description: "The template has been successfully deleted.",
+        title: "Success",
+        description: "Template deleted successfully",
       });
+      setTemplateToDelete(null);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
+      console.error('Delete template error:', error);
       toast({
         title: "Error",
-        description: "Failed to delete template. Please try again.",
+        description: error.message || "Failed to delete template",
         variant: "destructive",
       });
     },
@@ -98,7 +107,6 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
   const handleDeleteTemplate = async (template: GameTemplate) => {
     try {
       await deleteMutation.mutateAsync(template.id);
-      setTemplateToDelete(null);
     } catch (error) {
       console.error('Failed to delete template:', error);
     }

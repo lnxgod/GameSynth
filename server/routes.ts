@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertChatSchema, insertGameSchema } from "@shared/schema";
+import { insertChatSchema, insertGameSchema, insertGameTemplateSchema, insertUserSchema, insertFeatureSchema } from "@shared/schema";
 import OpenAI from "openai";
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -1839,22 +1839,37 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   // Add this to the existing routes in server/routes.ts
   app.delete("/api/templates/:id", async (req, res) => {
     try {
+      // Get user from request
       const user = (req as any).user;
-      if (user.role !== 'admin') {
+
+      // Check if user exists and has admin role
+      if (!user || user.role !== 'admin') {
         return res.status(403).json({ error: "Only admins can delete templates" });
       }
 
       const templateId = parseInt(req.params.id);
+
+      // Log deletion attempt
+      logApi("Attempting to delete template", { templateId, userId: user.id });
+
+      // Delete template
       const deleted = await storage.deleteTemplate(templateId);
-      logApi("Template deleted", { templateId }, deleted);
+
+      // Log successful deletion
+      logApi("Template deleted successfully", { templateId }, deleted);
+
       res.json(deleted);
     } catch (error: any) {
       console.error('Error deleting template:', error);
+
+      // Log error
+      logApi("Error deleting template", { error: error.message });
+
       if (error.message === 'Template not found') {
         return res.status(404).json({ error: "Template not found" });
       }
-      logApi("Error deleting template", req.body, { error: error.message });
-      res.status(500).json({ error: error.message });
+
+      res.status(500).json({ error: "Failed to delete template" });
     }
   });
 

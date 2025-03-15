@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import { 
-  chats, games, features, users, projects, projectFiles,
+  chats, games, features, users, projects, projectFiles, gameTemplates,
   type Chat, type Game, type Feature, type User, 
   type InsertChat, type InsertGame, type InsertFeature, type InsertUser,
   type Project, type ProjectFile, type InsertProject, type InsertProjectFile,
@@ -295,16 +295,21 @@ export class PostgresStorage implements IStorage {
     return user;
   }
   async deleteTemplate(templateId: number): Promise<GameTemplate> {
-    const [deletedTemplate] = await db
-      .delete(gameTemplates)
-      .where(eq(gameTemplates.id, templateId))
-      .returning();
+    try {
+      const [deletedTemplate] = await db
+        .delete(gameTemplates)
+        .where(eq(gameTemplates.id, templateId))
+        .returning();
 
-    if (!deletedTemplate) {
-      throw new Error('Template not found');
+      if (!deletedTemplate) {
+        throw new Error('Template not found');
+      }
+
+      return deletedTemplate;
+    } catch (error: any) {
+      console.error('Error deleting template:', error);
+      throw error;
     }
-
-    return deletedTemplate;
   }
 }
 
