@@ -2,11 +2,21 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wand2, ListPlus, Settings2 } from "lucide-react";
+import { Loader2, Wand2, ListPlus, Settings2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModelParameterControls } from "@/components/model-parameter-controls";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
@@ -109,6 +119,13 @@ export function GameDesignAssistant({
     `You are an expert game designer and developer. Analyze the given requirements and create detailed implementation plans. 
      Focus on creating engaging, polished games that are fun to play and technically sound.`
   );
+  const [isTemplateSaveOpen, setIsTemplateSaveOpen] = useState(false);
+  const [templateDetails, setTemplateDetails] = useState({
+    name: "",
+    description: "",
+    category: "Other",
+    tags: [] as string[],
+  });
   const { toast } = useToast();
 
   const { data: availableModels, isLoading: isLoadingModels, error: modelsError } = useQuery({
@@ -252,6 +269,35 @@ export function GameDesignAssistant({
       onDesignGenerated(data);
     }
   });
+
+  const saveTemplateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/templates", {
+        name: templateDetails.name,
+        description: templateDetails.description,
+        category: templateDetails.category,
+        tags: templateDetails.tags,
+        code: editableDesign,
+        isPublic: true
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Template Saved",
+        description: "Your game has been saved as a template!",
+      });
+      setIsTemplateSaveOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
 
   const handleThink = async () => {
     if (!requirements.gameType || !requirements.mechanics || !requirements.visualStyle || !requirements.difficulty || !requirements.specialFeatures) {
@@ -397,6 +443,19 @@ export function GameDesignAssistant({
         />
       </div>
     );
+  };
+
+  const handleSaveTemplate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateDetails.name || !templateDetails.description) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    saveTemplateMutation.mutate();
   };
 
   return (
@@ -617,6 +676,98 @@ export function GameDesignAssistant({
                   </>
                 )}
               </Button>
+              {finalDesign && (
+                <Dialog open={isTemplateSaveOpen} onOpenChange={setIsTemplateSaveOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="bg-gradient-to-r from-green-500 to-teal-500 text-white hover:from-green-600 hover:to-teal-600">
+                      <Save className="mr-2 h-4 w-4" />
+                      Save as Template
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Save Game as Template</DialogTitle>
+                      <DialogDescription>
+                        Fill in the details to save this game as a reusable template.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSaveTemplate} className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Template Name</label>
+                        <Input
+                          required
+                          value={templateDetails.name}
+                          onChange={(e) => setTemplateDetails(prev => ({
+                            ...prev,
+                            name: e.target.value
+                          }))}
+                          placeholder="Enter a name for your template"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Description</label>
+                        <Textarea
+                          required
+                          value={templateDetails.description}
+                          onChange={(e) => setTemplateDetails(prev => ({
+                            ...prev,
+                            description: e.target.value
+                          }))}
+                          placeholder="Describe your game template"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Category</label>
+                        <Select
+                          value={templateDetails.category}
+                          onValueChange={(value) => setTemplateDetails(prev => ({
+                            ...prev,
+                            category: value
+                          }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Platformer">Platformer</SelectItem>
+                            <SelectItem value="Shooter">Shooter</SelectItem>
+                            <SelectItem value="Puzzle">Puzzle</SelectItem>
+                            <SelectItem value="RPG">RPG</SelectItem>
+                            <SelectItem value="Strategy">Strategy</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Tags (comma-separated)</label>
+                        <Input
+                          value={templateDetails.tags.join(", ")}
+                          onChange={(e) => setTemplateDetails(prev => ({
+                            ...prev,
+                            tags: e.target.value.split(",").map(tag => tag.trim())
+                          }))}
+                          placeholder="2D, Arcade, etc."
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          type="submit"
+                          disabled={saveTemplateMutation.isPending}
+                        >
+                          {saveTemplateMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            "Save Template"
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
 
             <div className="space-y-4">
