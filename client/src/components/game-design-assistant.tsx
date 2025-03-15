@@ -27,22 +27,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-interface GameDesignAssistantProps {
-  onCodeGenerated: (code: string) => void;
-  onDesignGenerated: (design: any) => void;
-  onFeaturesGenerated: (features: string[]) => void;
-  debugContext?: string;
-  initialSettings?: any;
-  isNonTechnicalMode: boolean;
-  onAiOperation: (operation: { type: string; active: boolean }) => void;
-  selectedModel: string;
-  onSelectedModelChange: (model: string) => void;
-  modelParameters: any;
-  onModelParametersChange: (params: any) => void;
-  systemPrompt: string;
-  onSystemPromptChange: (prompt: string) => void;
-}
-
 interface GameRequirements {
   gameType: string;
   mechanics: string;
@@ -96,6 +80,28 @@ const difficultyLevels = [
   "Expert"
 ];
 
+interface GameDesignAssistantProps {
+  onCodeGenerated: (code: string) => void;
+  onDesignGenerated: (design: any) => void;
+  onFeaturesGenerated: (features: string[]) => void;
+  debugContext?: string;
+  initialSettings?: any;
+  isNonTechnicalMode: boolean;
+  onAiOperation: (operation: { type: string; active: boolean }) => void;
+  selectedModel: string;
+  onSelectedModelChange: (model: string) => void;
+  modelParameters: any;
+  onModelParametersChange: (params: any) => void;
+  systemPrompt: string;
+  onSystemPromptChange: (prompt: string) => void;
+  analyses: any;
+  onAnalysesChange: (analyses: any) => void;
+  finalDesign: any;
+  onFinalDesignChange: (design: any) => void;
+  messages: Array<{ role: 'assistant' | 'user'; content: string }>;
+  onMessagesChange: (messages: Array<{ role: 'assistant' | 'user'; content: string }>) => void;
+}
+
 export function GameDesignAssistant({
   onCodeGenerated,
   onDesignGenerated,
@@ -109,7 +115,13 @@ export function GameDesignAssistant({
   modelParameters,
   onModelParametersChange,
   systemPrompt,
-  onSystemPromptChange
+  onSystemPromptChange,
+  analyses,
+  onAnalysesChange,
+  finalDesign,
+  onFinalDesignChange,
+  messages,
+  onMessagesChange
 }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [requirements, setRequirements] = useState<GameRequirements>(() => {
@@ -130,10 +142,7 @@ export function GameDesignAssistant({
       specialFeatures: ""
     };
   });
-  const [analyses, setAnalyses] = useState<Partial<Record<keyof GameRequirements, AnalyzedAspect>>>({});
-  const [finalDesign, setFinalDesign] = useState<any>(null);
   const [editableDesign, setEditableDesign] = useState<string>("");
-  const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
   const [analysisProgress, setAnalysisProgress] = useState<AspectProgress>({
     gameType: { status: 'idle', progress: 0 },
@@ -194,10 +203,10 @@ export function GameDesignAssistant({
       }
     },
     onSuccess: (data, aspect) => {
-      setAnalyses(prev => ({
-        ...prev,
+      onAnalysesChange({
+        ...analyses,
         [aspect]: data
-      }));
+      });
       setAnalysisProgress(prev => ({
         ...prev,
         [aspect]: { status: 'complete', progress: 100 }
@@ -227,8 +236,8 @@ export function GameDesignAssistant({
       return res.json();
     },
     onSuccess: (data) => {
-      setMessages(data.history);
-      setFinalDesign(data);
+      onMessagesChange(data.history);
+      onFinalDesignChange(data);
       setEditableDesign(data.description || "");
       onDesignGenerated(data);
       toast({

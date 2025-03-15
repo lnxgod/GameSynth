@@ -32,6 +32,9 @@ export default function Home() {
     `You are an expert game designer and developer. Analyze the given requirements and create detailed implementation plans. 
      Focus on creating engaging, polished games that are fun to play and technically sound.`
   );
+  const [analyses, setAnalyses] = useState<any>({});
+  const [finalDesign, setFinalDesign] = useState<any>(null);
+  const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -116,6 +119,12 @@ export default function Home() {
               onModelParametersChange={setModelParameters}
               systemPrompt={systemPrompt}
               onSystemPromptChange={setSystemPrompt}
+              analyses={analyses}
+              onAnalysesChange={setAnalyses}
+              finalDesign={finalDesign}
+              onFinalDesignChange={setFinalDesign}
+              messages={messages}
+              onMessagesChange={setMessages}
             />
           </TabsContent>
 
