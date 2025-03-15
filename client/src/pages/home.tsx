@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { ChatInterface } from "@/components/chat-interface";
-import { GameCanvas } from "@/components/game-canvas";
-import { EnhancedCodeEditor } from "@/components/enhanced-code-editor";
+import { PlunkerEditor } from "@/components/plunker-editor";
 import { DebugLogs } from "@/components/debug-logs";
 import { ApiLogs } from "@/components/api-logs";
 import { GameDesignAssistant } from "@/components/game-design-assistant";
@@ -15,7 +14,7 @@ import { ThemeSwitcher } from "@/components/ui/theme-switcher";
 export default function Home() {
   const [gameCode, setGameCode] = useState("");
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [gameDesign, setGameDesign] = useState<any>(null);
+  const [gameDesign, setGameDesign] = useState<string>("");
   const [features, setFeatures] = useState<string[]>([]);
   const [debugContext, setDebugContext] = useState<string>("");
   const [aiOperation, setAiOperation] = useState<{type: string; active: boolean}>({
@@ -23,8 +22,6 @@ export default function Home() {
     active: false
   });
   const [isNonTechnicalMode, setIsNonTechnicalMode] = useState(false);
-
-  const codeEditorRef = useRef<{ handleDebug: (errorMessage?: string) => void } | null>(null);
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -39,27 +36,14 @@ export default function Home() {
   const handleDebugError = (error: string) => {
     setDebugContext(error);
     setAiOperation({ type: 'Analyzing Error...', active: true });
-
-    const codeEditorTab = document.querySelector('[data-tab="code"]');
-    if (codeEditorTab instanceof HTMLElement) {
-      codeEditorTab.click();
-    }
-
-    if (codeEditorRef.current) {
-      codeEditorRef.current.handleDebug(error);
-    }
   };
 
   useEffect(() => {
-    const handleGameDesignLoad = (e: CustomEvent<any>) => {
-      setGameDesign(e.detail);
-      addDebugLog("Loaded game design from saved project");
-    };
-
-    window.addEventListener('loadGameDesign', handleGameDesignLoad as EventListener);
-    return () => {
-      window.removeEventListener('loadGameDesign', handleGameDesignLoad as EventListener);
-    };
+    const savedCode = localStorage.getItem('currentGameCode');
+    if (savedCode) {
+      setGameCode(savedCode);
+      addDebugLog("Loaded code from local storage");
+    }
   }, []);
 
   return (
@@ -109,24 +93,18 @@ export default function Home() {
           </TabsContent>
         </Tabs>
 
-        <Tabs defaultValue="preview" className="w-full">
+        <Tabs defaultValue="editor" className="w-full">
           <TabsList className="w-full">
-            <TabsTrigger value="preview" className="flex-1">Game Preview</TabsTrigger>
-            <TabsTrigger value="code" className="flex-1" data-tab="code">Code Editor</TabsTrigger>
+            <TabsTrigger value="editor" className="flex-1">Code Editor</TabsTrigger>
             <TabsTrigger value="features" className="flex-1">Features</TabsTrigger>
             <TabsTrigger value="debug" className="flex-1">Debug Logs</TabsTrigger>
             <TabsTrigger value="api" className="flex-1">API Logs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="preview" className="mt-4">
-            <GameCanvas code={gameCode} onDebugLog={addDebugLog} />
-          </TabsContent>
-
-          <TabsContent value="code" className="mt-4">
-            <EnhancedCodeEditor
-              initialCode={gameCode}
+          <TabsContent value="editor" className="mt-4">
+            <PlunkerEditor
+              code={gameCode}
               onCodeChange={handleCodeChange}
-              readOnly={false}
             />
           </TabsContent>
 
