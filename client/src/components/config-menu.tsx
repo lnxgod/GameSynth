@@ -40,15 +40,21 @@ export function ConfigMenu() {
 
   const updatePreferences = useMutation({
     mutationFn: async (prefs: ModelPreferences) => {
-      const res = await apiRequest("PATCH", "/api/users/model-preferences", prefs);
+      const res = await apiRequest("PATCH", "/api/users/model-preferences", {
+        analysis_model: prefs.analysisModel,
+        code_gen_model: prefs.codeGenModel
+      });
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error);
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      // Update local auth state with new preferences
+      auth.analysis_model = data.analysis_model;
+      auth.code_gen_model = data.code_gen_model;
       toast({
         title: "Success",
         description: "Model preferences updated",
