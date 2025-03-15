@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ChatInterface } from "@/components/chat-interface";
-import { PlunkerEditor } from "@/components/plunker-editor";
+import { CodeEditor } from "@/components/code-editor";
 import { DebugLogs } from "@/components/debug-logs";
 import { ApiLogs } from "@/components/api-logs";
 import { GameDesignAssistant } from "@/components/game-design-assistant";
@@ -49,8 +49,8 @@ export default function Home() {
   return (
     <div className="container mx-auto p-4 min-h-screen">
       <div className="flex items-center mb-8">
-        <ThemeSwitcher className="mr-4" />
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent flex-1">
+        <ThemeSwitcher />
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent flex-1 ml-4">
           AI Game Creator
         </h1>
         <div className="flex items-center space-x-2">
@@ -58,9 +58,8 @@ export default function Home() {
             id="non-technical-mode"
             checked={isNonTechnicalMode}
             onCheckedChange={setIsNonTechnicalMode}
-            className="data-[state=checked]:bg-primary"
           />
-          <Label htmlFor="non-technical-mode" className="text-sm">
+          <Label htmlFor="non-technical-mode">
             {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
           </Label>
         </div>
@@ -102,7 +101,7 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="editor" className="mt-4">
-            <PlunkerEditor
+            <CodeEditor
               code={gameCode}
               onCodeChange={handleCodeChange}
             />
