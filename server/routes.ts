@@ -1,15 +1,12 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertChatSchema, insertGameSchema, changePasswordSchema } from "@shared/schema";
+import { insertChatSchema, insertGameSchema } from "@shared/schema";
 import OpenAI from "openai";
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from "path";
 import fs from "fs/promises";
-import session from "express-session";
-import { isAuthenticated, authenticateUser, requirePasswordChange } from "./middleware/auth";
-import { insertUserSchema } from "@shared/schema";
 import { chats, games, features, users } from "@shared/schema";
 import { db } from './db';
 import { eq } from 'drizzle-orm';
@@ -224,18 +221,8 @@ export async function registerRoutes(app: Express) {
     throw error;
   }
 
-  app.use(session({
-    secret: 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-  }));
-
   // Get current prompts
-  app.get("/api/prompts", isAuthenticated, async (req, res) => {
+  app.get("/api/prompts", async (req, res) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'admin') {
@@ -248,7 +235,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Update prompts
-  app.post("/api/prompts", isAuthenticated, async (req, res) => {
+  app.post("/api/prompts", async (req, res) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'admin') {
@@ -267,37 +254,9 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Authentication routes
-  app.post("/api/auth/login", authenticateUser);
-
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ error: "Failed to logout" });
-      }
-      res.json({ message: "Logged out successfully" });
-    });
-  });
-
-  app.post("/api/auth/change-password", isAuthenticated, async (req, res) => {
-    try {
-      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
-      const user = (req as any).user;
-
-      const isValid = await bcrypt.compare(currentPassword, user.password);
-      if (!isValid) {
-        return res.status(401).json({ error: "Current password is incorrect" });
-      }
-
-      await storage.updateUserPassword(user.id, newPassword);
-      res.json({ message: "Password updated successfully" });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
 
   //New User Management Endpoints
-  app.get("/api/users", isAuthenticated, async (req, res) => {
+  app.get("/api/users", async (req, res) => {
     try {
       // Only admin can list users
       const user = (req as any).user;
@@ -312,7 +271,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/users/:id/role", isAuthenticated, async (req, res) => {
+  app.patch("/api/users/:id/role", async (req, res) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'admin') {
@@ -340,7 +299,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/users/:id/reset-password", isAuthenticated, async (req, res) => {
+  app.post("/api/users/:id/reset-password", async (req, res) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'admin') {
@@ -366,7 +325,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/users/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/users/:id", async (req, res) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'admin') {
@@ -394,7 +353,7 @@ export async function registerRoutes(app: Express) {
 
 
   // Game Design Routes
-  app.post("/api/game-designs", isAuthenticated, async (req, res) => {
+  app.post("/api/game-designs", async (req, res) => {
     try {
       const user = (req as any).user;
       const designData = insertGameDesignSchema.parse(req.body);
@@ -410,7 +369,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/game-designs", isAuthenticated, async (req, res) => {
+  app.get("/api/game-designs", async (req, res) => {
     try {
       const user = (req as any).user;
       const designs = await storage.getAllGameDesigns(user.id);
@@ -420,7 +379,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/game-designs/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/game-designs/:id", async (req, res) => {
     try {
       const designId = parseInt(req.params.id);
       const design = await storage.getGameDesign(designId);
@@ -440,7 +399,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.put("/api/game-designs/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/game-designs/:id", async (req, res) => {
     try {
       const designId = parseInt(req.params.id);
       const existingDesign = await storage.getGameDesign(designId);
@@ -463,7 +422,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/game-designs/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/game-designs/:id", async (req, res) => {
     try {
       const designId = parseInt(req.params.id);
       const existingDesign = await storage.getGameDesign(designId);
@@ -484,8 +443,9 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Keep existing protected routes
-  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users", "/api/game-designs"], isAuthenticated, requirePasswordChange);
+  // Keep existing routes, removing auth middleware
+  app.use(["/api/chat", "/api/chats", "/api/games", "/api/features", "/api/code/chat", "/api/code/remix", "/api/code/debug", "/api/hint", "/api/build/android", "/api/users", "/api/game-designs"], async (req, res, next) => { next() });
+
 
   app.get("/api/logs", (req, res) => {
     res.json(apiLogs);
@@ -1400,7 +1360,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     'o3': 'O3 Standard'
   };
 
-  app.post("/api/users", isAuthenticated, async (req, res) => {
+  app.post("/api/users", async (req, res) => {
     try {
       const user = (req as any).user;
 
@@ -1421,7 +1381,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   });
 
   // Update route to handle separate model preferences
-  app.patch("/api/users/model-preferences", isAuthenticated, async (req, res) => {
+  app.patch("/api/users/model-preferences", async (req, res) => {
     try {
       const user = (req as any).user;
       const { analysisModel, codeGenModel } = req.body;
@@ -1448,7 +1408,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  app.get("/api/models", isAuthenticated, async (req, res) => {
+  app.get("/api/models", async (req, res) => {
     try {
       const models = await getAvailableModels();
       res.json(models);
@@ -1458,7 +1418,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   });
 
   // Add these new routes after existing chat routes
-  app.post("/api/projects", isAuthenticated, async (req, res) => {
+  app.post("/api/projects", async (req, res) => {
     try {
       const { name, files } = req.body;
       const user = (req as any).user;
@@ -1492,7 +1452,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  app.get("/api/projects", isAuthenticated, async (req, res) => {
+  app.get("/api/projects", async (req, res) => {
     try {
       const user = (req as any).user;
       const projects = await storage.getAllProjects(user.id);
@@ -1502,7 +1462,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  app.get("/api/projects/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/projects/:id", async (req, res) => {
     try {
       const projectId = parseInt(req.params.id);
       const project = await storage.getProject(projectId);
@@ -1527,7 +1487,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  app.patch("/api/projects/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/projects/:id", async (req, res) => {
     try {
       const projectId = parseInt(req.params.id);
       const { name } = req.body;
@@ -1555,7 +1515,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  app.delete("/api/projects/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/projects/:id", async (req, res) => {
     try {
       const projectId = parseInt(req.params.id);
       const project = await storage.getProject(projectId);
@@ -1577,7 +1537,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
   });
 
   // Add endpoints for managing individual files within a project
-  app.post("/api/projects/:projectId/files", isAuthenticated, async (req, res) => {
+  app.post("/api/projects/:projectId/files", async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId);
       const { name, content, language } = req.body;
@@ -1606,7 +1566,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  app.patch("/api/projects/:projectId/files/:fileId", isAuthenticated, async (req, res) => {
+  app.patch("/api/projects/:projectId/files/:fileId", async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId);
       const fileId = parseInt(req.params.fileId);
@@ -1630,7 +1590,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  app.delete("/api/projects/:projectId/files/:fileId", isAuthenticated, async (req, res) => {
+  app.delete("/api/projects/:projectId/files/:fileId", async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId);
       const fileId = parseInt(req.params.fileId);
@@ -1687,4 +1647,12 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+const logOpenAIParams = (config: any) => {
+  return config;
+};
+
+async function getAvailableModels() {
+    return DEFAULT_MODELS;
 }

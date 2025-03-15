@@ -1,57 +1,19 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
-import Login from "@/pages/login";
-import ChangePassword from "@/pages/change-password";
-import UserManagement from "@/pages/user-management";
 import Run from "@/pages/run";
-import { AuthContext, useAuthProvider } from "@/lib/auth";
-import React, { useContext } from 'react';
 import { NavBar } from "@/components/nav-bar";
 
-function ProtectedRoute({ component: Component, requireAdmin, ...rest }: { component: React.ComponentType<any>, requireAdmin?: boolean }) {
-  const { auth } = useContext(AuthContext)!;
-
-  if (!auth.isAuthenticated) {
-    return <Redirect to="/login" />;
-  }
-
-  if (auth.forcePasswordChange) {
-    return <Redirect to="/change-password" />;
-  }
-
-  if (requireAdmin && auth.role !== 'admin') {
-    return <Redirect to="/" />;
-  }
-
-  return <Component {...rest} />;
-}
-
 function Router() {
-  const auth = useContext(AuthContext)!;
-
   return (
     <div>
-      {auth.auth.isAuthenticated && <NavBar />}
+      <NavBar />
       <Switch>
-        <Route path="/login">
-          {auth.auth.isAuthenticated ? <Redirect to="/" /> : <Login />}
-        </Route>
-        <Route path="/change-password">
-          {!auth.auth.isAuthenticated ? (
-            <Redirect to="/login" />
-          ) : !auth.auth.forcePasswordChange ? (
-            <Redirect to="/" />
-          ) : (
-            <ChangePassword />
-          )}
-        </Route>
-        <Route path="/users" component={() => <ProtectedRoute component={UserManagement} requireAdmin />} />
-        <Route path="/run" component={() => <ProtectedRoute component={Run} />} />
-        <Route path="/" component={() => <ProtectedRoute component={Home} />} />
+        <Route path="/run" component={Run} />
+        <Route path="/" component={Home} />
         <Route component={NotFound} />
       </Switch>
     </div>
@@ -59,15 +21,11 @@ function Router() {
 }
 
 function App() {
-  const auth = useAuthProvider();
-
   return (
-    <AuthContext.Provider value={auth}>
-      <QueryClientProvider client={queryClient}>
-        <Router />
-        <Toaster />
-      </QueryClientProvider>
-    </AuthContext.Provider>
+    <QueryClientProvider client={queryClient}>
+      <Router />
+      <Toaster />
+    </QueryClientProvider>
   );
 }
 
