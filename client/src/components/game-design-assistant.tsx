@@ -32,6 +32,9 @@ interface GameDesignAssistantProps {
   onDesignGenerated: (design: any) => void;
   onFeaturesGenerated: (features: string[]) => void;
   debugContext?: string;
+  initialSettings?: any;
+  isNonTechnicalMode: boolean;
+  onAiOperation: (operation: { type: string; active: boolean }) => void;
 }
 
 interface GameRequirements {
@@ -91,23 +94,37 @@ export function GameDesignAssistant({
   onCodeGenerated,
   onDesignGenerated,
   onFeaturesGenerated,
-  debugContext
+  debugContext,
+  initialSettings,
+  isNonTechnicalMode,
+  onAiOperation
 }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
-  const [requirements, setRequirements] = useState<GameRequirements>({
-    gameType: "",
-    mechanics: "",
-    visualStyle: "",
-    difficulty: "",
-    specialFeatures: ""
+  const [requirements, setRequirements] = useState<GameRequirements>(() => {
+    if (initialSettings) {
+      return {
+        gameType: initialSettings.gameType || "",
+        mechanics: initialSettings.mechanics || "",
+        visualStyle: initialSettings.visualStyle || "",
+        difficulty: initialSettings.difficulty || "",
+        specialFeatures: initialSettings.specialFeatures || ""
+      };
+    }
+    return {
+      gameType: "",
+      mechanics: "",
+      visualStyle: "",
+      difficulty: "",
+      specialFeatures: ""
+    };
   });
   const [analyses, setAnalyses] = useState<Partial<Record<keyof GameRequirements, AnalyzedAspect>>>({});
   const [finalDesign, setFinalDesign] = useState<any>(null);
   const [editableDesign, setEditableDesign] = useState<string>("");
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
-  const [modelParameters, setModelParameters] = useState<Record<string, any>>({});
+  const [selectedModel, setSelectedModel] = useState(initialSettings?.modelParameters?.model || "gpt-4o");
+  const [modelParameters, setModelParameters] = useState(initialSettings?.modelParameters || {});
   const [analysisProgress, setAnalysisProgress] = useState<AspectProgress>({
     gameType: { status: 'idle', progress: 0 },
     mechanics: { status: 'idle', progress: 0 },
@@ -115,7 +132,7 @@ export function GameDesignAssistant({
     difficulty: { status: 'idle', progress: 0 },
     specialFeatures: { status: 'idle', progress: 0 }
   });
-  const [systemPrompt, setSystemPrompt] = useState<string>(
+  const [systemPrompt, setSystemPrompt] = useState(initialSettings?.systemPrompt ||
     `You are an expert game designer and developer. Analyze the given requirements and create detailed implementation plans. 
      Focus on creating engaging, polished games that are fun to play and technically sound.`
   );
@@ -387,6 +404,27 @@ export function GameDesignAssistant({
     }
     saveTemplateMutation.mutate();
   };
+
+  useEffect(() => {
+    if (initialSettings) {
+      setRequirements({
+        gameType: initialSettings.gameType || requirements.gameType,
+        mechanics: initialSettings.mechanics || requirements.mechanics,
+        visualStyle: initialSettings.visualStyle || requirements.visualStyle,
+        difficulty: initialSettings.difficulty || requirements.difficulty,
+        specialFeatures: initialSettings.specialFeatures || requirements.specialFeatures
+      });
+
+      if (initialSettings.modelParameters) {
+        setSelectedModel(initialSettings.modelParameters.model || selectedModel);
+        setModelParameters(initialSettings.modelParameters);
+      }
+
+      if (initialSettings.systemPrompt) {
+        setSystemPrompt(initialSettings.systemPrompt);
+      }
+    }
+  }, [initialSettings, requirements, selectedModel]);
 
   return (
     <Card className="w-full">

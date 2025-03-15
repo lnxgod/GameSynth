@@ -16,7 +16,17 @@ import { Loader2, Search } from "lucide-react";
 import type { GameTemplate } from "@shared/schema";
 
 interface TemplateLibraryProps {
-  onTemplateSelect: (code: string) => void;
+  onTemplateSelect: (code: string, settings?: TemplateSettings) => void;
+}
+
+interface TemplateSettings {
+  gameType: string;
+  mechanics: string;
+  visualStyle: string;
+  difficulty: string;
+  specialFeatures: string;
+  modelParameters?: any;
+  systemPrompt?: string;
 }
 
 export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
@@ -38,7 +48,11 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
   const categories = templates ? Array.from(new Set(templates.map(t => t.category))) : [];
 
   const handleTemplateSelect = (template: GameTemplate) => {
-    onTemplateSelect(template.code);
+    // Extract default settings if they exist
+    const settings = template.defaultSettings as TemplateSettings | undefined;
+
+    onTemplateSelect(template.code, settings);
+
     toast({
       title: "Template Selected",
       description: `Loading ${template.name} template...`,

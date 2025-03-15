@@ -23,6 +23,7 @@ export default function Home() {
     active: false
   });
   const [isNonTechnicalMode, setIsNonTechnicalMode] = useState(false);
+  const [templateSettings, setTemplateSettings] = useState<any>(null);
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -47,8 +48,14 @@ export default function Home() {
     }
   }, []);
 
-  const handleTemplateSelect = (code: string) => {
+  const handleTemplateSelect = (code: string, settings?: any) => {
     setGameCode(code);
+    if (settings) {
+      setTemplateSettings(settings);
+      if (settings.gameType) {
+        setGameDesign(JSON.stringify(settings, null, 2));
+      }
+    }
     addDebugLog("Loaded code from template");
   };
 
@@ -91,6 +98,7 @@ export default function Home() {
               debugContext={debugContext}
               onAiOperation={setAiOperation}
               isNonTechnicalMode={isNonTechnicalMode}
+              initialSettings={templateSettings}
             />
           </TabsContent>
 
