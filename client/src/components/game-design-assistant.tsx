@@ -302,6 +302,18 @@ export function GameDesignAssistant({
         category: templateDetails.category,
         tags: templateDetails.tags,
         code: editableDesign,
+        defaultSettings: {
+          gameType: requirements.gameType,
+          mechanics: requirements.mechanics,
+          visualStyle: requirements.visualStyle,
+          difficulty: requirements.difficulty,
+          specialFeatures: requirements.specialFeatures,
+          modelParameters: {
+            model: selectedModel,
+            ...modelParameters
+          },
+          systemPrompt
+        },
         isPublic: true
       });
       return res.json();
@@ -419,16 +431,6 @@ export function GameDesignAssistant({
         difficulty: initialSettings.difficulty || requirements.difficulty,
         specialFeatures: initialSettings.specialFeatures || requirements.specialFeatures
       });
-
-      //These lines are removed because model parameters and system prompt are now props
-      // if (initialSettings.modelParameters) {
-      //   setSelectedModel(initialSettings.modelParameters.model || selectedModel);
-      //   setModelParameters(initialSettings.modelParameters);
-      // }
-
-      // if (initialSettings.systemPrompt) {
-      //   setSystemPrompt(initialSettings.systemPrompt);
-      // }
     }
   }, [initialSettings, requirements]);
 
