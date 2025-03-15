@@ -8,7 +8,7 @@ import { promisify } from 'util';
 import path from "path";
 import fs from "fs/promises";
 import session from "express-session";
-import { isAuthenticated, requirePasswordChange } from "./middleware/auth";
+import { isAuthenticated, authenticateUser, requirePasswordChange } from "./middleware/auth";
 import { insertUserSchema } from "@shared/schema";
 import { chats, games, features, users } from "@shared/schema";
 import { db } from './db';
@@ -267,40 +267,8 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { username, password } = req.body;
-      console.log('Login attempt for username:', username);
-
-      const user = await storage.getUser(username);
-      if (!user) {
-        console.log('User not found:', username);
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-
-      console.log('User found:', username, 'Checking password...');
-      const isValid = await bcrypt.compare(password, user.password);
-      if (!isValid) {
-        console.log('Invalid password for user:', username);
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-
-      await storage.updateUserLastLogin(user.id);
-      req.session.userId = user.id;
-
-      console.log('Login successful for:', username, 'Role:', user.role);
-      res.json({
-        username: user.username,
-        role: user.role,
-        forcePasswordChange: user.forcePasswordChange,
-        analysis_model: user.analysis_model || "gpt-4o",
-        code_gen_model: user.code_gen_model || "gpt-4o"
-      });
-    } catch (error: any) {
-      console.error('Login error:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
+  // Authentication routes
+  app.post("/api/auth/login", authenticateUser);
 
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
