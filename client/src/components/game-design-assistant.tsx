@@ -127,6 +127,10 @@ export function GameDesignAssistant({
 }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [requirements, setRequirements] = useState<GameRequirements>(() => {
+    const savedRequirements = localStorage.getItem('gameRequirements');
+    if (savedRequirements) {
+      return JSON.parse(savedRequirements);
+    }
     if (initialSettings) {
       return {
         gameType: initialSettings.gameType || "",
@@ -360,6 +364,10 @@ export function GameDesignAssistant({
       const analysisPromises = aspects.map(aspect => analyzeMutation.mutateAsync(aspect));
       await Promise.all(analysisPromises);
       await finalizeMutation.mutateAsync();
+
+      // After successful analysis, save the current state
+      localStorage.setItem('gameRequirements', JSON.stringify(requirements));
+      localStorage.setItem('analyses', JSON.stringify(analyses));
     } catch (error) {
       toast({
         title: "Analysis Error",
@@ -444,6 +452,11 @@ export function GameDesignAssistant({
       });
     }
   }, [initialSettings, requirements]);
+
+  useEffect(() => {
+    localStorage.setItem('gameRequirements', JSON.stringify(requirements));
+  }, [requirements]);
+
 
   const handleModelChange = (model: string) => {
     onSelectedModelChange(model);

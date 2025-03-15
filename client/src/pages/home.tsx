@@ -25,16 +25,34 @@ export default function Home() {
   const [isNonTechnicalMode, setIsNonTechnicalMode] = useState(false);
 
   // Design Assistant persistent states
-  const [templateSettings, setTemplateSettings] = useState<any>(null);
-  const [selectedModel, setSelectedModel] = useState("gpt-4o");
-  const [modelParameters, setModelParameters] = useState<any>({});
+  const [templateSettings, setTemplateSettings] = useState<any>(() => {
+    const savedSettings = localStorage.getItem('templateSettings');
+    return savedSettings ? JSON.parse(savedSettings) : null;
+  });
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem('selectedModel') || "gpt-4o";
+  });
+  const [modelParameters, setModelParameters] = useState<any>(() => {
+    const savedParams = localStorage.getItem('modelParameters');
+    return savedParams ? JSON.parse(savedParams) : {};
+  });
   const [systemPrompt, setSystemPrompt] = useState(
+    () => localStorage.getItem('systemPrompt') ||
     `You are an expert game designer and developer. Analyze the given requirements and create detailed implementation plans. 
      Focus on creating engaging, polished games that are fun to play and technically sound.`
   );
-  const [analyses, setAnalyses] = useState<any>({});
-  const [finalDesign, setFinalDesign] = useState<any>(null);
-  const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
+  const [analyses, setAnalyses] = useState<any>(() => {
+    const savedAnalyses = localStorage.getItem('analyses');
+    return savedAnalyses ? JSON.parse(savedAnalyses) : {};
+  });
+  const [finalDesign, setFinalDesign] = useState<any>(() => {
+    const savedDesign = localStorage.getItem('finalDesign');
+    return savedDesign ? JSON.parse(savedDesign) : null;
+  });
+  const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>(() => {
+    const savedMessages = localStorage.getItem('designMessages');
+    return savedMessages ? JSON.parse(savedMessages) : [];
+  });
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -72,6 +90,38 @@ export default function Home() {
     }
     addDebugLog(`Loaded template with settings: ${settings ? JSON.stringify(settings, null, 2) : 'No settings'}`);
   };
+
+  useEffect(() => {
+    if (templateSettings) {
+      localStorage.setItem('templateSettings', JSON.stringify(templateSettings));
+    }
+  }, [templateSettings]);
+
+  useEffect(() => {
+    localStorage.setItem('selectedModel', selectedModel);
+  }, [selectedModel]);
+
+  useEffect(() => {
+    localStorage.setItem('modelParameters', JSON.stringify(modelParameters));
+  }, [modelParameters]);
+
+  useEffect(() => {
+    localStorage.setItem('systemPrompt', systemPrompt);
+  }, [systemPrompt]);
+
+  useEffect(() => {
+    localStorage.setItem('analyses', JSON.stringify(analyses));
+  }, [analyses]);
+
+  useEffect(() => {
+    if (finalDesign) {
+      localStorage.setItem('finalDesign', JSON.stringify(finalDesign));
+    }
+  }, [finalDesign]);
+
+  useEffect(() => {
+    localStorage.setItem('designMessages', JSON.stringify(messages));
+  }, [messages]);
 
   return (
     <div className="container mx-auto p-4 min-h-screen">
