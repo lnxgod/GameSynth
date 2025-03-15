@@ -23,7 +23,15 @@ export default function Home() {
     active: false
   });
   const [isNonTechnicalMode, setIsNonTechnicalMode] = useState(false);
+
+  // Design Assistant persistent states
   const [templateSettings, setTemplateSettings] = useState<any>(null);
+  const [selectedModel, setSelectedModel] = useState("gpt-4o");
+  const [modelParameters, setModelParameters] = useState<any>({});
+  const [systemPrompt, setSystemPrompt] = useState(
+    `You are an expert game designer and developer. Analyze the given requirements and create detailed implementation plans. 
+     Focus on creating engaging, polished games that are fun to play and technically sound.`
+  );
 
   const addDebugLog = (log: string) => {
     setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${log}`]);
@@ -52,11 +60,14 @@ export default function Home() {
     setGameCode(code);
     if (settings) {
       setTemplateSettings(settings);
+      setSelectedModel(settings.modelParameters?.model || selectedModel);
+      setModelParameters(settings.modelParameters || modelParameters);
+      setSystemPrompt(settings.systemPrompt || systemPrompt);
       if (settings.gameType) {
         setGameDesign(JSON.stringify(settings, null, 2));
       }
     }
-    addDebugLog("Loaded code from template");
+    addDebugLog(`Loaded template with settings: ${settings ? JSON.stringify(settings, null, 2) : 'No settings'}`);
   };
 
   return (
@@ -99,6 +110,12 @@ export default function Home() {
               onAiOperation={setAiOperation}
               isNonTechnicalMode={isNonTechnicalMode}
               initialSettings={templateSettings}
+              selectedModel={selectedModel}
+              onSelectedModelChange={setSelectedModel}
+              modelParameters={modelParameters}
+              onModelParametersChange={setModelParameters}
+              systemPrompt={systemPrompt}
+              onSystemPromptChange={setSystemPrompt}
             />
           </TabsContent>
 

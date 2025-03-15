@@ -35,6 +35,12 @@ interface GameDesignAssistantProps {
   initialSettings?: any;
   isNonTechnicalMode: boolean;
   onAiOperation: (operation: { type: string; active: boolean }) => void;
+  selectedModel: string;
+  onSelectedModelChange: (model: string) => void;
+  modelParameters: any;
+  onModelParametersChange: (params: any) => void;
+  systemPrompt: string;
+  onSystemPromptChange: (prompt: string) => void;
 }
 
 interface GameRequirements {
@@ -97,7 +103,13 @@ export function GameDesignAssistant({
   debugContext,
   initialSettings,
   isNonTechnicalMode,
-  onAiOperation
+  onAiOperation,
+  selectedModel,
+  onSelectedModelChange,
+  modelParameters,
+  onModelParametersChange,
+  systemPrompt,
+  onSystemPromptChange
 }: GameDesignAssistantProps) {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [requirements, setRequirements] = useState<GameRequirements>(() => {
@@ -123,8 +135,6 @@ export function GameDesignAssistant({
   const [editableDesign, setEditableDesign] = useState<string>("");
   const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
   const [generatedFeatures, setGeneratedFeatures] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState(initialSettings?.modelParameters?.model || "gpt-4o");
-  const [modelParameters, setModelParameters] = useState(initialSettings?.modelParameters || {});
   const [analysisProgress, setAnalysisProgress] = useState<AspectProgress>({
     gameType: { status: 'idle', progress: 0 },
     mechanics: { status: 'idle', progress: 0 },
@@ -132,10 +142,6 @@ export function GameDesignAssistant({
     difficulty: { status: 'idle', progress: 0 },
     specialFeatures: { status: 'idle', progress: 0 }
   });
-  const [systemPrompt, setSystemPrompt] = useState(initialSettings?.systemPrompt ||
-    `You are an expert game designer and developer. Analyze the given requirements and create detailed implementation plans. 
-     Focus on creating engaging, polished games that are fun to play and technically sound.`
-  );
   const [isTemplateSaveOpen, setIsTemplateSaveOpen] = useState(false);
   const [templateDetails, setTemplateDetails] = useState({
     name: "",
@@ -316,7 +322,6 @@ export function GameDesignAssistant({
     }
   });
 
-
   const handleThink = async () => {
     if (!requirements.gameType || !requirements.mechanics || !requirements.visualStyle || !requirements.difficulty || !requirements.specialFeatures) {
       toast({
@@ -415,16 +420,25 @@ export function GameDesignAssistant({
         specialFeatures: initialSettings.specialFeatures || requirements.specialFeatures
       });
 
-      if (initialSettings.modelParameters) {
-        setSelectedModel(initialSettings.modelParameters.model || selectedModel);
-        setModelParameters(initialSettings.modelParameters);
-      }
+      //These lines are removed because model parameters and system prompt are now props
+      // if (initialSettings.modelParameters) {
+      //   setSelectedModel(initialSettings.modelParameters.model || selectedModel);
+      //   setModelParameters(initialSettings.modelParameters);
+      // }
 
-      if (initialSettings.systemPrompt) {
-        setSystemPrompt(initialSettings.systemPrompt);
-      }
+      // if (initialSettings.systemPrompt) {
+      //   setSystemPrompt(initialSettings.systemPrompt);
+      // }
     }
-  }, [initialSettings, requirements, selectedModel]);
+  }, [initialSettings, requirements]);
+
+  const handleModelChange = (model: string) => {
+    onSelectedModelChange(model);
+  };
+
+  const handleParametersChange = (params: any) => {
+    onModelParametersChange(params);
+  };
 
   return (
     <Card className="w-full">
@@ -444,7 +458,7 @@ export function GameDesignAssistant({
                 <label className="text-sm font-medium">System Prompt</label>
                 <Textarea
                   value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  onChange={(e) => onSystemPromptChange(e.target.value)}
                   className="min-h-[100px] font-mono text-sm"
                   placeholder="Customize the AI's behavior and focus..."
                 />
@@ -454,7 +468,7 @@ export function GameDesignAssistant({
                 <label className="text-sm font-medium">AI Model</label>
                 <Select
                   value={selectedModel}
-                  onValueChange={setSelectedModel}
+                  onValueChange={handleModelChange}
                   disabled={isLoadingModels}
                 >
                   <SelectTrigger>
@@ -478,7 +492,7 @@ export function GameDesignAssistant({
 
               <ModelParameterControls
                 model={selectedModel}
-                onParametersChange={setModelParameters}
+                onParametersChange={handleParametersChange}
               />
             </CollapsibleContent>
           </Collapsible>
