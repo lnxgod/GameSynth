@@ -84,7 +84,7 @@ When providing code:
 Explain things in simple terms as if talking to someone new to programming.
 When explaining code or changes:
 1. ALWAYS provide the COMPLETE updated code with original code PLUS your modifications, never partial updates
-2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
+2. Always wrap the ENTIRE game code (original + your changes) between +++CODESTART+++ and +++CODESTOP+++ markers
 3. Preserve all existing game functionality when adding new features
 4. Use everyday analogies and simple examples
 5. Avoid technical jargon - when you must use it, explain it simply
@@ -92,11 +92,12 @@ When explaining code or changes:
 7. Use friendly, encouraging language
 8. Break down complex concepts into simple steps
 9. The canvas and context variables are already provided
-10. IMPORTANT: When implementing a feature, ALWAYS include all of the original code and add your new code to it`,
+10. EXTREMELY IMPORTANT: When implementing a feature, you MUST include 100% of the original code and add your new code to it
+11. Do NOT skip any parts of the original code when returning your implementation`,
   DEBUG_TECHNICAL: `You are a game development assistant specialized in HTML5 Canvas games.
 When modifying code:
 1. ALWAYS provide the COMPLETE updated code with original code PLUS your modifications, never partial updates
-2. Always wrap the entire updated code between +++CODESTART+++ and +++CODESTOP+++ markers
+2. Always wrap the ENTIRE game code (original + your changes) between +++CODESTART+++ and +++CODESTOP+++ markers
 3. Preserve all existing game functionality when adding new features
 4. Explain the changes you're making in clear, simple terms
 5. Maintain game functionality and style consistency
@@ -104,7 +105,8 @@ When modifying code:
 7. The canvas and context variables are already provided, DO NOT create them
 8. Assume canvas and ctx are available in the scope
 9. DO NOT include HTML, just the JavaScript game code
-10. IMPORTANT: When implementing a feature, ALWAYS include all of the original code and add your new code to it`
+10. EXTREMELY IMPORTANT: When implementing a feature, you MUST include 100% of the original code and add your new code to it
+11. Do NOT skip any parts of the original code when returning your implementation`
 };
 
 // API Logs array with type definition
@@ -164,6 +166,7 @@ function extractGameCode(content: string): string | null {
 
     if (startIndex === -1) {
       console.log('ERROR: No CODESTART marker found in response');
+      console.log('Raw content:', content);
       return null;
     }
 
@@ -177,6 +180,7 @@ function extractGameCode(content: string): string | null {
       .substring(startIndex + startMarker.length, endIndex)
       .trim();
 
+    // Extract code from script tags if present (for HTML responses)
     if (code.includes('<script>')) {
       const scriptStart = code.indexOf('<script>') + 8;
       const scriptEnd = code.indexOf('</script>');
@@ -185,14 +189,18 @@ function extractGameCode(content: string): string | null {
       }
     }
 
+    // Clean up any HTML structure that might have been included
     code = code.replace(/<!DOCTYPE.*?>/, '');
     code = code.replace(/<html>.*?<body>/s, '');
     code = code.replace(/<\/body>.*?<\/html>/s, '');
 
+    // Remove canvas initialization that might be duplicated
     code = code.replace(/const canvas\s*=\s*document\.getElementById[^;]+;/, '');
     code = code.replace(/const ctx\s*=\s*canvas\.getContext[^;]+;/, '');
 
+    // Remove code block formatting if present
     code = code.replace(/^```javascript\n/, '');
+    code = code.replace(/^```js\n/, '');
     code = code.replace(/^```\n/, '');
     code = code.replace(/\n```$/, '');
 
@@ -201,7 +209,7 @@ function extractGameCode(content: string): string | null {
       return null;
     }
 
-    console.log('Extracted code:', code);
+    console.log('Extracted code successfully');
     return code;
 
   } catch (error) {
@@ -788,6 +796,22 @@ Each feature should be specific and actionable.`
         ? SystemPrompts.DEBUG_FRIENDLY
         : SystemPrompts.DEBUG_TECHNICAL;
 
+      // Enhanced user prompt that strongly emphasizes code preservation
+      const userPrompt = `Here is my current game code that MUST be preserved in your response:
+
+\`\`\`javascript
+${code}
+\`\`\`
+
+User request: ${message}
+${debugContext ? `\n\nDebug Context: ${debugContext}` : ''}
+
+IMPORTANT: When you provide your answer:
+1. Always include the COMPLETE, FULL original code
+2. Wrap ALL the code (original + your changes) between +++CODESTART+++ and +++CODESTOP+++ markers
+3. When implementing changes, NEVER remove ANY part of the original code; only ADD to it
+4. Keep all original functions and variables intact`;
+
       const requestConfig = {
         model: model || (user?.code_gen_model) || "gpt-4o",
         messages: [
@@ -797,9 +821,7 @@ Each feature should be specific and actionable.`
           },
           {
             role: "user",
-            content: `Here is my current game code:\n\n${code}\n\nUser request: ${message}${
-              debugContext ? `\n\nDebug Context: ${debugContext}` : ''
-            }`
+            content: userPrompt
           }
         ],
         temperature: 0.7,
@@ -811,6 +833,16 @@ Each feature should be specific and actionable.`
 
       const content = response.choices[0].message.content || "";
       const updatedCode = extractGameCode(content);
+
+      // Log the code extraction process for debugging
+      console.log(`Original code length: ${code.length}`);
+      console.log(`Extracted code length: ${updatedCode?.length || 0}`);
+      
+      // Verify code extraction worked properly
+      if (!updatedCode) {
+        console.error("Failed to extract code properly, check response format");
+        console.log("Response content:", content);
+      }
 
       const result = {
         message: content,
