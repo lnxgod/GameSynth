@@ -210,7 +210,7 @@ export default function RunPage() {
         <GameSandbox 
           gameCode={gameCode}
           onClose={handleCloseGame}
-          showCode={true}
+          showCode={false}
         />
       ) : (
         <Card>

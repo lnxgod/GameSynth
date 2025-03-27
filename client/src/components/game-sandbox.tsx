@@ -440,47 +440,66 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
       </div>
       
       <div className="flex-1 overflow-hidden flex flex-col">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
-          <div className="border-b px-4">
-            <TabsList>
-              <TabsTrigger value="preview" className="flex items-center gap-2">
-                <Maximize2 className="h-4 w-4" />
-                Preview
-              </TabsTrigger>
-              <TabsTrigger value="code" className="flex items-center gap-2">
-                <Code className="h-4 w-4" />
-                Code
-              </TabsTrigger>
-            </TabsList>
-          </div>
-          
-          <div className="flex-1 overflow-hidden">
-            <TabsContent value="preview" className="flex-1 h-full m-0 p-0 relative">
-              <iframe 
-                ref={iframeRef}
-                className="w-full h-full border-0"
-                title="Game Preview"
-                sandbox="allow-scripts allow-same-origin"
-              />
-              
-              {isLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
-                  <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
-                  <p>Loading game environment...</p>
-                </div>
-              )}
-            </TabsContent>
+        {showCode ? (
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
+            <div className="border-b px-4">
+              <TabsList>
+                <TabsTrigger value="preview" className="flex items-center gap-2">
+                  <Maximize2 className="h-4 w-4" />
+                  Preview
+                </TabsTrigger>
+                <TabsTrigger value="code" className="flex items-center gap-2">
+                  <Code className="h-4 w-4" />
+                  Code
+                </TabsTrigger>
+              </TabsList>
+            </div>
             
-            <TabsContent value="code" className="flex-1 h-full m-0 p-0">
-              <Textarea
-                value={editableCode}
-                onChange={handleCodeChange}
-                className="w-full h-full p-4 font-mono text-sm border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                style={{ minHeight: '100%' }}
-              />
-            </TabsContent>
+            <div className="flex-1 overflow-hidden">
+              <TabsContent value="preview" className="flex-1 h-full m-0 p-0 relative">
+                <iframe 
+                  ref={iframeRef}
+                  className="w-full h-full border-0"
+                  title="Game Preview"
+                  sandbox="allow-scripts allow-same-origin"
+                />
+                
+                {isLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
+                    <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
+                    <p>Loading game environment...</p>
+                  </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="code" className="flex-1 h-full m-0 p-0">
+                <Textarea
+                  value={editableCode}
+                  onChange={handleCodeChange}
+                  className="w-full h-full p-4 font-mono text-sm border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  style={{ minHeight: '100%' }}
+                />
+              </TabsContent>
+            </div>
+          </Tabs>
+        ) : (
+          // Preview-only mode
+          <div className="flex-1 relative">
+            <iframe 
+              ref={iframeRef}
+              className="w-full h-full border-0"
+              title="Game Preview"
+              sandbox="allow-scripts allow-same-origin"
+            />
+            
+            {isLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
+                <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
+                <p>Loading game environment...</p>
+              </div>
+            )}
           </div>
-        </Tabs>
+        )}
         
         {hasError && !isLoading && (
           <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-destructive/10 border border-destructive text-destructive p-4 rounded-md max-w-md z-10">
