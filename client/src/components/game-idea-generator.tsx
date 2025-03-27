@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spinner } from '@/components/ui/spinner';
+import { Spinner } from './ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -26,36 +26,20 @@ export function GameIdeaGenerator() {
     setError(null);
     
     try {
-      const response = await apiRequest('POST', '/api/chat', {
-        prompt: 'Generate a whimsical and creative game idea with a unique theme. Format it as a JSON object with the following properties: title, description, mainCharacter, setting, mechanics, twist. Make it suitable for casual players and keep the description concise. IMPORTANT: Return ONLY the JSON object without any additional text or code markers.',
-        modelConfig: {
-          model: 'gpt-4o'
-        }
-      });
+      // Direct API request to the dedicated game idea endpoint
+      const response = await apiRequest('POST', '/api/game-idea');
       
-      const data = await response;
+      console.log("Game idea generated:", response);
       
-      try {
-        // Extract JSON from the response
-        let jsonStr = data.response;
-        
-        // If the response contains JSON somewhere, extract it
-        if (jsonStr.includes('{') && jsonStr.includes('}')) {
-          const jsonStart = jsonStr.indexOf('{');
-          const jsonEnd = jsonStr.lastIndexOf('}') + 1;
-          jsonStr = jsonStr.substring(jsonStart, jsonEnd);
-        }
-        
-        const parsedIdea = JSON.parse(jsonStr);
-        
-        setGameIdea(parsedIdea);
-      } catch (parseError) {
-        console.error('Error parsing game idea:', parseError);
-        setError('Could not parse the generated game idea. Please try again.');
+      if (!response) {
+        throw new Error('Invalid response from the server');
       }
-    } catch (apiError) {
-      console.error('Error generating game idea:', apiError);
-      setError('Failed to generate a game idea. Please try again later.');
+      
+      // Set the game idea directly from the response as GameIdea
+      setGameIdea(response as GameIdea);
+    } catch (error) {
+      console.error('Error generating game idea:', error);
+      setError('Could not generate a game idea. Please try again.');
     } finally {
       setIsGenerating(false);
     }

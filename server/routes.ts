@@ -1,22 +1,28 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertChatSchema, insertGameSchema, insertGameTemplateSchema, insertUserSchema, insertFeatureSchema } from "@shared/schema";
-import OpenAI from "openai";
+import { insertChatSchema, insertGameSchema, insertFeatureSchema, insertUserSchema } from "@shared/schema";
+import { gameTemplates } from "@shared/schema";
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from "path";
 import fs from "fs/promises";
-import { chats, games, features, users, gameTemplates } from "@shared/schema";
+import { chats, games, features, users } from "@shared/schema";
 import { db } from './db';
 import { eq } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
 import { z } from 'zod';
+import OpenAI from "openai";
+import { makeCompletionRequest, makeChatCompletionRequest, makeJsonCompletionRequest, generateGameIdea } from './openai';
 
 // Helper function to make OpenAI requests with strict parameter control
 async function makeOpenAIRequest(config: any) {
   // Start with only the essential parameters
-  const baseRequest = {
+  const baseRequest: {
+    model: string;
+    messages: any[];
+    [key: string]: any;
+  } = {
     model: config.model,
     messages: config.messages
   };
@@ -38,8 +44,11 @@ async function makeOpenAIRequest(config: any) {
 
   logWithTimestamp('Final OpenAI request configuration:', baseRequest);
 
+  // Create a new instance of the OpenAI client with API key
+  const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  
   try {
-    return await openai.chat.completions.create(baseRequest);
+    return await openaiClient.chat.completions.create(baseRequest);
   } catch (error: any) {
     logWithTimestamp('OpenAI API Error:', error.message);
     throw error;
@@ -222,8 +231,6 @@ function extractGameCode(content: string): string | null {
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
 }
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function registerRoutes(app: Express) {
   // Ensure database is initialized
@@ -758,6 +765,21 @@ Each feature should be specific and actionable.`
       res.json(chats);
     } catch (error: any) {
       logApi("Error getting chats", req.query, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/game-idea", async (req, res) => {
+    try {
+      logApi("Game idea generation request received");
+
+      // Use our simplified game idea generation function from openai.ts
+      const gameIdea = await generateGameIdea();
+      
+      logApi("Game idea generated successfully", null, { gameIdea });
+      res.json(gameIdea);
+    } catch (error: any) {
+      logApi("Error generating game idea", null, { error: error.message });
       res.status(500).json({ error: error.message });
     }
   });
