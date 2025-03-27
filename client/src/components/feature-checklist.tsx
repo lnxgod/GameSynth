@@ -81,8 +81,12 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
       // Notify the UI that AI operation is in progress
       onAiOperation?.({ type: "Implementing Feature", active: true });
       
+      // Get the current game code from localStorage
+      const currentCode = localStorage.getItem('currentGameCode') || '';
+      
       try {
         const res = await apiRequest('POST', '/api/code/chat', {
+          code: currentCode,
           message: `Please implement this feature: ${feature}`,
           gameDesign
         });
