@@ -1,81 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, RefreshCw, Code, Loader2, ExternalLink, Maximize2 } from 'lucide-react';
-import {
-  SandpackProvider,
-  SandpackPreview,
-  SandpackLayout,
-  SandpackCodeEditor,
-  useSandpack,
-  SandpackFiles
-} from '@codesandbox/sandpack-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// This component handles SandpackPreview events
-function SandpackEventHandler({ onBoot, onError, onMessage }: { 
-  onBoot: () => void; 
-  onError: () => void;
-  onMessage: (msg: any) => void;
-}) {
-  const { listen } = useSandpack();
-
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    
-    const unsubscribe = listen(message => {
-      // Debug - log all messages
-      onMessage(`Sandbox message type: ${message.type}`);
-      
-      // Handle successful loads
-      if (message.type === 'start') {
-        onMessage('Sandbox started');
-      } 
-      
-      // Special case for 'done' message - this happens when compilation is complete
-      if (message.type === 'done') {
-        onMessage('Sandbox compilation done');
-        // Give a little time for the preview to fully render
-        timeout = setTimeout(() => {
-          onBoot();
-        }, 500);
-      }
-      
-      // Console messages from sandbox
-      if (message.type === 'console' && 'data' in message) {
-        try {
-          let logText = 'Console:';
-          
-          // Handle different console message formats
-          if (Array.isArray(message.data)) {
-            logText += ' ' + message.data.map((item: any) => 
-              typeof item === 'object' ? JSON.stringify(item) : String(item)
-            ).join(' ');
-          } else if (message.data) {
-            logText += ' ' + String(message.data);
-          }
-          
-          onMessage(logText);
-        } catch (err) {
-          onMessage(`Console log could not be parsed`);
-        }
-      }
-      
-      // Error detection - safely handle different message formats
-      if ((message as any).error || 
-         (message.type === 'action' && (message as any).action === 'show-error')) {
-        onMessage('Sandbox error detected');
-        onError();
-      }
-    });
-
-    return () => {
-      if (timeout) clearTimeout(timeout);
-      unsubscribe();
-    };
-  }, [listen, onBoot, onError, onMessage]);
-
-  return null;
-}
+import { Textarea } from '@/components/ui/textarea';
 
 interface GameSandboxProps {
   gameCode: string | null;
@@ -88,10 +15,9 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
   const [hasError, setHasError] = useState(false);
   const [editableCode, setEditableCode] = useState<string | null>(gameCode);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [sandpackFiles, setSandpackFiles] = useState<SandpackFiles | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState(showCode ? "code" : "preview");
-
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  
   // Logging helper
   const addDebugLog = (log: string) => {
     setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${log}`]);
@@ -213,76 +139,83 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
     `.trim();
   };
   
-  // Initialize files when code is available
-  useEffect(() => {
-    if (editableCode) {
-      const files = {
-        '/index.html': {
-          code: createGameHTML(editableCode),
-          active: true
-        },
-        '/game.js': {
-          code: editableCode,
-          active: false
-        }
-      };
-      
-      setSandpackFiles(files);
-      addDebugLog("Initialized sandbox files");
-    }
-  }, [editableCode]);
+  // Handle code changes from editor
+  const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditableCode(e.target.value);
+  };
   
-  // Log on component mount
-  useEffect(() => {
-    addDebugLog("Game sandbox component mounted");
-  }, []);
-  
-  // Update code when gameCode prop changes - only run on mount and when gameCode changes
+  // Update code when gameCode prop changes
   useEffect(() => {
     if (gameCode) {
       setEditableCode(gameCode);
       addDebugLog("Game code updated from props");
-      setIsLoading(true);
-      setHasError(false);
     }
   }, [gameCode]);
   
-  const handleRefresh = () => {
-    if (!editableCode) return;
+  // Handle iframe load events
+  useEffect(() => {
+    const iframe = iframeRef.current;
     
-    addDebugLog("Refreshing sandbox");
-    setIsLoading(true);
-    setHasError(false);
-    
-    // Update files and trigger a refresh
-    const updatedFiles = {
-      '/index.html': {
-        code: createGameHTML(editableCode),
-        active: activeTab === "preview"
-      },
-      '/game.js': {
-        code: editableCode,
-        active: activeTab === "code"
-      }
+    // Event handler for when iframe loads
+    const handleLoad = () => {
+      setIsLoading(false);
+      addDebugLog("Game preview loaded");
     };
     
-    setSandpackFiles(updatedFiles);
-    setRefreshTrigger(prev => prev + 1); // Force re-render of SandpackProvider
+    // Event handler for iframe errors
+    const handleError = () => {
+      setHasError(true);
+      setIsLoading(false);
+      addDebugLog("Error loading game preview");
+    };
+    
+    // Add event listeners
+    if (iframe) {
+      iframe.addEventListener('load', handleLoad);
+      iframe.addEventListener('error', handleError);
+      
+      // Log mount
+      addDebugLog("Game sandbox mounted");
+    }
+    
+    // Clean up
+    return () => {
+      if (iframe) {
+        iframe.removeEventListener('load', handleLoad);
+        iframe.removeEventListener('error', handleError);
+      }
+    };
+  }, []);
+  
+  // When editableCode changes and we're in preview tab, update the iframe
+  useEffect(() => {
+    if (editableCode && activeTab === 'preview') {
+      refreshPreview();
+    }
+  }, [editableCode, activeTab]);
+  
+  // Refresh the preview iframe
+  const refreshPreview = () => {
+    if (!editableCode || !iframeRef.current) return;
+    
+    setIsLoading(true);
+    setHasError(false);
+    addDebugLog("Refreshing game preview");
+    
+    // Create a data URL from the HTML content
+    const htmlContent = createGameHTML(editableCode);
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    
+    // Update the iframe src
+    iframeRef.current.src = url;
+    
+    // Clean up the URL after it's loaded
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
-
-  const handlePreviewReady = () => {
-    addDebugLog("Preview ready");
-    setIsLoading(false);
-  };
-
-  const handlePreviewError = () => {
-    addDebugLog("Preview error occurred");
-    setHasError(true);
-    setIsLoading(false);
-  };
-
+  
+  // Open game in new window
   const openInNewWindow = () => {
-    // Create a standalone HTML file with the game code
     if (!editableCode) return;
     
     const htmlContent = createGameHTML(editableCode);
@@ -295,60 +228,19 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
     // Clean up the URL after a delay
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
-
+  
+  // Handle tab changes
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    if (sandpackFiles) {
-      const updatedFiles = {
-        ...sandpackFiles,
-        '/game.js': {
-          ...sandpackFiles['/game.js'],
-          active: value === "code"
-        }
-      };
-      setSandpackFiles(updatedFiles);
+    
+    // If switching to preview, refresh it
+    if (value === 'preview') {
+      refreshPreview();
     }
   };
 
-  // Initialize sandbox files
-  useEffect(() => {
-    if (editableCode) {
-      const files: SandpackFiles = {
-        '/index.html': {
-          code: `<!DOCTYPE html>
-<html>
-  <head>
-    <style>
-      body { margin: 0; overflow: hidden; background: black; }
-      canvas { 
-        display: block;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        max-width: 100vw;
-        max-height: 100vh;
-      }
-    </style>
-  </head>
-  <body>
-    <canvas id="canvas"></canvas>
-    <script type="module" src="/game.js"></script>
-  </body>
-</html>`,
-          hidden: true
-        },
-        '/game.js': {
-          code: editableCode,
-          active: true
-        }
-      };
-      setSandpackFiles(files);
-    }
-  }, [editableCode]);
-
-  // Show loading placeholder if files not ready
-  if (!sandpackFiles) {
+  // Show loading placeholder if code not ready
+  if (!editableCode) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center">
         <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
@@ -366,7 +258,7 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={handleRefresh} 
+            onClick={refreshPreview} 
             title="Refresh Preview"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -409,56 +301,32 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
           </div>
           
           <div className="flex-1 overflow-hidden">
-            <SandpackProvider
-              files={sandpackFiles}
-              template="vanilla"
-              theme="dark"
-              options={{
-                externalResources: [],
-                recompileMode: "immediate",
-                recompileDelay: 300,
-              }}
-              key={refreshTrigger}
-              customSetup={{
-                entry: '/index.html'
-              }}
-            >
-              <TabsContent value="preview" className="flex-1 h-full m-0 p-0">
-                <div className="h-full flex flex-col">
-                  <SandpackPreview
-                    showOpenInCodeSandbox={false}
-                    showRefreshButton={false}
-                    showNavigator={false}
-                    className="flex-grow"
-                  />
-                  <SandpackEventHandler
-                    onBoot={handlePreviewReady}
-                    onError={handlePreviewError}
-                    onMessage={addDebugLog}
-                  />
-                </div>
-              </TabsContent>
+            <TabsContent value="preview" className="flex-1 h-full m-0 p-0 relative">
+              <iframe 
+                ref={iframeRef}
+                className="w-full h-full border-0"
+                title="Game Preview"
+                sandbox="allow-scripts allow-same-origin"
+              />
               
-              <TabsContent value="code" className="flex-1 h-full m-0 p-0">
-                <SandpackCodeEditor 
-                  showLineNumbers={true}
-                  showInlineErrors={true}
-                  wrapContent={true}
-                  closableTabs={true}
-                  initMode="immediate"
-                  className="h-full"
-                />
-              </TabsContent>
-            </SandpackProvider>
+              {isLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
+                  <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
+                  <p>Loading game environment...</p>
+                </div>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="code" className="flex-1 h-full m-0 p-0">
+              <Textarea
+                value={editableCode}
+                onChange={handleCodeChange}
+                className="w-full h-full p-4 font-mono text-sm border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                style={{ minHeight: '100%' }}
+              />
+            </TabsContent>
           </div>
         </Tabs>
-        
-        {isLoading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-10">
-            <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
-            <p>Loading game environment...</p>
-          </div>
-        )}
         
         {hasError && !isLoading && (
           <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-destructive/10 border border-destructive text-destructive p-4 rounded-md max-w-md z-10">
