@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Play, Settings } from "lucide-react";
+import { Play, Settings, Sparkles } from "lucide-react";
 import { GameSandbox } from "@/components/game-sandbox";
+import { GameIdeaGenerator } from "@/components/game-idea-generator";
 
 export function NavBar() {
   const [showGamePreview, setShowGamePreview] = useState(false);
@@ -37,6 +38,7 @@ export function NavBar() {
                 Prompts Setup
               </Button>
             </Link>
+            <GameIdeaGenerator />
             <Button variant="ghost" onClick={handleRunGame}>
               <Play className="mr-2 h-4 w-4" />
               Run Game
