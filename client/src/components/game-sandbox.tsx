@@ -298,17 +298,11 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    
-    // Update active files when tab changes
-    if (sandpackFiles && editableCode) {
-      // Create a fresh copy of files with correct active states
+    if (sandpackFiles) {
       const updatedFiles = {
-        '/index.html': {
-          code: createGameHTML(editableCode),
-          active: value === "preview"
-        },
+        ...sandpackFiles,
         '/game.js': {
-          code: editableCode,
+          ...sandpackFiles['/game.js'],
           active: value === "code"
         }
       };
@@ -316,8 +310,45 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
     }
   };
 
-  // Show loading placeholder if code or files not ready
-  if (!editableCode || !sandpackFiles) {
+  // Initialize sandbox files
+  useEffect(() => {
+    if (editableCode) {
+      const files: SandpackFiles = {
+        '/index.html': {
+          code: `<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body { margin: 0; overflow: hidden; background: black; }
+      canvas { 
+        display: block;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 100vw;
+        max-height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <script type="module" src="/game.js"></script>
+  </body>
+</html>`,
+          hidden: true
+        },
+        '/game.js': {
+          code: editableCode,
+          active: true
+        }
+      };
+      setSandpackFiles(files);
+    }
+  }, [editableCode]);
+
+  // Show loading placeholder if files not ready
+  if (!sandpackFiles) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center">
         <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
