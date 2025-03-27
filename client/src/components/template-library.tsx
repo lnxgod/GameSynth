@@ -44,11 +44,49 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [templateToDelete, setTemplateToDelete] = useState<GameTemplate | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: templates, isLoading } = useQuery<GameTemplate[]>({
     queryKey: ["/api/templates"],
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/templates`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete all templates');
+      }
+
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({
+        title: "Success",
+        description: data.message || "All templates deleted successfully",
+      });
+      setShowDeleteAllConfirm(false);
+      setIsDeleting(false);
+    },
+    onError: (error: Error) => {
+      console.error('Delete all templates error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete all templates",
+        variant: "destructive",
+      });
+      setIsDeleting(false);
+    },
   });
 
   const deleteMutation = useMutation({
@@ -115,6 +153,15 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
       console.error('Failed to delete template:', error);
     }
   };
+  
+  const handleDeleteAllTemplates = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteAllMutation.mutateAsync();
+    } catch (error) {
+      console.error('Failed to delete all templates:', error);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -126,6 +173,49 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-semibold">Game Templates</h2>
+        
+        <AlertDialog open={showDeleteAllConfirm} onOpenChange={setShowDeleteAllConfirm}>
+          <AlertDialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="text-destructive border-destructive hover:bg-destructive/10"
+            >
+              Delete All Templates
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete All Templates</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete all templates? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeleteAllConfirm(false)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteAllTemplates}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete All'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+      
       <div className="flex gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

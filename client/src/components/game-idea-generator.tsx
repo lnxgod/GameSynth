@@ -27,16 +27,27 @@ export function GameIdeaGenerator() {
     
     try {
       // Direct API request to the dedicated game idea endpoint
-      const response = await apiRequest('POST', '/api/game-idea');
+      const response = await fetch('/api/game-idea', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
-      console.log("Game idea generated:", response);
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
       
-      if (!response) {
+      // Parse the JSON response
+      const data = await response.json();
+      console.log("Game idea generated:", data);
+      
+      if (!data) {
         throw new Error('Invalid response from the server');
       }
       
-      // Set the game idea directly from the response as GameIdea
-      setGameIdea(response as GameIdea);
+      // Set the game idea from the response data
+      setGameIdea(data);
     } catch (error) {
       console.error('Error generating game idea:', error);
       setError('Could not generate a game idea. Please try again.');

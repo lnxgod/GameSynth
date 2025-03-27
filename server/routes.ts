@@ -1917,18 +1917,11 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
   app.delete("/api/templates/:id", async (req, res) => {
     try {
-      // Get user from request
-      const user = (req as any).user;
-
-      // Check if user exists and has admin role
-      if (!user || user.role !== 'admin') {
-        return res.status(403).json({ error: "Only admins can delete templates" });
-      }
-
+      // Allow any user to delete templates as requested
       const templateId = parseInt(req.params.id);
 
       // Log deletion attempt
-      logApi("Attempting to delete template", { templateId, userId: user.id });
+      logApi("Attempting to delete template", { templateId });
 
       // Delete template
       const deleted = await storage.deleteTemplate(templateId);
@@ -1948,6 +1941,35 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
       }
 
       res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+  
+  // New endpoint to delete all templates
+  app.delete("/api/templates", async (req, res) => {
+    try {
+      logApi("Attempting to delete all templates");
+      
+      // Get all templates
+      const templates = await db.select().from(gameTemplates);
+      
+      // Delete each template
+      const deleted = [];
+      for (const template of templates) {
+        try {
+          const deletedTemplate = await storage.deleteTemplate(template.id);
+          deleted.push(deletedTemplate);
+        } catch (err) {
+          // Continue with next template if one fails
+          console.error(`Failed to delete template ${template.id}:`, err);
+        }
+      }
+      
+      logApi("All templates deleted successfully", { count: deleted.length });
+      res.json({ message: `Successfully deleted ${deleted.length} templates` });
+    } catch (error: any) {
+      console.error('Error deleting all templates:', error);
+      logApi("Error deleting all templates", { error: error.message });
+      res.status(500).json({ error: "Failed to delete all templates" });
     }
   });
 
