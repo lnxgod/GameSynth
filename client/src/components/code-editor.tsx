@@ -83,10 +83,15 @@ export function CodeEditor({ code, onCodeChange }: CodeEditorProps) {
             window.addEventListener('resize', resizeCanvas);
 
             // Error handling
-            const errorDisplay = document.getElementById('error-display');
+            // Create error display element
+            const errorDisplay = document.createElement('div');
+            errorDisplay.id = 'error-display';
+            errorDisplay.style.cssText = 'display: none; position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255, 0, 0, 0.8); color: white; padding: 10px; font-family: monospace; z-index: 1000;';
+            document.body.appendChild(errorDisplay);
+
             window.onerror = function(msg, url, lineNo, columnNo, error) {
               errorDisplay.style.display = 'block';
-              errorDisplay.textContent = 'Error: ' + msg + '\\nLine: ' + lineNo;
+              errorDisplay.textContent = 'Error: ' + msg + '\nLine: ' + lineNo;
               return false;
             };
 
