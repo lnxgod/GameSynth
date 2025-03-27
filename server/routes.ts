@@ -222,14 +222,19 @@ export async function registerRoutes(app: Express) {
     throw error;
   }
 
-  // Get current prompts
+  // Update the GET /api/prompts endpoint at the top of the file
   app.get("/api/prompts", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (user.role !== 'admin') {
-        return res.status(403).json({ error: "Only admins can view prompts" });
-      }
-      res.json(SystemPrompts);
+      // Convert SystemPrompts object to array format expected by frontend
+      const promptsArray = Object.entries(SystemPrompts).map(([id, content]) => ({
+        id,
+        name: id.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' '),
+        description: "System prompt for controlling AI response format and behavior",
+        content,
+        category: "System"
+      }));
+
+      res.json(promptsArray);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -907,8 +912,8 @@ When providing suggestions:
     } catch (error: any) {
       console.error('Debug endpoint error:', error);
       res.status(500).json({
-        error: "Debug HelperError",
-        message: "I couldn't analyze the game properly. Please try running the game again toget fresh error information.",
+        error: "Debug Helper Error",
+        message: "I couldn't analyze the game properly. Please try running the game again to get fresh error information.",
         details: error.message
       });
     }
@@ -1536,7 +1541,7 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
-  // Add these endpoints after existing routes, before the httpServer is created
+  // Add these routes after existing routes, before the httpServer is created
   // Prompts Management Routes
   app.get("/api/prompts", async (req, res) => {
     try {
@@ -1564,17 +1569,22 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
 
   app.patch("/api/prompts/:id", async (req, res) => {
     try {
-      const promptId = parseInt(req.params.id);
       const { content } = req.body;
+      const promptId = req.params.id;
 
-      const prompt = await storage.getPrompt(promptId);
-
-      if (!prompt) {
+      if (!(promptId in SystemPrompts)) {
         return res.status(404).json({ error: "Prompt not found" });
       }
 
-      const updatedPrompt = await storage.updatePrompt(promptId, content);
-      res.json(updatedPrompt);
+      // Update the system prompt
+      SystemPrompts[promptId as keyof typeof SystemPrompts] = content;
+
+      res.json({
+        id: promptId,
+        content,
+        name: promptId.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' '),
+        category: "System"
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
