@@ -702,7 +702,7 @@ Each feature should be specific and actionable.`
       logApi("Chat request received", { prompt }, null, { requestedModel: modelConfig?.model });
 
       const requestConfig = {
-        model: modelConfig?.model || user.code_gen_model || "gpt-4o",
+        model: modelConfig?.model || (user?.code_gen_model) || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -784,7 +784,7 @@ Each feature should be specific and actionable.`
         : SystemPrompts.DEBUG_TECHNICAL;
 
       const requestConfig = {
-        model: model || user.code_gen_model || "gpt-4o",
+        model: model || (user?.code_gen_model) || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -826,7 +826,7 @@ Each feature should be specific and actionable.`
       const user = (req as any).user;
 
       const requestConfig = {
-        model: model || user.code_gen_model || "gpt-4o",
+        model: model || (user?.code_gen_model) || "gpt-4o",
         messages: [
           {
             role: "system",
@@ -963,7 +963,7 @@ When providing suggestions:
       logApi("Hint request received", { context, currentFeature, model, parameters });
 
       const requestConfig = {
-        model: model || user.code_gen_model || "gpt-4o",
+        model: model || (user?.code_gen_model) || "gpt-4o",
         messages: [
           {
             role: "system",
