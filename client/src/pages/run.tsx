@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2, Play } from "lucide-react";
 export default function RunPage() {
   const [gameCode, setGameCode] = useState<string | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [showGame, setShowGame] = useState(false);
 
   useEffect(() => {
     // Get the game code from localStorage
@@ -20,6 +21,7 @@ export default function RunPage() {
     if (!gameCode) return;
 
     setIsLaunching(true);
+    setShowGame(true);
 
     // Create an HTML document that includes the game code
     const gameHTML = `
@@ -104,18 +106,22 @@ export default function RunPage() {
     const blob = new Blob([gameHTML], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
 
-    // Open in new window
-    const gameWindow = window.open(url, '_blank');
+    // Set the iframe src
+    const iframe = document.getElementById('gameFrame') as HTMLIFrameElement;
+    if (iframe) {
+      iframe.src = url;
 
-    // Clean up the URL object after the window is loaded
-    if (gameWindow) {
-      gameWindow.onload = () => {
+      // Clean up URL after iframe loads
+      iframe.onload = () => {
         URL.revokeObjectURL(url);
         setIsLaunching(false);
       };
-    } else {
-      setIsLaunching(false);
     }
+  };
+
+  const handleCloseGame = () => {
+    setShowGame(false);
+    setIsLaunching(false);
   };
 
   return (
@@ -128,44 +134,62 @@ export default function RunPage() {
           </Button>
         </Link>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Run Game</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {gameCode ? (
-            <div className="text-center">
-              <Button 
-                onClick={handleRunGame}
-                size="lg"
-                className="w-full max-w-sm relative"
-                disabled={isLaunching}
-              >
-                {isLaunching ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Launching Game...
-                  </>
-                ) : (
-                  <>
-                    <Play className="mr-2 h-4 w-4" />
-                    Launch Game in New Window
-                  </>
-                )}
-              </Button>
-            </div>
-          ) : (
-            <div className="text-center p-4">
-              <p>No game code available. Please generate or load a game first.</p>
-              <Link href="/">
-                <Button className="mt-4">
-                  Go to Game Designer
+      {showGame ? (
+        <div className="fixed inset-0 bg-background z-50 flex flex-col">
+          <div className="p-4 flex justify-between items-center border-b">
+            <h2 className="text-lg font-semibold">Game Preview</h2>
+            <Button variant="outline" onClick={handleCloseGame}>
+              Close Preview
+            </Button>
+          </div>
+          <div className="flex-1 relative">
+            <iframe
+              id="gameFrame"
+              className="w-full h-full border-0"
+              title="Game Preview"
+            />
+          </div>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Run Game</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {gameCode ? (
+              <div className="text-center">
+                <Button 
+                  onClick={handleRunGame}
+                  size="lg"
+                  className="w-full max-w-sm relative"
+                  disabled={isLaunching}
+                >
+                  {isLaunching ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Launching Game...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      Launch Game
+                    </>
+                  )}
                 </Button>
-              </Link>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            ) : (
+              <div className="text-center p-4">
+                <p>No game code available. Please generate or load a game first.</p>
+                <Link href="/">
+                  <Button className="mt-4">
+                    Go to Game Designer
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
