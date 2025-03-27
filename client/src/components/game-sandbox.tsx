@@ -26,6 +26,129 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
 
   // Create the full HTML with the game code embedded
   const createGameHTML = (code: string) => {
+    // If code already contains HTML structure with doctype, head, body, etc.
+    // we'll use it directly
+    if (code.trim().toLowerCase().startsWith('<!doctype html>') || 
+        code.trim().toLowerCase().startsWith('<html') || 
+        (code.includes('<head') && code.includes('<body'))) {
+      
+      addDebugLog("Using existing HTML structure from game code");
+      return code;
+    }
+    
+    // If code has a script tag that includes Phaser
+    if (code.includes('Phaser.') || code.includes('phaser.')) {
+      addDebugLog("Detected Phaser game code");
+      
+      return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Preview</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0;
+      overflow: hidden; 
+      background: #121212; 
+    }
+    #game-container { 
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas { 
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    #debug-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      color: lime;
+      font-family: monospace;
+      font-size: 12px;
+      background: rgba(0,0,0,0.7);
+      padding: 5px;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    #errorDisplay {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      background: rgba(255, 0, 0, 0.8);
+      color: white;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      z-index: 2000;
+      display: none;
+      white-space: pre-wrap;
+      max-height: 50%;
+      overflow-y: auto;
+    }
+  </style>
+  <!-- Load Phaser -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+</head>
+<body>
+  <div id="errorDisplay"></div>
+  <div id="debug-info">Loading game...</div>
+  <div id="game-container"></div>
+  
+  <script>
+    // Debug info
+    const debugInfo = document.getElementById('debug-info');
+    
+    // Update debug info during game lifecycle
+    function updateDebugInfo(message) {
+      debugInfo.textContent = message;
+      console.log("Debug:", message);
+    }
+    
+    // Error handling
+    const errorDisplay = document.getElementById('errorDisplay');
+    window.onerror = function(message, source, lineno, colno, error) {
+      errorDisplay.style.display = 'block';
+      errorDisplay.textContent = 'Error: ' + message + '\\nLine: ' + lineno;
+      updateDebugInfo('Game error occurred at line ' + lineno);
+      console.error('Game error:', message, 'Line:', lineno);
+      return true;
+    };
+    
+    updateDebugInfo('Initializing game environment...');
+    
+    try {
+      // Add any additional game initialization code
+      updateDebugInfo('Running game code...');
+      
+      // ========== User Game Code ==========
+      ${code}
+      // ====================================
+      
+      updateDebugInfo('Game running');
+    } catch (error) {
+      console.error("Game code execution error:", error);
+      errorDisplay.style.display = 'block';
+      errorDisplay.textContent = 'Error: ' + error.message;
+      updateDebugInfo('Game initialization failed: ' + error.message);
+    }
+  </script>
+</body>
+</html>
+      `.trim();
+    }
+    
+    // Default case - basic canvas game
+    addDebugLog("Using standard canvas template for game code");
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -50,6 +173,19 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
+    }
+    #debug-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      color: lime;
+      font-family: monospace;
+      font-size: 12px;
+      background: rgba(0,0,0,0.7);
+      padding: 5px;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 1000;
     }
     #errorDisplay {
       position: fixed;
@@ -80,23 +216,39 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
 </head>
 <body>
   <div id="errorDisplay"></div>
+  <div id="debug-info">Loading game...</div>
   <div id="container">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
   </div>
   
   <script>
+    // Debug info
+    const debugInfo = document.getElementById('debug-info');
+    
+    // Update debug info during game lifecycle
+    function updateDebugInfo(message) {
+      debugInfo.textContent = message;
+      console.log("Debug:", message);
+    }
+    
     // Error handling
     const errorDisplay = document.getElementById('errorDisplay');
     window.onerror = function(message, source, lineno, colno, error) {
       errorDisplay.style.display = 'block';
       errorDisplay.textContent = 'Error: ' + message + '\\nLine: ' + lineno;
+      updateDebugInfo('Game error occurred at line ' + lineno);
       console.error('Game error:', message, 'Line:', lineno);
       return true;
     };
     
     try {
+      updateDebugInfo('Setting up canvas...');
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
+      
+      // Make canvas and its context available to game code
+      window.canvas = canvas;
+      window.ctx = ctx;
       
       // Responsive canvas sizing
       function resizeCanvas() {
@@ -116,22 +268,24 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
         
         canvas.style.width = width + 'px';
         canvas.style.height = height + 'px';
-        console.log("Canvas sized to:", width, height);
+        updateDebugInfo('Canvas sized to: ' + width + 'x' + height);
       }
       
       window.addEventListener('resize', resizeCanvas);
       resizeCanvas();
       
-      console.log("Game environment initialized");
+      updateDebugInfo('Running game code...');
       
       // ========== User Game Code ==========
       ${code}
       // ====================================
       
+      updateDebugInfo('Game running');
     } catch (error) {
       console.error("Game code execution error:", error);
       errorDisplay.style.display = 'block';
       errorDisplay.textContent = 'Error: ' + error.message;
+      updateDebugInfo('Game initialization failed: ' + error.message);
     }
   </script>
 </body>
