@@ -7,12 +7,115 @@ import { GameSandbox } from "@/components/game-sandbox";
 
 // Default game code in case nothing is saved
 const DEFAULT_GAME_CODE = `
-// Simple bouncing ball game
-let x = 400;
-let y = 300;
-let dx = 5;
-let dy = 5;
-let radius = 25;
+// Simple interactive bouncing ball game with multiple balls
+// Colors
+const COLORS = ["#4CAF50", "#2196F3", "#FFC107", "#F44336", "#9C27B0"];
+
+// Ball class
+class Ball {
+  constructor(x, y, radius, color) {
+    this.x = x;
+    this.y = y;
+    this.radius = radius;
+    this.color = color;
+    this.dx = (Math.random() * 6) - 3;
+    this.dy = (Math.random() * 6) - 3;
+    
+    // Ensure we have some movement
+    if (Math.abs(this.dx) < 0.5) this.dx = 1;
+    if (Math.abs(this.dy) < 0.5) this.dy = 1;
+  }
+  
+  update() {
+    // Bounce off walls
+    if (this.x + this.dx > canvas.width - this.radius || this.x + this.dx < this.radius) {
+      this.dx = -this.dx;
+    }
+    if (this.y + this.dy > canvas.height - this.radius || this.y + this.dy < this.radius) {
+      this.dy = -this.dy;
+    }
+    
+    // Move ball
+    this.x += this.dx;
+    this.y += this.dy;
+  }
+  
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+    
+    // Add a light shimmer effect
+    ctx.beginPath();
+    ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.fill();
+  }
+}
+
+// Create balls
+const balls = [];
+for (let i = 0; i < 10; i++) {
+  const radius = Math.random() * 20 + 10;
+  const x = Math.random() * (canvas.width - radius * 2) + radius;
+  const y = Math.random() * (canvas.height - radius * 2) + radius;
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  balls.push(new Ball(x, y, radius, color));
+}
+
+// Add a player-controlled ball with mouse
+const playerBall = new Ball(canvas.width / 2, canvas.height / 2, 30, "#FF5722");
+let isMouseDown = false;
+
+// Add mouse event listeners
+canvas.addEventListener("mousedown", function(e) {
+  isMouseDown = true;
+});
+
+canvas.addEventListener("mouseup", function() {
+  isMouseDown = false;
+});
+
+canvas.addEventListener("mousemove", function(e) {
+  if (isMouseDown) {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Only update if within bounds
+    if (mouseX > playerBall.radius && mouseX < canvas.width - playerBall.radius &&
+        mouseY > playerBall.radius && mouseY < canvas.height - playerBall.radius) {
+      playerBall.x = mouseX;
+      playerBall.y = mouseY;
+    }
+  }
+});
+
+// Add touch support for mobile
+canvas.addEventListener("touchstart", function(e) {
+  isMouseDown = true;
+  e.preventDefault();
+});
+
+canvas.addEventListener("touchend", function() {
+  isMouseDown = false;
+});
+
+canvas.addEventListener("touchmove", function(e) {
+  if (isMouseDown && e.touches[0]) {
+    const rect = canvas.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    const touchY = e.touches[0].clientY - rect.top;
+    
+    if (touchX > playerBall.radius && touchX < canvas.width - playerBall.radius &&
+        touchY > playerBall.radius && touchY < canvas.height - playerBall.radius) {
+      playerBall.x = touchX;
+      playerBall.y = touchY;
+    }
+    e.preventDefault();
+  }
+});
 
 // Game animation loop
 function animate() {
@@ -20,27 +123,41 @@ function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
   // Draw background
-  ctx.fillStyle = "#111";
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, "#1a1a2e");
+  gradient.addColorStop(1, "#16213e");
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // Draw ball
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fillStyle = "#4CAF50";
-  ctx.fill();
-  ctx.closePath();
-  
-  // Bounce off walls
-  if (x + dx > canvas.width - radius || x + dx < radius) {
-    dx = -dx;
+  // Update and draw all balls
+  for (const ball of balls) {
+    ball.update();
+    ball.draw();
+    
+    // Check collision with player ball
+    const dx = ball.x - playerBall.x;
+    const dy = ball.y - playerBall.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance < ball.radius + playerBall.radius) {
+      // Simple bounce effect
+      ball.dx = -ball.dx * 1.1;
+      ball.dy = -ball.dy * 1.1;
+      
+      // Limit max speed
+      ball.dx = Math.min(Math.max(ball.dx, -8), 8);
+      ball.dy = Math.min(Math.max(ball.dy, -8), 8);
+    }
   }
-  if (y + dy > canvas.height - radius || y + dy < radius) {
-    dy = -dy;
-  }
   
-  // Move ball
-  x += dx;
-  y += dy;
+  // Draw player ball
+  playerBall.draw();
+  
+  // Draw instruction text
+  ctx.font = "16px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.fillText("Click and drag to move the orange ball", canvas.width / 2, 30);
   
   // Continue animation
   requestAnimationFrame(animate);
@@ -48,6 +165,7 @@ function animate() {
 
 // Start game
 animate();
+console.log("Game initialized with", balls.length, "balls");
 `;
 
 export default function RunPage() {

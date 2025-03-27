@@ -4,36 +4,56 @@ import {
   SandpackPreview,
   SandpackLayout,
   SandpackCodeEditor,
-  useSandpack
+  useSandpack,
+  SandpackFiles
 } from '@codesandbox/sandpack-react';
 import { Button } from '@/components/ui/button';
 import { X, RefreshCw, Code, Loader2 } from 'lucide-react';
 
 // This component handles SandpackPreview events
-function SandpackEventHandler({ onBoot, onError }: { onBoot: () => void; onError: () => void }) {
+function SandpackEventHandler({ onBoot, onError, onMessage }: { 
+  onBoot: () => void; 
+  onError: () => void;
+  onMessage: (msg: any) => void;
+}) {
   const { listen } = useSandpack();
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
     
     const unsubscribe = listen(message => {
+      // Debug - log all messages
+      onMessage(`Sandbox message type: ${message.type}`);
+      
       // Handle successful loads
       if (message.type === 'start') {
         onBoot();
+        onMessage('Sandbox started');
       } 
       
       // Special case for 'done' message - this happens when compilation is complete
       if (message.type === 'done') {
+        onMessage('Sandbox compilation done');
         // Give a little time for the preview to fully render
         timeout = setTimeout(() => {
           onBoot();
         }, 500);
       }
       
-      // Just check for error message with type assertion, ignore TypeScript complaints
-      const msg = message as any;
-      if (msg.error) {
-        onError();
+      // Just check for error message with type assertion
+      try {
+        // Try to detect errors in the message
+        if (message.type === 'action' && (message as any).action === 'show-error') {
+          onMessage('Sandbox error detected');
+          onError();
+        }
+        
+        if ((message as any).error) {
+          onMessage('Sandbox error property detected');
+          onError();
+        }
+      } catch (err) {
+        // Silently ignore errors from type checking
       }
     });
 
@@ -41,7 +61,7 @@ function SandpackEventHandler({ onBoot, onError }: { onBoot: () => void; onError
       if (timeout) clearTimeout(timeout);
       unsubscribe();
     };
-  }, [listen, onBoot, onError]);
+  }, [listen, onBoot, onError, onMessage]);
 
   return null;
 }
@@ -52,12 +72,25 @@ interface GameSandboxProps {
   showCode?: boolean;
 }
 
+interface SandpackFile {
+  code: string;
+  active?: boolean;
+}
+
 export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandboxProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [showEditor, setShowEditor] = useState(showCode);
   const [editableCode, setEditableCode] = useState<string | null>(gameCode);
-  const isRefreshing = useRef(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [sandpackFiles, setSandpackFiles] = useState<SandpackFiles | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Logging helper
+  const addDebugLog = (log: string) => {
+    setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${log}`]);
+    console.log(`[GameSandbox] ${log}`);
+  };
 
   // Create the full HTML with the game code embedded
   const createGameHTML = (code: string) => {
@@ -142,6 +175,7 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
     try {
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
+      console.log("Game canvas initialized with size:", canvas.width, canvas.height);
 
       // Set canvas size to fit the window while maintaining aspect ratio
       function resizeCanvas() {
@@ -157,16 +191,20 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
         
         canvas.style.width = width + 'px';
         canvas.style.height = height + 'px';
+        console.log("Canvas resized to:", width, height);
       }
       
       window.addEventListener('resize', resizeCanvas);
       resizeCanvas();
 
+      console.log("Running game code...");
       // ========== Game Code ==========
       ${code}
       // ==============================
+      console.log("Game code executed successfully");
       
     } catch (error) {
+      console.error("Game code execution error:", error);
       errorDisplay.style.display = 'block';
       errorDisplay.textContent = 'Error: ' + error.message;
     }
@@ -175,49 +213,81 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
 </html>
     `.trim();
   };
-
+  
+  // Initialize files when code is available
+  useEffect(() => {
+    if (editableCode) {
+      const files = {
+        '/index.html': {
+          code: createGameHTML(editableCode),
+          active: true
+        }
+      };
+      
+      setSandpackFiles(files);
+      addDebugLog("Initialized sandbox files with HTML5 canvas");
+    }
+  }, [editableCode]);
+  
+  // Log on component mount
+  useEffect(() => {
+    addDebugLog("Component mounted");
+  }, []);
+  
+  // Update code when gameCode prop changes
+  useEffect(() => {
+    if (gameCode && gameCode !== editableCode) {
+      setEditableCode(gameCode);
+      addDebugLog("Game code updated from props");
+      setIsLoading(true);
+      setHasError(false);
+    }
+  }, [gameCode]);
+  
   const handleRefresh = () => {
+    if (!editableCode) return;
+    
+    addDebugLog("Refreshing sandbox");
     setIsLoading(true);
     setHasError(false);
-    isRefreshing.current = true;
+    
+    // Update files and trigger a refresh
+    const updatedFiles = {
+      '/index.html': {
+        code: createGameHTML(editableCode),
+        active: true
+      }
+    };
+    
+    setSandpackFiles(updatedFiles);
+    setRefreshTrigger(prev => prev + 1); // Force re-render of SandpackProvider
+  };
+
+  const handlePreviewReady = () => {
+    addDebugLog("Preview ready");
+    setIsLoading(false);
+  };
+
+  const handlePreviewError = () => {
+    addDebugLog("Preview error occurred");
+    setHasError(true);
+    setIsLoading(false);
   };
 
   const toggleEditor = () => {
     setShowEditor(!showEditor);
+    addDebugLog(`${showEditor ? "Hiding" : "Showing"} code editor`);
   };
 
-  useEffect(() => {
-    if (gameCode && gameCode !== editableCode) {
-      setEditableCode(gameCode);
-    }
-    setIsLoading(true);
-    setHasError(false);
-  }, [gameCode]);
-
-  const handlePreviewReady = () => {
-    setIsLoading(false);
-    isRefreshing.current = false;
-  };
-
-  const handlePreviewError = () => {
-    setHasError(true);
-    setIsLoading(false);
-    isRefreshing.current = false;
-  };
-
-  if (!editableCode) {
+  // Show loading placeholder if code or files not ready
+  if (!editableCode || !sandpackFiles) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
-        <p className="text-lg text-muted-foreground mb-4">No game code available</p>
+        <p className="text-lg text-muted-foreground mb-4">Loading game preview...</p>
         <Button onClick={onClose}>Close</Button>
       </div>
     );
   }
-
-  const files = {
-    '/index.html': createGameHTML(editableCode),
-    '/game.js': editableCode
-  };
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
@@ -256,24 +326,27 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
       
       <div className="flex-1 overflow-hidden">
         <SandpackProvider
-          files={files}
-          template="static"
+          files={sandpackFiles}
+          template="vanilla"
           theme="dark"
           options={{
             externalResources: [],
             recompileMode: "immediate",
             recompileDelay: 300,
           }}
-          key={isRefreshing.current ? Date.now() : undefined}
+          key={refreshTrigger} // Use trigger to force re-render
+          customSetup={{
+            entry: '/index.html'
+          }}
         >
           <SandpackLayout>
             {showEditor && (
               <SandpackCodeEditor 
-                showLineNumbers 
-                showInlineErrors 
-                wrapContent 
-                closableTabs
-                readOnly={false}
+                showLineNumbers={true}
+                showInlineErrors={true}
+                wrapContent={true}
+                closableTabs={true}
+                initMode="immediate"
               />
             )}
             <SandpackPreview
@@ -284,6 +357,7 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
             <SandpackEventHandler
               onBoot={handlePreviewReady}
               onError={handlePreviewError}
+              onMessage={addDebugLog}
             />
           </SandpackLayout>
         </SandpackProvider>
@@ -300,6 +374,19 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
             <p className="text-sm font-medium">An error occurred while loading the game. Check the preview for details.</p>
           </div>
         )}
+        
+        {/* Debug logs panel - collapsible */}
+        <div className="absolute bottom-4 right-4 max-w-xs z-20">
+          <div className="bg-slate-900/90 border border-slate-700 rounded-md p-2 shadow-lg text-xs font-mono overflow-y-auto max-h-40">
+            <h3 className="text-xs font-semibold text-slate-300 mb-1">Debug Logs:</h3>
+            <div className="text-slate-400">
+              {debugLogs.map((log, i) => (
+                <div key={i} className="truncate hover:whitespace-normal">{log}</div>
+              ))}
+              {debugLogs.length === 0 && <div>No logs yet</div>}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
