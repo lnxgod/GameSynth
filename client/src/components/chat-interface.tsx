@@ -67,6 +67,9 @@ export function ChatInterface({
     },
     onSuccess: (data) => {
       if (data.code) {
+        // Update localStorage with the new game code
+        localStorage.setItem('currentGameCode', data.code);
+        
         onCodeReceived(data.code);
       }
       toast({

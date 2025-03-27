@@ -96,6 +96,10 @@ export function TemplateLibrary({ onTemplateSelect }: TemplateLibraryProps) {
 
   const handleTemplateSelect = (template: GameTemplate) => {
     const settings = template.defaultSettings as TemplateSettings | undefined;
+    
+    // Update localStorage to persist the template code
+    localStorage.setItem('currentGameCode', template.code);
+    
     onTemplateSelect(template.code, settings);
 
     toast({

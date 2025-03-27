@@ -299,6 +299,9 @@ export function GameDesignAssistant({
     },
     onSuccess: (data) => {
       if (data.code) {
+        // Update localStorage with the new game code
+        localStorage.setItem('currentGameCode', data.code);
+        
         onCodeGenerated(data.code);
         toast({
           title: "Success",
@@ -508,7 +511,7 @@ export function GameDesignAssistant({
                     ) : (
                       availableModels && Object.entries(availableModels).map(([id, name]) => (
                         <SelectItem key={id} value={id}>
-                          {name}
+                          {String(name)}
                         </SelectItem>
                       ))
                     )}
@@ -802,7 +805,7 @@ export function GameDesignAssistant({
                             : 'bg-primary text-primary-foreground'
                         }`}
                       >
-                        {message.content}
+                        {typeof message.content === 'string' ? message.content : String(message.content)}
                       </div>
                     </div>
                   ))}

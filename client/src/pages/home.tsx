@@ -13,7 +13,10 @@ import { Label } from "@/components/ui/label";
 import { ThemeSwitcher } from "@/components/ui/theme-switcher";
 
 export default function Home() {
-  const [gameCode, setGameCode] = useState("");
+  const [gameCode, setGameCode] = useState(() => {
+    const savedCode = localStorage.getItem('currentGameCode');
+    return savedCode || "";
+  });
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [gameDesign, setGameDesign] = useState<string>("");
   const [features, setFeatures] = useState<string[]>([]);
@@ -69,13 +72,7 @@ export default function Home() {
     setAiOperation({ type: 'Analyzing Error...', active: true });
   };
 
-  useEffect(() => {
-    const savedCode = localStorage.getItem('currentGameCode');
-    if (savedCode) {
-      setGameCode(savedCode);
-      addDebugLog("Loaded code from local storage");
-    }
-  }, []);
+  // No need for additional useEffect to load code as it's handled in the initial state
 
   const handleTemplateSelect = (code: string, settings?: any) => {
     setGameCode(code);

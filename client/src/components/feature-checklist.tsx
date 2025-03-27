@@ -22,9 +22,11 @@ interface FeatureChecklistProps {
   gameDesign: any;
   onCodeUpdate?: (code: string) => void;
   initialFeatures?: string[];
+  onAiOperation?: (operation: { type: string; active: boolean }) => void;
+  isNonTechnicalMode?: boolean;
 }
 
-export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [] }: FeatureChecklistProps) {
+export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [], onAiOperation, isNonTechnicalMode }: FeatureChecklistProps) {
   const [newFeature, setNewFeature] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -76,14 +78,25 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
 
   const implementFeatureMutation = useMutation({
     mutationFn: async (feature: string) => {
-      const res = await apiRequest('POST', '/api/code/chat', {
-        message: `Please implement this feature: ${feature}`,
-        gameDesign
-      });
-      return res.json();
+      // Notify the UI that AI operation is in progress
+      onAiOperation?.({ type: "Implementing Feature", active: true });
+      
+      try {
+        const res = await apiRequest('POST', '/api/code/chat', {
+          message: `Please implement this feature: ${feature}`,
+          gameDesign
+        });
+        return res.json();
+      } finally {
+        // Notify the UI that AI operation is complete
+        onAiOperation?.({ type: "", active: false });
+      }
     },
     onSuccess: (data) => {
       if (data.updatedCode) {
+        // Save the updated code to localStorage
+        localStorage.setItem('currentGameCode', data.updatedCode);
+        
         onCodeUpdate?.(data.updatedCode);
         toast({
           title: "Feature Implementation",
@@ -120,7 +133,7 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
           <h3 className="text-lg font-semibold">Game Features</h3>
           <AIHint
             gameDesign={gameDesign}
-            currentFeature={features.find(f => !f.completed)?.description}
+            currentFeature={features.find((f: Feature) => !f.completed)?.description}
           />
         </div>
 
@@ -142,7 +155,7 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
             <div className="space-y-4">
               <div>
                 <h5 className="font-medium mb-2">Generated Features</h5>
-                {features.filter(f => f.type === 'generated').map(feature => (
+                {features.filter((f: Feature) => f.type === 'generated').map((feature: Feature) => (
                   <div key={feature.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
                       id={feature.id.toString()}
@@ -164,10 +177,10 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
                 ))}
               </div>
 
-              {features.filter(f => f.type === 'manual').length > 0 && (
+              {features.filter((f: Feature) => f.type === 'manual').length > 0 && (
                 <div>
                   <h5 className="font-medium mb-2">Custom Features</h5>
-                  {features.filter(f => f.type === 'manual').map(feature => (
+                  {features.filter((f: Feature) => f.type === 'manual').map((feature: Feature) => (
                     <div key={feature.id} className="flex items-center space-x-2 mb-2">
                       <Checkbox
                         id={feature.id.toString()}
