@@ -4,18 +4,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, ListPlus, Sparkles, Code } from "lucide-react";
+import { Loader2, Plus, ListPlus, Sparkles, Code, Trash2 } from "lucide-react";
 import { AIHint } from "./ai-hint";
 
 interface Feature {
-  id: number;
+  id: string; // Using client-side IDs now (string)
   description: string;
   completed: boolean;
   type: 'core' | 'tech' | 'generated' | 'manual';
-  gameId?: number;
 }
 
 interface FeatureChecklistProps {
@@ -28,44 +27,38 @@ interface FeatureChecklistProps {
 
 export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [], onAiOperation, isNonTechnicalMode }: FeatureChecklistProps) {
   const [newFeature, setNewFeature] = useState("");
+  const [features, setFeatures] = useState<Feature[]>([]);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [isGeneratingFromCode, setIsGeneratingFromCode] = useState(false);
   
-  // We don't initialize features automatically anymore - user must click Generate button
-  // This is intentional as per user request
-
-  const { data: features = [] } = useQuery({
-    queryKey: ['features'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', '/api/features');
-      return res.json();
+  // Clean up features on component mount
+  useEffect(() => {
+    // Clear any features that might be stored in the database as they should not persist
+    const cleanupFeatures = async () => {
+      try {
+        await apiRequest('DELETE', '/api/features');
+      } catch (error) {
+        console.error("Failed to clear features:", error);
+      }
+    };
+    
+    cleanupFeatures();
+    
+    // Load initial features from localStorage if available
+    const savedFeatures = localStorage.getItem('gameFeatures');
+    if (savedFeatures) {
+      try {
+        setFeatures(JSON.parse(savedFeatures));
+      } catch (error) {
+        console.error("Failed to parse saved features:", error);
+      }
     }
-  });
-
-  const createFeatureMutation = useMutation({
-    mutationFn: async (feature: Omit<Feature, 'id'>) => {
-      const res = await apiRequest('POST', '/api/features', feature);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['features'] });
-      toast({
-        title: "Feature Added",
-        description: "New feature has been added to the checklist.",
-      });
-    }
-  });
-
-  const updateFeatureStatusMutation = useMutation({
-    mutationFn: async ({ id, completed }: { id: number; completed: boolean }) => {
-      const res = await apiRequest('PATCH', `/api/features/${id}`, { completed });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['features'] });
-    }
-  });
+  }, []);
+  
+  // Save features to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('gameFeatures', JSON.stringify(features));
+  }, [features]);
 
   const implementFeatureMutation = useMutation({
     mutationFn: async (feature: string) => {
@@ -104,17 +97,28 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
   const handleAddFeature = () => {
     if (!newFeature.trim()) return;
 
-    createFeatureMutation.mutate({
+    const newFeatureObj: Feature = {
+      id: `manual_${Date.now()}`, // Generate client-side unique ID
       description: newFeature,
       type: 'manual',
       completed: false
-    });
-
+    };
+    
+    setFeatures(prev => [...prev, newFeatureObj]);
     setNewFeature("");
+    
+    toast({
+      title: "Feature Added",
+      description: "New feature has been added to the checklist.",
+    });
   };
 
-  const toggleFeature = (id: number, completed: boolean) => {
-    updateFeatureStatusMutation.mutate({ id, completed });
+  const toggleFeature = (id: string, completed: boolean) => {
+    setFeatures(prev => 
+      prev.map(feature => 
+        feature.id === id ? { ...feature, completed } : feature
+      )
+    );
   };
 
   const handleImplementFeature = (feature: Feature) => {
@@ -145,14 +149,15 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
     },
     onSuccess: (data) => {
       if (data.features && Array.isArray(data.features)) {
-        // Add each suggested feature to the feature list
-        data.features.forEach((feature: string) => {
-          createFeatureMutation.mutate({
-            description: feature,
-            type: 'generated',
-            completed: false
-          });
-        });
+        // Add each suggested feature to the features state
+        const newFeatures = data.features.map((featureDesc: string): Feature => ({
+          id: `generated_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          description: featureDesc,
+          type: 'generated',
+          completed: false
+        }));
+        
+        setFeatures(prev => [...prev, ...newFeatures]);
         
         toast({
           title: "Features Generated",
@@ -174,16 +179,37 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
       });
     }
   });
+  
+  const handleClearFeatures = () => {
+    setFeatures([]);
+    localStorage.removeItem('gameFeatures');
+    toast({
+      title: "Features Cleared",
+      description: "All features have been removed from the checklist.",
+    });
+  };
 
   return (
     <Card className="p-4">
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold">Game Features</h3>
-          <AIHint
-            gameDesign={gameDesign}
-            currentFeature={features.find((f: Feature) => !f.completed)?.description}
-          />
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleClearFeatures}
+              disabled={features.length === 0}
+              className="flex items-center"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Clear All
+            </Button>
+            <AIHint
+              gameDesign={gameDesign}
+              currentFeature={features.find((f: Feature) => !f.completed)?.description}
+            />
+          </div>
         </div>
 
         <div className="flex gap-2 items-center mb-2">
@@ -217,61 +243,69 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
           )}
         </Button>
 
-        <div className="space-y-4">
-          <ScrollArea className="h-[300px]">
-            <div className="space-y-4">
-              <div>
-                <h5 className="font-medium mb-2">Generated Features</h5>
-                {features.filter((f: Feature) => f.type === 'generated').map((feature: Feature) => (
-                  <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                    <Checkbox
-                      id={feature.id.toString()}
-                      checked={feature.completed}
-                      onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
-                    />
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleImplementFeature(feature)}
-                      disabled={implementFeatureMutation.isPending}
-                      className="flex-grow text-left justify-start px-2 hover:bg-accent"
-                    >
-                      {feature.description}
-                      {implementFeatureMutation.isPending && (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      )}
-                    </Button>
+        {features.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            No features yet. Add a feature manually or generate from your game code.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-4">
+                {features.filter((f: Feature) => f.type === 'generated').length > 0 && (
+                  <div>
+                    <h5 className="font-medium mb-2">Generated Features</h5>
+                    {features.filter((f: Feature) => f.type === 'generated').map((feature: Feature) => (
+                      <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                        <Checkbox
+                          id={feature.id.toString()}
+                          checked={feature.completed}
+                          onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
+                        />
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleImplementFeature(feature)}
+                          disabled={implementFeatureMutation.isPending}
+                          className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                        >
+                          {feature.description}
+                          {implementFeatureMutation.isPending && (
+                            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                          )}
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
 
-              {features.filter((f: Feature) => f.type === 'manual').length > 0 && (
-                <div>
-                  <h5 className="font-medium mb-2">Custom Features</h5>
-                  {features.filter((f: Feature) => f.type === 'manual').map((feature: Feature) => (
-                    <div key={feature.id} className="flex items-center space-x-2 mb-2">
-                      <Checkbox
-                        id={feature.id.toString()}
-                        checked={feature.completed}
-                        onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
-                      />
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleImplementFeature(feature)}
-                        disabled={implementFeatureMutation.isPending}
-                        className="flex-grow text-left justify-start px-2 hover:bg-accent"
-                      >
-                        {feature.description}
-                        {implementFeatureMutation.isPending && (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        )}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </div>
+                {features.filter((f: Feature) => f.type === 'manual').length > 0 && (
+                  <div>
+                    <h5 className="font-medium mb-2">Custom Features</h5>
+                    {features.filter((f: Feature) => f.type === 'manual').map((feature: Feature) => (
+                      <div key={feature.id} className="flex items-center space-x-2 mb-2">
+                        <Checkbox
+                          id={feature.id.toString()}
+                          checked={feature.completed}
+                          onCheckedChange={() => toggleFeature(feature.id, !feature.completed)}
+                        />
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleImplementFeature(feature)}
+                          disabled={implementFeatureMutation.isPending}
+                          className="flex-grow text-left justify-start px-2 hover:bg-accent"
+                        >
+                          {feature.description}
+                          {implementFeatureMutation.isPending && (
+                            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
       </div>
     </Card>
   );

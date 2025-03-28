@@ -48,6 +48,7 @@ export interface IStorage {
   getFeature(id: number): Promise<Feature | undefined>;
   getAllFeatures(gameId?: number): Promise<Feature[]>;
   updateFeatureStatus(id: number, completed: boolean): Promise<Feature>;
+  deleteAllFeatures(): Promise<void>;
   updateUserModelPreferences(id: number, analysis_model: string, code_gen_model: string): Promise<User>;
   deleteTemplate(templateId: number): Promise<GameTemplate>;
 
@@ -253,6 +254,10 @@ export class PostgresStorage implements IStorage {
       .where(eq(features.id, id))
       .returning();
     return feature;
+  }
+
+  async deleteAllFeatures(): Promise<void> {
+    await db.delete(features);
   }
   async createGameDesign(design: InsertGameDesign & { userId: number }): Promise<GameDesign> {
     const [newDesign] = await db.insert(gameDesigns).values({

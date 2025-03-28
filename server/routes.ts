@@ -1284,6 +1284,17 @@ When providing suggestions:
       res.status(400).json({ error: error.message });
     }
   });
+  
+  app.delete("/api/features", async (req, res) => {
+    try {
+      await storage.deleteAllFeatures();
+      logApi("All features deleted", null, { success: true });
+      res.json({ success: true });
+    } catch (error: any) {
+      logApi("Error deleting all features", null, { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   app.post("/api/hint", async (req, res) => {
     try {
