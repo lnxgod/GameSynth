@@ -12,8 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Code, Wand, Play, ArrowRight, CheckCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
-// Fallback demo game in case nothing is loaded
-import demoGameCode from '../components/demo-game.html?raw';
+// No fallback demo game - always use user's code
 
 export function AssetMappingTest() {
   // Use the active game code directly from session storage
@@ -33,8 +32,8 @@ export function AssetMappingTest() {
     console.log('Asset mapping page loaded with session code:', sessionCode ? 'available' : 'not available');
     console.log('Local storage code:', localCode ? 'available' : 'not available');
     
-    // Prioritize session storage, then local storage, then demo
-    const currentCode = sessionCode || localCode || demoGameCode;
+    // Prioritize session storage, then local storage
+    const currentCode = sessionCode || localCode || '';
     setGameCode(currentCode);
     
     // Always ensure both storages are in sync with the most recent code
@@ -48,7 +47,7 @@ export function AssetMappingTest() {
     
     // Listen for storage events to update if code changes in another tab
     const handleStorageChange = () => {
-      const updatedCode = sessionStorage.getItem('currentGameCode') || localStorage.getItem('gameCode') || demoGameCode;
+      const updatedCode = sessionStorage.getItem('currentGameCode') || localStorage.getItem('gameCode') || '';
       console.log('Storage event detected, updating code');
       setGameCode(updatedCode);
     };
@@ -83,14 +82,23 @@ export function AssetMappingTest() {
     setActiveTab('preview');
   };
   
-  // Function to reset to the demo
+  // Function to reset everything (clear code instead of loading a demo)
   const resetDemo = () => {
-    setGameCode(demoGameCode);
+    // Clear all stored code to get a fresh start
+    localStorage.removeItem('gameCode');
+    sessionStorage.removeItem('currentGameCode');
+    
+    // Reset the state
+    setGameCode('');
     setMappedCode('');
     setActiveTab('generate');
     
-    // Update storage
-    sessionStorage.setItem('currentGameCode', demoGameCode);
+    // Show a notification
+    toast({
+      title: "Reset completed",
+      description: "All game code has been cleared. Please return to the editor to create new game code.",
+      duration: 3000
+    });
   };
   
   // Handle tab changes
@@ -155,7 +163,7 @@ export function AssetMappingTest() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={resetDemo} className="flex-shrink-0">
             <RefreshCw className="mr-2 h-4 w-4" />
-            Reset Demo
+            Clear Game
           </Button>
           {mappedCode && (
             <Button onClick={launchGame} variant="default" className="bg-gradient-to-r from-primary to-purple-600 text-white shadow-lg" disabled={isLaunching}>
