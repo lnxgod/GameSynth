@@ -1,7 +1,13 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertChatSchema, insertGameSchema, insertFeatureSchema, insertUserSchema } from "@shared/schema";
+import { 
+  insertChatSchema, 
+  insertGameSchema, 
+  insertFeatureSchema, 
+  insertUserSchema,
+  insertGameDesignSchema
+} from "@shared/schema";
 import { gameTemplates } from "@shared/schema";
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -167,24 +173,42 @@ function extractGameCode(content: string): string | null {
   try {
     console.log('Starting code extraction...');
 
+    // First, try with explicit markers
     const startMarker = '+++CODESTART+++';
     const endMarker = '+++CODESTOP+++';
 
-    const startIndex = content.indexOf(startMarker);
-    const endIndex = content.indexOf(endMarker);
+    let startIndex = content.indexOf(startMarker);
+    let endIndex = content.indexOf(endMarker);
 
-    if (startIndex === -1) {
-      console.log('ERROR: No CODESTART marker found in response');
-      console.log('Raw content:', content);
+    // If explicit markers aren't found, look for code blocks
+    if (startIndex === -1 || endIndex === -1) {
+      console.log('No explicit markers found, looking for code blocks');
+      
+      // Try to find code blocks with JavaScript/JS markers
+      const jsBlockRegex = /```(?:javascript|js)([\s\S]*?)```/;
+      const jsMatch = content.match(jsBlockRegex);
+      
+      if (jsMatch && jsMatch[1]) {
+        console.log('Found JavaScript code block');
+        return jsMatch[1].trim();
+      }
+      
+      // Try to find any code blocks
+      const anyBlockRegex = /```([\s\S]*?)```/;
+      const anyMatch = content.match(anyBlockRegex);
+      
+      if (anyMatch && anyMatch[1]) {
+        console.log('Found generic code block');
+        return anyMatch[1].trim();
+      }
+      
+      // If still not found, log the error
+      console.log('ERROR: No valid code markers or blocks found in response');
+      console.log('Content preview (first 500 chars):', content.substring(0, 500) + '...');
       return null;
     }
 
-    if (endIndex === -1) {
-      console.log('ERROR: No CODESTOP marker found in response');
-      console.log('Raw content:', content);
-      return null;
-    }
-
+    // Process code with explicit markers
     let code = content
       .substring(startIndex + startMarker.length, endIndex)
       .trim();
@@ -199,19 +223,22 @@ function extractGameCode(content: string): string | null {
     }
 
     // Clean up any HTML structure that might have been included
-    code = code.replace(/<!DOCTYPE.*?>/, '');
-    code = code.replace(/<html>.*?<body>/s, '');
-    code = code.replace(/<\/body>.*?<\/html>/s, '');
+    code = code.replace(/<!DOCTYPE.*?>/i, '');
+    code = code.replace(/<html>[\s\S]*?<body>/i, '');
+    code = code.replace(/<\/body>[\s\S]*?<\/html>/i, '');
 
     // Remove canvas initialization that might be duplicated
     code = code.replace(/const canvas\s*=\s*document\.getElementById[^;]+;/, '');
     code = code.replace(/const ctx\s*=\s*canvas\.getContext[^;]+;/, '');
 
     // Remove code block formatting if present
-    code = code.replace(/^```javascript\n/, '');
-    code = code.replace(/^```js\n/, '');
-    code = code.replace(/^```\n/, '');
-    code = code.replace(/\n```$/, '');
+    code = code.replace(/^```(?:javascript|js)?\s*\n?/, '');
+    code = code.replace(/\n?```$/, '');
+
+    // Check for truncation markers
+    if (code.includes('...') && code.trim().endsWith('...')) {
+      console.log('WARNING: Code appears to be truncated');
+    }
 
     if (!code) {
       console.log('ERROR: Empty code block found');
@@ -219,6 +246,7 @@ function extractGameCode(content: string): string | null {
     }
 
     console.log('Extracted code successfully');
+    console.log('Code preview (first 300 chars):', code.substring(0, 300) + '...');
     return code;
 
   } catch (error) {
