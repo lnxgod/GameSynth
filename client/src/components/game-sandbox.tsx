@@ -31,61 +31,6 @@ export function GameSandbox({ gameCode, onClose, showCode = false, fullscreen = 
 
   // Create the full HTML with the game code embedded
   const createGameHTML = (code: string) => {
-    // First check if the code is actually available and not just whitespace
-    if (!code || code.trim() === '') {
-      addDebugLog("No game code provided, showing empty message");
-      return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Create a Game</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(to bottom, #1a1a1a, #2d2d2d);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
-    }
-    .message {
-      max-width: 600px;
-      padding: 30px;
-      border-radius: 12px;
-      background: rgba(0,0,0,0.2);
-      border: 1px solid rgba(255,255,255,0.1);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-    h1 {
-      margin-top: 0;
-      font-size: 24px;
-      margin-bottom: 16px;
-    }
-    p {
-      margin-bottom: 24px;
-      line-height: 1.6;
-      opacity: 0.8;
-    }
-  </style>
-</head>
-<body>
-  <div class="message">
-    <h1>No Game Found</h1>
-    <p>
-      It looks like there's no game code available to run. Please return to the editor
-      and either create a new game or load a template first.
-    </p>
-  </div>
-</body>
-</html>`;
-    }
-    
     // If code already contains HTML structure with doctype, head, body, etc.
     // we'll use it directly
     if (code.trim().toLowerCase().startsWith('<!doctype html>') || 
@@ -362,18 +307,7 @@ export function GameSandbox({ gameCode, onClose, showCode = false, fullscreen = 
   useEffect(() => {
     if (gameCode) {
       setEditableCode(gameCode);
-      
-      // Additional logging to track code through the component lifecycle
-      console.log('GameSandbox received code from props, length:', gameCode.length);
-      console.log('Code starts with:', gameCode.substring(0, 50) + '...');
-      
-      addDebugLog(`Game code updated from props (${gameCode.length} chars)`);
-      
-      // Clear error state when new code is received
-      setHasError(false);
-    } else {
-      console.log('GameSandbox received null or empty game code');
-      addDebugLog("Warning: No game code provided to GameSandbox");
+      addDebugLog("Game code updated from props");
     }
   }, [gameCode]);
   
@@ -421,40 +355,22 @@ export function GameSandbox({ gameCode, onClose, showCode = false, fullscreen = 
   
   // Refresh the preview iframe
   const refreshPreview = () => {
-    if (!editableCode || !iframeRef.current) {
-      console.log('Cannot refresh preview: missing code or iframe reference');
-      return;
-    }
+    if (!editableCode || !iframeRef.current) return;
     
     setIsLoading(true);
     setHasError(false);
+    addDebugLog("Refreshing game preview");
     
-    // Add more detailed logging
-    console.log('Refreshing game preview with code length:', editableCode.length);
-    addDebugLog(`Refreshing game preview (${editableCode.length} chars)`);
+    // Create a data URL from the HTML content
+    const htmlContent = createGameHTML(editableCode);
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
     
-    try {
-      // Create a data URL from the HTML content
-      const htmlContent = createGameHTML(editableCode);
-      console.log('Generated HTML content length:', htmlContent.length);
-      
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      
-      // Update the iframe src
-      iframeRef.current.src = url;
-      
-      // Clean up the URL after it's loaded
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-        console.log('Cleaned up blob URL');
-      }, 5000);
-    } catch (error) {
-      console.error('Error refreshing game preview:', error);
-      setHasError(true);
-      setIsLoading(false);
-      addDebugLog(`Error refreshing preview: ${error.message}`);
-    }
+    // Update the iframe src
+    iframeRef.current.src = url;
+    
+    // Clean up the URL after it's loaded
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
   
   // Open game in new window

@@ -5,56 +5,168 @@ import { Link } from "wouter";
 import { ArrowLeft, Play, Loader2 } from "lucide-react";
 import { GameSandbox } from "@/components/game-sandbox";
 
-// Empty placeholder with a message instead of a default game
-const DEFAULT_GAME_CODE = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Create a Game</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(to bottom, #1a1a1a, #2d2d2d);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
+// Default game code in case nothing is saved
+const DEFAULT_GAME_CODE = `
+// Simple interactive bouncing ball game with multiple balls
+// Colors
+const COLORS = ["#4CAF50", "#2196F3", "#FFC107", "#F44336", "#9C27B0"];
+
+// Ball class
+class Ball {
+  constructor(x, y, radius, color) {
+    this.x = x;
+    this.y = y;
+    this.radius = radius;
+    this.color = color;
+    this.dx = (Math.random() * 6) - 3;
+    this.dy = (Math.random() * 6) - 3;
+    
+    // Ensure we have some movement
+    if (Math.abs(this.dx) < 0.5) this.dx = 1;
+    if (Math.abs(this.dy) < 0.5) this.dy = 1;
+  }
+  
+  update() {
+    // Bounce off walls
+    if (this.x + this.dx > canvas.width - this.radius || this.x + this.dx < this.radius) {
+      this.dx = -this.dx;
     }
-    .message {
-      max-width: 600px;
-      padding: 30px;
-      border-radius: 12px;
-      background: rgba(0,0,0,0.2);
-      border: 1px solid rgba(255,255,255,0.1);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    if (this.y + this.dy > canvas.height - this.radius || this.y + this.dy < this.radius) {
+      this.dy = -this.dy;
     }
-    h1 {
-      margin-top: 0;
-      font-size: 24px;
-      margin-bottom: 16px;
+    
+    // Move ball
+    this.x += this.dx;
+    this.y += this.dy;
+  }
+  
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+    
+    // Add a light shimmer effect
+    ctx.beginPath();
+    ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.fill();
+  }
+}
+
+// Create balls
+const balls = [];
+for (let i = 0; i < 10; i++) {
+  const radius = Math.random() * 20 + 10;
+  const x = Math.random() * (canvas.width - radius * 2) + radius;
+  const y = Math.random() * (canvas.height - radius * 2) + radius;
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  balls.push(new Ball(x, y, radius, color));
+}
+
+// Add a player-controlled ball with mouse
+const playerBall = new Ball(canvas.width / 2, canvas.height / 2, 30, "#FF5722");
+let isMouseDown = false;
+
+// Add mouse event listeners
+canvas.addEventListener("mousedown", function(e) {
+  isMouseDown = true;
+});
+
+canvas.addEventListener("mouseup", function() {
+  isMouseDown = false;
+});
+
+canvas.addEventListener("mousemove", function(e) {
+  if (isMouseDown) {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Only update if within bounds
+    if (mouseX > playerBall.radius && mouseX < canvas.width - playerBall.radius &&
+        mouseY > playerBall.radius && mouseY < canvas.height - playerBall.radius) {
+      playerBall.x = mouseX;
+      playerBall.y = mouseY;
     }
-    p {
-      margin-bottom: 24px;
-      line-height: 1.6;
-      opacity: 0.8;
+  }
+});
+
+// Add touch support for mobile
+canvas.addEventListener("touchstart", function(e) {
+  isMouseDown = true;
+  e.preventDefault();
+});
+
+canvas.addEventListener("touchend", function() {
+  isMouseDown = false;
+});
+
+canvas.addEventListener("touchmove", function(e) {
+  if (isMouseDown && e.touches[0]) {
+    const rect = canvas.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    const touchY = e.touches[0].clientY - rect.top;
+    
+    if (touchX > playerBall.radius && touchX < canvas.width - playerBall.radius &&
+        touchY > playerBall.radius && touchY < canvas.height - playerBall.radius) {
+      playerBall.x = touchX;
+      playerBall.y = touchY;
     }
-  </style>
-</head>
-<body>
-  <div class="message">
-    <h1>No Game Found</h1>
-    <p>
-      It looks like there's no game code available to run. Please return to the editor
-      and either create a new game or load a template first.
-    </p>
-  </div>
-</body>
-</html>`;
+    e.preventDefault();
+  }
+});
+
+// Game animation loop
+function animate() {
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw background
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, "#1a1a2e");
+  gradient.addColorStop(1, "#16213e");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Update and draw all balls
+  for (const ball of balls) {
+    ball.update();
+    ball.draw();
+    
+    // Check collision with player ball
+    const dx = ball.x - playerBall.x;
+    const dy = ball.y - playerBall.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance < ball.radius + playerBall.radius) {
+      // Simple bounce effect
+      ball.dx = -ball.dx * 1.1;
+      ball.dy = -ball.dy * 1.1;
+      
+      // Limit max speed
+      ball.dx = Math.min(Math.max(ball.dx, -8), 8);
+      ball.dy = Math.min(Math.max(ball.dy, -8), 8);
+    }
+  }
+  
+  // Draw player ball
+  playerBall.draw();
+  
+  // Draw instruction text
+  ctx.font = "16px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.fillText("Click and drag to move the orange ball", canvas.width / 2, 30);
+  
+  // Continue animation
+  requestAnimationFrame(animate);
+}
+
+// Start game
+animate();
+console.log("Game initialized with", balls.length, "balls");
+`;
 
 export default function RunPage() {
   const [gameCode, setGameCode] = useState<string | null>(null);
@@ -63,38 +175,14 @@ export default function RunPage() {
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    // CRITICAL FIX: Don't use demo code, always use the user's game
-    const sessionCode = sessionStorage.getItem('currentGameCode');
-    const localCode = localStorage.getItem('gameCode');
-    
-    console.log('Run page loaded with session code:', sessionCode ? 'available' : 'not available');
-    console.log('Local storage code:', localCode ? 'available' : 'not available');
-    
-    // IMPORTANT: Only use actual user code - never default to demo unless both storages are empty
-    if (sessionCode) {
-      setGameCode(sessionCode);
-      console.log('Using session storage code, length:', sessionCode.length);
-      
-      // Keep both storages in sync
-      localStorage.setItem('gameCode', sessionCode);
-    } else if (localCode) {
-      setGameCode(localCode);
-      console.log('Using local storage code, length:', localCode.length);
-      
-      // Keep both storages in sync
-      sessionStorage.setItem('currentGameCode', localCode);
+    // Get the game code from localStorage
+    const savedCode = localStorage.getItem('currentGameCode');
+    if (savedCode) {
+      setGameCode(savedCode);
     } else {
-      // Only as absolute last resort when there is truly no code available
-      console.log('WARNING: No user game found, using default code as fallback');
+      // Use default game code if none is available
       setGameCode(DEFAULT_GAME_CODE);
     }
-    
-    // Auto-launch if we have code
-    setTimeout(() => {
-      if (sessionCode || localCode) {
-        handleRunGame();
-      }
-    }, 500);
   }, []);
 
   const handleRunGame = () => {
@@ -167,7 +255,7 @@ export default function RunPage() {
                 </Button>
                 {!gameCode && (
                   <p className="mt-4 text-sm text-muted-foreground">
-                    No game found. Create a game first in the editor.
+                    A default demo game will be loaded
                   </p>
                 )}
               </div>
