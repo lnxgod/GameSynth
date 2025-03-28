@@ -19,7 +19,14 @@ import { eq } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
 import { z } from 'zod';
 import OpenAI from "openai";
-import { makeCompletionRequest, makeChatCompletionRequest, makeJsonCompletionRequest, generateGameIdea } from './openai';
+import { 
+  makeCompletionRequest, 
+  makeChatCompletionRequest, 
+  makeJsonCompletionRequest, 
+  generateGameIdea,
+  generateGameAsset,
+  generateGameIcon
+} from './openai';
 
 // Helper function to make OpenAI requests with strict parameter control
 async function makeOpenAIRequest(config: any) {
@@ -1681,13 +1688,6 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     res.json(modelParams[model] || {});
   });
 
-  const DEFAULT_MODELS = {
-    'gpt-4o': 'GPT-4 Optimized',
-    'o1': 'O1 Base',
-    'o3-mini': 'O3 Mini',
-    'o3': 'O3 Standard'
-  };
-
   app.post("/api/users", async (req, res) => {
     try {
       const user = (req as any).user;
@@ -2269,6 +2269,49 @@ Current Code: ${code ? code.substring(0, 500) + '...' : 'No code yet'}`
     }
   });
 
+  // Asset generation endpoints
+  app.post("/api/assets/generate", async (req, res) => {
+    try {
+      const { description, style, size, quality } = req.body;
+      
+      if (!description) {
+        return res.status(400).json({ error: "Description is required" });
+      }
+
+      logApi("Generating game asset", { description, style, size, quality });
+      
+      const asset = await generateGameAsset(description, {
+        style: style || "pixel art",
+        size: size || "1024x1024",
+        quality: quality || "standard"
+      });
+      
+      res.json(asset);
+    } catch (error: any) {
+      console.error("Error generating asset:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/assets/icon", async (req, res) => {
+    try {
+      const { description } = req.body;
+      
+      if (!description) {
+        return res.status(400).json({ error: "Description is required" });
+      }
+
+      logApi("Generating game icon", { description });
+      
+      const svgCode = await generateGameIcon(description);
+      
+      res.json({ svg: svgCode });
+    } catch (error: any) {
+      console.error("Error generating icon:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
@@ -2277,8 +2320,16 @@ const logOpenAIParams = (config: any) => {
   return config;
 };
 
+// Define available models
+const DEFAULT_MODELS = {
+  'gpt-4o': 'GPT-4 Optimized',
+  'o1': 'O1 Base',
+  'o3-mini': 'O3 Mini',
+  'o3': 'O3 Standard'
+};
+
 async function getAvailableModels() {
-    return DEFAULT_MODELS;
+  return DEFAULT_MODELS;
 }
 
 const insertGameTemplateSchema = z.object({

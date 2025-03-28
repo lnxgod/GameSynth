@@ -293,4 +293,93 @@ export async function fixAllGameCodeIssues(
   }
 }
 
+/**
+ * Generates an image asset for a game based on a description
+ */
+export async function generateGameAsset(
+  description: string,
+  options: {
+    style?: string,
+    size?: "1024x1024" | "1792x1024" | "1024x1792",
+    quality?: "standard" | "hd"
+  } = {}
+): Promise<{
+  url: string,
+  base64Data?: string
+}> {
+  const { style = "pixel art", size = "1024x1024", quality = "standard" } = options;
+  
+  try {
+    const prompt = `Create a ${style} game asset for: ${description}. Make it transparent background if appropriate. Ensure the design is clean, simple, and suitable for a game.`;
+    
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt,
+      n: 1,
+      size,
+      quality,
+      response_format: "url"
+    });
+
+    // Return the URL and possibly retrieve base64 data
+    if (!response.data[0].url) {
+      throw new Error("No image URL returned from OpenAI");
+    }
+    
+    return { 
+      url: response.data[0].url 
+    };
+  } catch (error) {
+    console.error("Error generating game asset:", error);
+    throw new Error("Failed to generate game asset: " + (error as Error).message);
+  }
+}
+
+/**
+ * Generates an SVG icon asset for game UI elements
+ */
+export async function generateGameIcon(
+  description: string
+): Promise<string> {
+  const prompt = `
+    Create a simple SVG icon for a game UI element: ${description}.
+    
+    Respond ONLY with valid, clean SVG code (viewBox="0 0 24 24" with no unnecessary attributes).
+    Keep it simple - minimal paths, solid fill colors.
+    Ensure it works well at small sizes in a game interface.
+    The SVG must be a single color that can be styled via CSS.
+    
+    Return ONLY the SVG code with no markdown, explanation or backticks.
+  `;
+  
+  try {
+    const response = await makeCompletionRequest(prompt, {
+      temperature: 0.3,
+      max_tokens: 1024
+    });
+    
+    if (!response) {
+      throw new Error("No response received from OpenAI");
+    }
+    
+    // Extract SVG from response, in case there's any explanation
+    const svgRegex = /<svg[\s\S]*?<\/svg>/i;
+    const match = response.match(svgRegex);
+    
+    if (match) {
+      return match[0].trim();
+    }
+    
+    // If no SVG found but response starts with svg tag
+    if (response.trim().startsWith('<svg')) {
+      return response.trim();
+    }
+    
+    throw new Error("Failed to generate valid SVG");
+  } catch (error) {
+    console.error("Error generating game icon:", error);
+    throw new Error("Failed to generate game icon: " + (error as Error).message);
+  }
+}
+
 export default openai;
