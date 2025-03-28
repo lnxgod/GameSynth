@@ -175,30 +175,38 @@ export default function RunPage() {
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    // First check sessionStorage (most recent), then localStorage as fallback
+    // CRITICAL FIX: Don't use demo code, always use the user's game
     const sessionCode = sessionStorage.getItem('currentGameCode');
     const localCode = localStorage.getItem('gameCode');
     
-    // Log for debugging
     console.log('Run page loaded with session code:', sessionCode ? 'available' : 'not available');
     console.log('Local storage code:', localCode ? 'available' : 'not available');
     
+    // IMPORTANT: Only use actual user code - never default to demo unless both storages are empty
     if (sessionCode) {
       setGameCode(sessionCode);
-      console.log('Using session storage code');
+      console.log('Using session storage code, length:', sessionCode.length);
+      
+      // Keep both storages in sync
+      localStorage.setItem('gameCode', sessionCode);
     } else if (localCode) {
       setGameCode(localCode);
-      console.log('Using local storage code');
+      console.log('Using local storage code, length:', localCode.length);
+      
+      // Keep both storages in sync
+      sessionStorage.setItem('currentGameCode', localCode);
     } else {
-      // Use default game code if none is available
+      // Only as absolute last resort when there is truly no code available
+      console.log('WARNING: No user game found, using default code as fallback');
       setGameCode(DEFAULT_GAME_CODE);
-      console.log('Using default game code');
     }
     
-    // Make sure to save the current code to both storages to ensure persistence
-    if (sessionCode) {
-      localStorage.setItem('gameCode', sessionCode);
-    }
+    // Auto-launch if we have code
+    setTimeout(() => {
+      if (sessionCode || localCode) {
+        handleRunGame();
+      }
+    }, 500);
   }, []);
 
   const handleRunGame = () => {

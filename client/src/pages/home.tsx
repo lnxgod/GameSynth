@@ -24,9 +24,28 @@ export default function Home() {
     console.log('Home page loaded with session code:', sessionCode ? 'available' : 'not available');
     console.log('Local storage code:', localCode ? 'available' : 'not available');
     
-    // Use the most recent code available
-    const savedCode = sessionCode || localCode;
-    return savedCode || "";
+    // Choose the best available code - prioritize session storage as it's most recent
+    let codeToUse = '';
+    
+    if (sessionCode && sessionCode.trim() !== '') {
+      console.log('Using session code, length:', sessionCode.length);
+      codeToUse = sessionCode;
+      
+      // Keep storages in sync when we have the most recent code
+      if (!localCode || localCode !== sessionCode) {
+        localStorage.setItem('gameCode', sessionCode);
+        console.log('Syncing session code to local storage');
+      }
+    } else if (localCode && localCode.trim() !== '') {
+      console.log('Using local storage code, length:', localCode.length);
+      codeToUse = localCode;
+      
+      // Keep storages in sync
+      sessionStorage.setItem('currentGameCode', localCode);
+      console.log('Syncing local code to session storage');
+    }
+    
+    return codeToUse;
   });
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [gameDesign, setGameDesign] = useState<string>("");

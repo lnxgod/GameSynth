@@ -109,21 +109,37 @@ export function AssetMappingTest() {
   const [isLaunching, setIsLaunching] = useState(false);
   
   const launchGame = () => {
-    // Determine which code to use - prefer mapped code, fall back to original
+    // Always prioritize the mapped code that has assets integrated
     const codeToUse = mappedCode || gameCode;
     
-    console.log('Launching game with code:', codeToUse ? 'available' : 'not available');
-    console.log('Using mapped code:', mappedCode ? 'yes' : 'no');
+    if (!codeToUse || codeToUse.trim() === '') {
+      toast({
+        title: "No game code available",
+        description: "There is no game code to run. Please create a game first.",
+        variant: "destructive"
+      });
+      return;
+    }
     
-    // Save the current state to BOTH session storage and local storage
-    // This ensures the Run page will always find the latest code
+    console.log('Launching game with code, length:', codeToUse.length);
+    console.log('Using mapped code with assets:', mappedCode ? 'yes' : 'no');
+    console.log('Code starts with:', codeToUse.substring(0, 50) + '...');
+    
+    // IMPORTANT: Save to BOTH storage mechanisms to ensure the Run page finds it
+    // We clear both storages first to prevent any stale data issues
+    localStorage.removeItem('gameCode');
+    sessionStorage.removeItem('currentGameCode');
+    
+    // Now set the fresh code
     sessionStorage.setItem('currentGameCode', codeToUse);
     localStorage.setItem('gameCode', codeToUse);
+    
+    console.log('Game code saved to both storages');
     
     // Show launching state
     setIsLaunching(true);
     
-    // Small delay for visual feedback
+    // Small delay for visual feedback before navigating
     setTimeout(() => {
       navigate('/run');
     }, 500);
@@ -253,9 +269,22 @@ export function AssetMappingTest() {
                   <Button 
                     variant="outline" 
                     onClick={() => {
-                      // Save the current code and return to home
+                      // Same clear-then-save pattern for consistency
+                      localStorage.removeItem('gameCode');
+                      sessionStorage.removeItem('currentGameCode');
+                      
+                      // Save the current mapped code with assets and return to home
                       localStorage.setItem('gameCode', mappedCode);
                       sessionStorage.setItem('currentGameCode', mappedCode);
+                      
+                      console.log('Saved mapped code to storage before returning to editor, length:', mappedCode.length);
+                      
+                      toast({
+                        title: "Code saved",
+                        description: "Your game with assets has been saved to the editor",
+                        duration: 3000
+                      });
+                      
                       navigate('/');
                     }}
                   >
@@ -282,7 +311,21 @@ export function AssetMappingTest() {
                     <Play className="h-8 w-8 mb-2 text-primary" />
                     <span>Play Your Game</span>
                   </Button>
-                  <Button variant="outline" className="flex flex-col h-24 p-4 justify-center" onClick={() => navigate('/')}>
+                  <Button 
+                    variant="outline" 
+                    className="flex flex-col h-24 p-4 justify-center" 
+                    onClick={() => {
+                      // Make sure we're saving the mapped code with assets before navigating
+                      if (mappedCode) {
+                        localStorage.removeItem('gameCode');
+                        sessionStorage.removeItem('currentGameCode');
+                        localStorage.setItem('gameCode', mappedCode);
+                        sessionStorage.setItem('currentGameCode', mappedCode);
+                        console.log('Saved game with assets before going to editor');
+                      }
+                      navigate('/');
+                    }}
+                  >
                     <Code className="h-8 w-8 mb-2 text-primary" />
                     <span>Edit Game Code</span>
                   </Button>
