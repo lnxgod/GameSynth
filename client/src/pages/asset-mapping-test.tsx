@@ -8,26 +8,60 @@ import { AssetMapper } from '../components/asset-mapper';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GameSandbox } from '../components/game-sandbox';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Code } from 'lucide-react';
+import { RefreshCw, Code, AlertTriangle, Save } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
 
+// Fallback demo game in case nothing is in localStorage
 import demoGameCode from '../components/demo-game.html?raw';
 
 export function AssetMappingTest() {
-  const [gameCode, setGameCode] = useState<string>(demoGameCode || '');
+  // Get game code from localStorage or use demo code as fallback
+  const [gameCode, setGameCode] = useState<string>('');
   const [activeTab, setActiveTab] = useState('generate');
   const [mappedCode, setMappedCode] = useState<string>('');
   const [isAnalyzingGameCode, setIsAnalyzingGameCode] = useState(false);
+  const [noGameFound, setNoGameFound] = useState(false);
+  const { toast } = useToast();
+  
+  // Load game code from localStorage on component mount
+  useEffect(() => {
+    const savedGameCode = localStorage.getItem('gameCode');
+    if (savedGameCode) {
+      setGameCode(savedGameCode);
+      setNoGameFound(false);
+    } else {
+      setGameCode(demoGameCode);
+      setNoGameFound(true);
+    }
+  }, []);
   
   const handleApplyMappings = (_mappings: any[], updatedCode: string) => {
     setMappedCode(updatedCode);
+    
+    // If this is a user game (not demo), save the updated code back to localStorage
+    if (!noGameFound && updatedCode) {
+      localStorage.setItem('gameCode', updatedCode);
+      
+      // Show toast confirmation
+      toast({
+        title: "Game code updated",
+        description: "Your game has been updated with the mapped assets",
+        duration: 3000,
+        variant: "default",
+        icon: <Save className="h-4 w-4 text-green-500" />
+      });
+    }
+    
     setActiveTab('preview');
   };
   
-  // Function to reset the demo
+  // Function to reset to the demo
   const resetDemo = () => {
     setGameCode(demoGameCode);
     setMappedCode('');
     setActiveTab('generate');
+    setNoGameFound(true);
   };
   
   // Handle tab changes
@@ -54,6 +88,19 @@ export function AssetMappingTest() {
         </Button>
       </div>
       
+      {noGameFound && (
+        <div className="mb-4 rounded-lg border border-amber-500 bg-amber-50 p-4 dark:bg-amber-900/10">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <div className="font-medium text-amber-500">No saved game found</div>
+          </div>
+          <div className="mt-2 text-sm">
+            We're currently using a demo game. To use your own game, go to the home page, 
+            create or edit a game, and then come back to this page.
+          </div>
+        </div>
+      )}
+
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList className="grid grid-cols-3">
           <TabsTrigger value="generate">1. Generate Assets</TabsTrigger>
