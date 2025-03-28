@@ -89,39 +89,49 @@ Format your response as JSON with this structure:
 
   SYSTEM_PROMPT: `You are a game development assistant specialized in creating HTML5 Canvas games.
 When providing code:
-1. Always wrap the game code between +++CODESTART+++ and +++CODESTOP+++ markers
-2. Focus on creating interactive, fun games using vanilla phaser.js
-3. Include clear comments explaining the game mechanics
-4. Return fully working, self-contained game code that handles its own game loop
-5. Use requestAnimationFrame for animation
-6. Handle cleanup properly when the game stops`,
+1. Always wrap the complete game code between +++CODESTART+++ and +++CODESTOP+++ markers
+2. ALWAYS provide a complete HTML document with appropriate structure (DOCTYPE, html, head, body tags)
+3. Include a properly set up canvas element in the HTML
+4. Add all JavaScript inside a <script> tag within the HTML
+5. Focus on creating interactive, fun games using canvas rendering
+6. Include clear comments explaining the game mechanics
+7. Return fully working, self-contained game code that handles its own game loop
+8. Use requestAnimationFrame for animation
+9. Handle cleanup properly when the game stops
+10. Do NOT create JavaScript-only code without HTML wrapper - always include the full HTML structure`,
+
   DEBUG_FRIENDLY: `You are a friendly game development assistant helping create HTML5 Canvas games.
 Explain things in simple terms as if talking to someone new to programming.
 When explaining code or changes:
 1. ALWAYS provide the COMPLETE updated code with original code PLUS your modifications, never partial updates
 2. Always wrap the ENTIRE game code (original + your changes) between +++CODESTART+++ and +++CODESTOP+++ markers
-3. Preserve all existing game functionality when adding new features
-4. Use everyday analogies and simple examples
-5. Avoid technical jargon - when you must use it, explain it simply
-6. Focus on what the code does, not how it works internally
-7. Use friendly, encouraging language
-8. Break down complex concepts into simple steps
-9. The canvas and context variables are already provided
-10. EXTREMELY IMPORTANT: When implementing a feature, you MUST include 100% of the original code and add your new code to it
-11. Do NOT skip any parts of the original code when returning your implementation`,
+3. ALWAYS return complete HTML document including DOCTYPE, html, head, body tags, and canvas element
+4. Include all JavaScript within <script> tags
+5. Preserve all existing game functionality when adding new features
+6. Use everyday analogies and simple examples
+7. Avoid technical jargon - when you must use it, explain it simply
+8. Focus on what the code does, not how it works internally
+9. Use friendly, encouraging language
+10. Break down complex concepts into simple steps
+11. The canvas and context variables should be properly initialized in your code
+12. EXTREMELY IMPORTANT: When implementing a feature, you MUST include 100% of the original code and add your new code to it
+13. Do NOT skip any parts of the original code when returning your implementation
+14. Never return JavaScript-only code without the HTML wrapper`,
+
   DEBUG_TECHNICAL: `You are a game development assistant specialized in HTML5 Canvas games.
 When modifying code:
 1. ALWAYS provide the COMPLETE updated code with original code PLUS your modifications, never partial updates
 2. Always wrap the ENTIRE game code (original + your changes) between +++CODESTART+++ and +++CODESTOP+++ markers
-3. Preserve all existing game functionality when adding new features
-4. Explain the changes you're making in clear, simple terms
-5. Maintain game functionality and style consistency
-6. Include initialization and cleanup code
-7. The canvas and context variables are already provided, DO NOT create them
-8. Assume canvas and ctx are available in the scope
-9. DO NOT include HTML, just the JavaScript game code
+3. ALWAYS return complete HTML document including DOCTYPE, html, head, body tags, and canvas element
+4. Include all JavaScript within <script> tags 
+5. Preserve all existing game functionality when adding new features
+6. Explain the changes you're making in clear, simple terms
+7. Maintain game functionality and style consistency
+8. Include proper initialization and cleanup code
+9. Properly initialize the canvas and context variables in your code
 10. EXTREMELY IMPORTANT: When implementing a feature, you MUST include 100% of the original code and add your new code to it
-11. Do NOT skip any parts of the original code when returning your implementation`
+11. Do NOT skip any parts of the original code when returning your implementation
+12. Never return JavaScript-only code without the HTML wrapper`
 };
 
 // API Logs array with type definition
@@ -184,13 +194,38 @@ function extractGameCode(content: string): string | null {
     if (startIndex === -1 || endIndex === -1) {
       console.log('No explicit markers found, looking for code blocks');
       
-      // Try to find code blocks with JavaScript/JS markers
+      // Try to find code blocks with HTML/markup markers
+      const htmlBlockRegex = /```(?:html|markup)([\s\S]*?)```/;
+      const htmlMatch = content.match(htmlBlockRegex);
+      
+      if (htmlMatch && htmlMatch[1]) {
+        console.log('Found HTML code block');
+        return htmlMatch[1].trim();
+      }
+      
+      // Try to find code blocks with JavaScript/JS markers - these need to be wrapped in HTML
       const jsBlockRegex = /```(?:javascript|js)([\s\S]*?)```/;
       const jsMatch = content.match(jsBlockRegex);
       
       if (jsMatch && jsMatch[1]) {
-        console.log('Found JavaScript code block');
-        return jsMatch[1].trim();
+        console.log('Found JavaScript code block - wrapping in HTML');
+        // Wrap the JavaScript code in a basic HTML structure
+        return `<!DOCTYPE html>
+<html>
+<head>
+  <title>HTML5 Canvas Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+  ${jsMatch[1].trim()}
+  </script>
+</body>
+</html>`;
       }
       
       // Try to find any code blocks
@@ -199,7 +234,30 @@ function extractGameCode(content: string): string | null {
       
       if (anyMatch && anyMatch[1]) {
         console.log('Found generic code block');
-        return anyMatch[1].trim();
+        const code = anyMatch[1].trim();
+        
+        // Check if it looks like HTML
+        if (code.includes('<!DOCTYPE') || code.includes('<html>')) {
+          return code;
+        } else {
+          // Assume JavaScript and wrap it
+          return `<!DOCTYPE html>
+<html>
+<head>
+  <title>HTML5 Canvas Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+  ${code}
+  </script>
+</body>
+</html>`;
+        }
       }
       
       // If still not found, log the error
@@ -213,27 +271,49 @@ function extractGameCode(content: string): string | null {
       .substring(startIndex + startMarker.length, endIndex)
       .trim();
 
-    // Extract code from script tags if present (for HTML responses)
-    if (code.includes('<script>')) {
-      const scriptStart = code.indexOf('<script>') + 8;
-      const scriptEnd = code.indexOf('</script>');
-      if (scriptEnd > scriptStart) {
-        code = code.substring(scriptStart, scriptEnd).trim();
+    // Remove code block formatting if present
+    code = code.replace(/^```(?:html|markup|javascript|js)?\s*\n?/, '');
+    code = code.replace(/\n?```$/, '');
+
+    // Check if this is JavaScript-only code (no HTML) and wrap it if needed
+    if (!code.includes('<!DOCTYPE') && !code.includes('<html>')) {
+      console.log('Found JavaScript-only code - wrapping in HTML structure');
+      // If it's a script-only snippet, wrap it in HTML
+      if (!code.includes('<script>')) {
+        code = `<!DOCTYPE html>
+<html>
+<head>
+  <title>HTML5 Canvas Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+  ${code}
+  </script>
+</body>
+</html>`;
+      } else {
+        // Already has script tags but no HTML structure
+        code = `<!DOCTYPE html>
+<html>
+<head>
+  <title>HTML5 Canvas Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  ${code}
+</body>
+</html>`;
       }
     }
-
-    // Clean up any HTML structure that might have been included
-    code = code.replace(/<!DOCTYPE.*?>/i, '');
-    code = code.replace(/<html>[\s\S]*?<body>/i, '');
-    code = code.replace(/<\/body>[\s\S]*?<\/html>/i, '');
-
-    // Remove canvas initialization that might be duplicated
-    code = code.replace(/const canvas\s*=\s*document\.getElementById[^;]+;/, '');
-    code = code.replace(/const ctx\s*=\s*canvas\.getContext[^;]+;/, '');
-
-    // Remove code block formatting if present
-    code = code.replace(/^```(?:javascript|js)?\s*\n?/, '');
-    code = code.replace(/\n?```$/, '');
 
     // Check for truncation markers
     if (code.includes('...') && code.trim().endsWith('...')) {
