@@ -31,6 +31,61 @@ export function GameSandbox({ gameCode, onClose, showCode = false, fullscreen = 
 
   // Create the full HTML with the game code embedded
   const createGameHTML = (code: string) => {
+    // First check if the code is actually available and not just whitespace
+    if (!code || code.trim() === '') {
+      addDebugLog("No game code provided, showing empty message");
+      return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create a Game</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom, #1a1a1a, #2d2d2d);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .message {
+      max-width: 600px;
+      padding: 30px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+    p {
+      margin-bottom: 24px;
+      line-height: 1.6;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="message">
+    <h1>No Game Found</h1>
+    <p>
+      It looks like there's no game code available to run. Please return to the editor
+      and either create a new game or load a template first.
+    </p>
+  </div>
+</body>
+</html>`;
+    }
+    
     // If code already contains HTML structure with doctype, head, body, etc.
     // we'll use it directly
     if (code.trim().toLowerCase().startsWith('<!doctype html>') || 
