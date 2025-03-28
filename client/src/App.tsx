@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import Run from "@/pages/run";
 import PromptsSetup from "@/pages/prompts-setup";
 import { AssetsPage } from "@/pages/assets";
+import { AssetMappingTest } from "@/pages/asset-mapping-test";
 import { NavBar } from "@/components/nav-bar";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
         <Route path="/run" component={Run} />
         <Route path="/prompts-setup" component={PromptsSetup} />
         <Route path="/assets" component={AssetsPage} />
+        <Route path="/asset-mapping-test" component={AssetMappingTest} />
         <Route path="/" component={Home} />
         <Route component={NotFound} />
       </Switch>

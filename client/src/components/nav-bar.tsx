@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Play, Settings, ImageIcon } from "lucide-react";
+import { Play, Settings, ImageIcon, Palette } from "lucide-react";
 import { GameIdeaGenerator } from "@/components/game-idea-generator";
 
 export function NavBar() {
@@ -25,6 +25,12 @@ export function NavBar() {
             <Button variant="ghost">
               <ImageIcon className="mr-2 h-4 w-4" />
               Assets
+            </Button>
+          </Link>
+          <Link href="/asset-mapping-test">
+            <Button variant="ghost">
+              <Palette className="mr-2 h-4 w-4" />
+              Asset Mapping
             </Button>
           </Link>
           <GameIdeaGenerator />
