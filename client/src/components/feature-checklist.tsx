@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, ListPlus } from "lucide-react";
+import { Loader2, Plus, ListPlus, Sparkles, Code } from "lucide-react";
 import { AIHint } from "./ai-hint";
 
 interface Feature {
@@ -30,19 +30,10 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
   const [newFeature, setNewFeature] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // Initialize features from initialFeatures prop
-  useEffect(() => {
-    if (initialFeatures.length > 0) {
-      initialFeatures.forEach((feature: string) => {
-        createFeatureMutation.mutate({
-          description: feature,
-          type: 'generated',
-          completed: false
-        });
-      });
-    }
-  }, [initialFeatures]);
+  const [isGeneratingFromCode, setIsGeneratingFromCode] = useState(false);
+  
+  // We don't initialize features automatically anymore - user must click Generate button
+  // This is intentional as per user request
 
   const { data: features = [] } = useQuery({
     queryKey: ['features'],
@@ -129,6 +120,60 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
   const handleImplementFeature = (feature: Feature) => {
     implementFeatureMutation.mutate(feature.description);
   };
+  
+  // New mutation for generating features from code
+  const generateFeaturesFromCodeMutation = useMutation({
+    mutationFn: async () => {
+      // Notify the UI that AI operation is in progress
+      onAiOperation?.({ type: "Analyzing Code for Features", active: true });
+      setIsGeneratingFromCode(true);
+      
+      // Get the current game code from localStorage
+      const currentCode = localStorage.getItem('currentGameCode') || '';
+      
+      try {
+        const res = await apiRequest('POST', '/api/code/analyze-features', {
+          code: currentCode,
+          gameDesign: gameDesign
+        });
+        return res.json();
+      } finally {
+        // Notify the UI that AI operation is complete
+        onAiOperation?.({ type: "", active: false });
+        setIsGeneratingFromCode(false);
+      }
+    },
+    onSuccess: (data) => {
+      if (data.features && Array.isArray(data.features)) {
+        // Add each suggested feature to the feature list
+        data.features.forEach((feature: string) => {
+          createFeatureMutation.mutate({
+            description: feature,
+            type: 'generated',
+            completed: false
+          });
+        });
+        
+        toast({
+          title: "Features Generated",
+          description: `Generated ${data.features.length} features from code analysis.`,
+        });
+      } else {
+        toast({
+          title: "Feature Generation",
+          description: "No new features were suggested. Try adding more code or details.",
+          variant: "destructive"
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Feature Generation Failed",
+        description: error.message || "An error occurred while generating features.",
+        variant: "destructive"
+      });
+    }
+  });
 
   return (
     <Card className="p-4">
@@ -141,7 +186,7 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
           />
         </div>
 
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center mb-2">
           <Input
             placeholder="Add a new feature..."
             value={newFeature}
@@ -153,6 +198,24 @@ export function FeatureChecklist({ gameDesign, onCodeUpdate, initialFeatures = [
             Add Feature
           </Button>
         </div>
+        
+        <Button 
+          onClick={() => generateFeaturesFromCodeMutation.mutate()}
+          disabled={generateFeaturesFromCodeMutation.isPending || !localStorage.getItem('currentGameCode')}
+          className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+        >
+          {generateFeaturesFromCodeMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Analyzing Code...
+            </>
+          ) : (
+            <>
+              <Code className="mr-2 h-4 w-4" />
+              Generate Features from Code
+            </>
+          )}
+        </Button>
 
         <div className="space-y-4">
           <ScrollArea className="h-[300px]">

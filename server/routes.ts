@@ -810,6 +810,69 @@ Each feature should be specific and actionable.`
     }
   });
   
+  // Feature generation from code analysis endpoint
+  app.post("/api/code/analyze-features", async (req, res) => {
+    try {
+      const { code, gameDesign, model, parameters } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ error: "No code provided for feature analysis" });
+      }
+      
+      logApi("Feature generation from code request received", { codeLength: code.length });
+      
+      const requestConfig = {
+        model: model || "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a game development assistant that analyzes code to suggest new features.
+Analyze the provided code to identify what functionality is already implemented and suggest new features that would enhance the game.
+Focus on concrete, implementable features that build upon the existing code structure.
+Format your response as JSON with this structure:
+{
+  "features": [
+    "Feature 1: Detailed description",
+    "Feature 2: Detailed description",
+    "Feature 3: Detailed description"
+  ]
+}`
+          },
+          {
+            role: "user",
+            content: `Analyze this game code and suggest 3-5 new features that would enhance the game:
+
+\`\`\`javascript
+${code}
+\`\`\`
+
+${gameDesign ? `Game Design Context:\n${JSON.stringify(gameDesign, null, 2)}` : ''}
+
+Focus on suggesting concrete, implementable features that:
+1. Build upon the existing code structure
+2. Add gameplay depth or user engagement
+3. Are specific enough to be implemented with clear direction
+4. Enhance what's already in the code rather than replacing it
+
+Return a list of suggested features in the specified JSON format.`
+          }
+        ],
+        response_format: { type: "json_object" },
+        parameters // Pass through any explicitly set parameters
+      };
+      
+      const response = await makeOpenAIRequest(requestConfig);
+      const suggestions = JSON.parse(response.choices[0].message.content);
+      
+      logApi("Feature suggestions generated from code", null, { features: suggestions });
+      res.json(suggestions);
+    } catch (error: any) {
+      logApi("Error generating features from code", null, { error: error.message });
+      console.error('Error generating features from code:', error);
+      res.status(500).json({ error: error.message || "Failed to generate features from code" });
+    }
+  });
+  
   // Fix specific issue endpoint
   app.post("/api/code/fix", async (req, res) => {
     try {
