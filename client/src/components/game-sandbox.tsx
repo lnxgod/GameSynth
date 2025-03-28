@@ -9,9 +9,10 @@ interface GameSandboxProps {
   gameCode: string | null;
   onClose: () => void;
   showCode?: boolean;
+  fullscreen?: boolean;
 }
 
-export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandboxProps) {
+export function GameSandbox({ gameCode, onClose, showCode = false, fullscreen = false }: GameSandboxProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [editableCode, setEditableCode] = useState<string | null>(gameCode);
@@ -419,35 +420,40 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
-      <div className="p-4 flex justify-between items-center border-b">
-        <h2 className="text-lg font-semibold">Game Preview</h2>
-        <div className="flex gap-2">
+      <div className={`p-4 flex justify-between items-center ${fullscreen ? 'bg-transparent absolute top-0 left-0 right-0 z-10' : 'border-b'}`}>
+        <h2 className={`text-lg font-semibold ${fullscreen ? 'opacity-0 transition-opacity hover:opacity-100' : ''}`}>
+          Game Preview
+        </h2>
+        <div className={`flex gap-2 ${fullscreen ? 'ml-auto opacity-50 hover:opacity-100 transition-opacity' : ''}`}>
           <Button 
-            variant="outline" 
+            variant={fullscreen ? "secondary" : "outline"}
             size="sm" 
             onClick={refreshPreview} 
             title="Refresh Preview"
+            className={fullscreen ? "bg-background/60 backdrop-blur-sm" : ""}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+            {!fullscreen && "Refresh"}
           </Button>
           <Button 
-            variant="outline" 
+            variant={fullscreen ? "secondary" : "outline"}
             size="sm" 
             onClick={openInNewWindow} 
             title="Open in New Window"
+            className={fullscreen ? "bg-background/60 backdrop-blur-sm" : ""}
           >
             <ExternalLink className="h-4 w-4 mr-2" />
-            New Window
+            {!fullscreen && "New Window"}
           </Button>
           <Button 
-            variant="outline" 
+            variant={fullscreen ? "destructive" : "outline"}
             size="sm" 
             onClick={onClose} 
             title="Close Preview"
+            className={fullscreen ? "bg-background/60 backdrop-blur-sm" : ""}
           >
-            <X className="h-4 w-4 mr-2" />
-            Close
+            <X className="h-4 w-4" />
+            {!fullscreen && "Close"}
           </Button>
         </div>
       </div>

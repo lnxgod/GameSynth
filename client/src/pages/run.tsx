@@ -172,6 +172,7 @@ export default function RunPage() {
   const [gameCode, setGameCode] = useState<string | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const [showGame, setShowGame] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     // Get the game code from localStorage
@@ -187,64 +188,80 @@ export default function RunPage() {
   const handleRunGame = () => {
     if (!gameCode) return;
     setIsLaunching(true);
-    setShowGame(true);
+    
+    // Add a small delay to show the loading animation
+    setTimeout(() => {
+      setShowGame(true);
+      setFullscreen(true);
+    }, 800); // Delay for visual effect
   };
 
   const handleCloseGame = () => {
     setShowGame(false);
     setIsLaunching(false);
+    setFullscreen(false);
   };
 
   return (
-    <div className="container py-8">
-      <div className="flex items-center justify-between mb-4">
-        <Link href="/">
-          <Button variant="outline" className="flex items-center">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Design
-          </Button>
-        </Link>
-      </div>
+    <div className={`${fullscreen ? 'fixed inset-0 z-50 bg-background' : 'container py-8'} transition-all duration-300`}>
+      {/* Only show back button when not in fullscreen mode */}
+      {!fullscreen && (
+        <div className="flex items-center justify-between mb-4">
+          <Link href="/">
+            <Button variant="outline" className="flex items-center">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Design
+            </Button>
+          </Link>
+        </div>
+      )}
       
+      {/* Loading animation during transition */}
+      {isLaunching && !showGame && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center">
+          <div className="relative w-16 h-16 mb-6">
+            <div className="absolute inset-0 border-4 border-secondary rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-t-primary rounded-full animate-spin"></div>
+          </div>
+          <h3 className="text-xl font-medium mb-2">Preparing Game Environment</h3>
+          <p className="text-muted-foreground">Loading assets and initializing game...</p>
+        </div>
+      )}
+      
+      {/* Game sandbox */}
       {showGame ? (
         <GameSandbox 
           gameCode={gameCode}
           onClose={handleCloseGame}
           showCode={false}
+          fullscreen={fullscreen}
         />
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Run Game</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center">
-              <Button 
-                onClick={handleRunGame}
-                size="lg"
-                className="w-full max-w-sm relative"
-                disabled={isLaunching}
-              >
-                {isLaunching ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Launching Game...
-                  </>
-                ) : (
-                  <>
-                    <Play className="mr-2 h-4 w-4" />
-                    Launch Game
-                  </>
+        !isLaunching && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Run Game</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <Button 
+                  onClick={handleRunGame}
+                  size="lg"
+                  className="w-full max-w-sm relative"
+                  disabled={isLaunching}
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  Launch Game
+                </Button>
+                {!gameCode && (
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    A default demo game will be loaded
+                  </p>
                 )}
-              </Button>
-              {!gameCode && (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  A default demo game will be loaded
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </CardContent>
+          </Card>
+        )
       )}
     </div>
   );
