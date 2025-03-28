@@ -54,12 +54,19 @@ export function GameDebugger({ code, onFixedCode }: GameDebuggerProps) {
       }
 
       const data = await response.json();
-      setIssues(data.issues || []);
+      // Safely handle various potential response formats
+      const issuesArray = Array.isArray(data.issues) 
+        ? data.issues 
+        : (data.issues && data.issues.issues && Array.isArray(data.issues.issues)) 
+          ? data.issues.issues 
+          : [];
+          
+      setIssues(issuesArray);
 
-      if (data.issues && data.issues.length > 0) {
+      if (issuesArray.length > 0) {
         toast({
           title: "Analysis Complete",
-          description: `Found ${data.issues.length} potential issue${data.issues.length === 1 ? '' : 's'}`,
+          description: `Found ${issuesArray.length} potential issue${issuesArray.length === 1 ? '' : 's'}`,
         });
       } else {
         toast({
