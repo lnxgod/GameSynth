@@ -175,10 +175,14 @@ export default function RunPage() {
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    // Get the game code from localStorage
-    const savedCode = localStorage.getItem('currentGameCode');
-    if (savedCode) {
-      setGameCode(savedCode);
+    // First check sessionStorage (most recent), then localStorage as fallback
+    const sessionCode = sessionStorage.getItem('currentGameCode');
+    const localCode = localStorage.getItem('gameCode');
+    
+    if (sessionCode) {
+      setGameCode(sessionCode);
+    } else if (localCode) {
+      setGameCode(localCode);
     } else {
       // Use default game code if none is available
       setGameCode(DEFAULT_GAME_CODE);

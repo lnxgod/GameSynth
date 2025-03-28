@@ -68,22 +68,31 @@ export function AssetMapper({ gameCode, onApplyMappings }: AssetMapperProps) {
       setIconAssets(JSON.parse(savedIcons));
     }
     
+    // If no gameCode is provided, try to load from sessionStorage first, then localStorage
+    let codeToAnalyze = gameCode;
+    if (!codeToAnalyze || !codeToAnalyze.trim()) {
+      const sessionCode = sessionStorage.getItem('currentGameCode');
+      const localCode = localStorage.getItem('gameCode');
+      codeToAnalyze = sessionCode || localCode || '';
+    }
+    
     // Automatically analyze game code when component mounts
-    if (gameCode && gameCode.trim()) {
-      analyzeGameCode();
+    if (codeToAnalyze && codeToAnalyze.trim()) {
+      // Call the function with explicit parameter
+      analyzeGameCode(codeToAnalyze);
     }
   }, [gameCode]);
   
   // Analyze game code to find mappable objects
-  const analyzeGameCode = async () => {
-    if (!gameCode.trim()) return;
+  const analyzeGameCode = async (codeToAnalyze = gameCode) => {
+    if (!codeToAnalyze || !codeToAnalyze.trim()) return;
     
     setAnalyzing(true);
     try {
       const response = await fetch('/api/assets/analyze-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: gameCode })
+        body: JSON.stringify({ code: codeToAnalyze })
       });
       
       if (!response.ok) {
@@ -182,11 +191,16 @@ export function AssetMapper({ gameCode, onApplyMappings }: AssetMapperProps) {
         };
       });
       
+      // Try to get the most current code (from session storage or local storage)
+      const sessionCode = sessionStorage.getItem('currentGameCode');
+      const localCode = localStorage.getItem('gameCode');
+      const currentCode = gameCode || sessionCode || localCode || '';
+      
       const response = await fetch('/api/assets/generate-code-updates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          gameCode,
+          gameCode: currentCode,
           mappings: mappingData
         })
       });
@@ -242,8 +256,14 @@ export function AssetMapper({ gameCode, onApplyMappings }: AssetMapperProps) {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Button 
-                onClick={analyzeGameCode} 
-                disabled={analyzing || !gameCode.trim()}
+                onClick={() => {
+                  // Get code from storage if not directly provided
+                  const sessionCode = sessionStorage.getItem('currentGameCode');
+                  const localCode = localStorage.getItem('gameCode');
+                  const codeToUse = gameCode || sessionCode || localCode || '';
+                  analyzeGameCode(codeToUse);
+                }} 
+                disabled={analyzing}
                 className="flex items-center"
               >
                 <Code className="mr-2 h-4 w-4" />

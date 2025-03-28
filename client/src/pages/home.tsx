@@ -14,7 +14,7 @@ import { ThemeSwitcher } from "@/components/ui/theme-switcher";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState(() => {
-    const savedCode = localStorage.getItem('currentGameCode');
+    const savedCode = localStorage.getItem('gameCode') || sessionStorage.getItem('currentGameCode');
     return savedCode || "";
   });
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -63,7 +63,9 @@ export default function Home() {
 
   const handleCodeChange = (newCode: string) => {
     setGameCode(newCode);
-    localStorage.setItem('currentGameCode', newCode);
+    // Save to both localStorage and sessionStorage for persistence
+    localStorage.setItem('gameCode', newCode);
+    sessionStorage.setItem('currentGameCode', newCode);
     addDebugLog("Code updated in editor");
   };
 
@@ -76,6 +78,11 @@ export default function Home() {
 
   const handleTemplateSelect = (code: string, settings?: any) => {
     setGameCode(code);
+    
+    // Save to both localStorage and sessionStorage for persistence
+    localStorage.setItem('gameCode', code);
+    sessionStorage.setItem('currentGameCode', code);
+    
     if (settings) {
       setTemplateSettings(settings);
       setSelectedModel(settings.modelParameters?.model || selectedModel);
