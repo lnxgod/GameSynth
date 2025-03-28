@@ -307,7 +307,18 @@ export function GameSandbox({ gameCode, onClose, showCode = false, fullscreen = 
   useEffect(() => {
     if (gameCode) {
       setEditableCode(gameCode);
-      addDebugLog("Game code updated from props");
+      
+      // Additional logging to track code through the component lifecycle
+      console.log('GameSandbox received code from props, length:', gameCode.length);
+      console.log('Code starts with:', gameCode.substring(0, 50) + '...');
+      
+      addDebugLog(`Game code updated from props (${gameCode.length} chars)`);
+      
+      // Clear error state when new code is received
+      setHasError(false);
+    } else {
+      console.log('GameSandbox received null or empty game code');
+      addDebugLog("Warning: No game code provided to GameSandbox");
     }
   }, [gameCode]);
   
@@ -355,22 +366,40 @@ export function GameSandbox({ gameCode, onClose, showCode = false, fullscreen = 
   
   // Refresh the preview iframe
   const refreshPreview = () => {
-    if (!editableCode || !iframeRef.current) return;
+    if (!editableCode || !iframeRef.current) {
+      console.log('Cannot refresh preview: missing code or iframe reference');
+      return;
+    }
     
     setIsLoading(true);
     setHasError(false);
-    addDebugLog("Refreshing game preview");
     
-    // Create a data URL from the HTML content
-    const htmlContent = createGameHTML(editableCode);
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+    // Add more detailed logging
+    console.log('Refreshing game preview with code length:', editableCode.length);
+    addDebugLog(`Refreshing game preview (${editableCode.length} chars)`);
     
-    // Update the iframe src
-    iframeRef.current.src = url;
-    
-    // Clean up the URL after it's loaded
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    try {
+      // Create a data URL from the HTML content
+      const htmlContent = createGameHTML(editableCode);
+      console.log('Generated HTML content length:', htmlContent.length);
+      
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      
+      // Update the iframe src
+      iframeRef.current.src = url;
+      
+      // Clean up the URL after it's loaded
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        console.log('Cleaned up blob URL');
+      }, 5000);
+    } catch (error) {
+      console.error('Error refreshing game preview:', error);
+      setHasError(true);
+      setIsLoading(false);
+      addDebugLog(`Error refreshing preview: ${error.message}`);
+    }
   };
   
   // Open game in new window

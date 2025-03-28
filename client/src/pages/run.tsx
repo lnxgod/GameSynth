@@ -179,13 +179,25 @@ export default function RunPage() {
     const sessionCode = sessionStorage.getItem('currentGameCode');
     const localCode = localStorage.getItem('gameCode');
     
+    // Log for debugging
+    console.log('Run page loaded with session code:', sessionCode ? 'available' : 'not available');
+    console.log('Local storage code:', localCode ? 'available' : 'not available');
+    
     if (sessionCode) {
       setGameCode(sessionCode);
+      console.log('Using session storage code');
     } else if (localCode) {
       setGameCode(localCode);
+      console.log('Using local storage code');
     } else {
       // Use default game code if none is available
       setGameCode(DEFAULT_GAME_CODE);
+      console.log('Using default game code');
+    }
+    
+    // Make sure to save the current code to both storages to ensure persistence
+    if (sessionCode) {
+      localStorage.setItem('gameCode', sessionCode);
     }
   }, []);
 

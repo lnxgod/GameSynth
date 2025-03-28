@@ -26,12 +26,30 @@ export function AssetMappingTest() {
   // Load the currently active game code
   useEffect(() => {
     // First try to get the code from session storage (most recent workspace code)
-    const currentCode = sessionStorage.getItem('currentGameCode') || localStorage.getItem('gameCode') || demoGameCode;
+    const sessionCode = sessionStorage.getItem('currentGameCode');
+    const localCode = localStorage.getItem('gameCode');
+    
+    // Debug logging
+    console.log('Asset mapping page loaded with session code:', sessionCode ? 'available' : 'not available');
+    console.log('Local storage code:', localCode ? 'available' : 'not available');
+    
+    // Prioritize session storage, then local storage, then demo
+    const currentCode = sessionCode || localCode || demoGameCode;
     setGameCode(currentCode);
+    
+    // Always ensure both storages are in sync with the most recent code
+    if (sessionCode && !localCode) {
+      console.log('Syncing session code to local storage');
+      localStorage.setItem('gameCode', sessionCode);
+    } else if (localCode && !sessionCode) {
+      console.log('Syncing local code to session storage');
+      sessionStorage.setItem('currentGameCode', localCode);
+    }
     
     // Listen for storage events to update if code changes in another tab
     const handleStorageChange = () => {
       const updatedCode = sessionStorage.getItem('currentGameCode') || localStorage.getItem('gameCode') || demoGameCode;
+      console.log('Storage event detected, updating code');
       setGameCode(updatedCode);
     };
     
@@ -91,10 +109,21 @@ export function AssetMappingTest() {
   const [isLaunching, setIsLaunching] = useState(false);
   
   const launchGame = () => {
-    // Save the current state to session storage for the run page to access
-    sessionStorage.setItem('currentGameCode', mappedCode || gameCode);
-    // Then navigate to the run page
+    // Determine which code to use - prefer mapped code, fall back to original
+    const codeToUse = mappedCode || gameCode;
+    
+    console.log('Launching game with code:', codeToUse ? 'available' : 'not available');
+    console.log('Using mapped code:', mappedCode ? 'yes' : 'no');
+    
+    // Save the current state to BOTH session storage and local storage
+    // This ensures the Run page will always find the latest code
+    sessionStorage.setItem('currentGameCode', codeToUse);
+    localStorage.setItem('gameCode', codeToUse);
+    
+    // Show launching state
     setIsLaunching(true);
+    
+    // Small delay for visual feedback
     setTimeout(() => {
       navigate('/run');
     }, 500);

@@ -17,7 +17,15 @@ import { Palette, Sparkles, ImageIcon, ArrowRight } from "lucide-react";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState(() => {
-    const savedCode = localStorage.getItem('gameCode') || sessionStorage.getItem('currentGameCode');
+    // Prioritize session storage for most recent code, then local storage
+    const sessionCode = sessionStorage.getItem('currentGameCode');
+    const localCode = localStorage.getItem('gameCode');
+    
+    console.log('Home page loaded with session code:', sessionCode ? 'available' : 'not available');
+    console.log('Local storage code:', localCode ? 'available' : 'not available');
+    
+    // Use the most recent code available
+    const savedCode = sessionCode || localCode;
     return savedCode || "";
   });
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -66,9 +74,13 @@ export default function Home() {
 
   const handleCodeChange = (newCode: string) => {
     setGameCode(newCode);
+    
     // Save to both localStorage and sessionStorage for persistence
+    // This ensures code is available to all components consistently
     localStorage.setItem('gameCode', newCode);
     sessionStorage.setItem('currentGameCode', newCode);
+    
+    console.log('Code updated in editor and saved to both storages');
     addDebugLog("Code updated in editor");
   };
 
@@ -82,9 +94,13 @@ export default function Home() {
   const handleTemplateSelect = (code: string, settings?: any) => {
     setGameCode(code);
     
+    console.log('Template selected with code length:', code ? code.length : 0);
+    
     // Save to both localStorage and sessionStorage for persistence
     localStorage.setItem('gameCode', code);
     sessionStorage.setItem('currentGameCode', code);
+    
+    console.log('Template code saved to both storages');
     
     if (settings) {
       setTemplateSettings(settings);
