@@ -783,6 +783,99 @@ Each feature should be specific and actionable.`
       res.status(500).json({ error: error.message });
     }
   });
+  
+  // Game code analysis endpoint
+  app.post("/api/code/analyze", async (req, res) => {
+    try {
+      const { code } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ error: "No code provided for analysis" });
+      }
+      
+      logApi("Game code analysis request received");
+      
+      // Import the analyze function from openai.ts
+      const { analyzeGameCode } = await import('./openai');
+      
+      // Extract common issues from the game code
+      const issues = await analyzeGameCode(code);
+      
+      logApi("Game code analysis completed", null, { issuesCount: issues.length });
+      res.json({ issues });
+    } catch (error: any) {
+      logApi("Error analyzing game code", null, { error: error.message });
+      console.error('Error analyzing game code:', error);
+      res.status(500).json({ error: error.message || "Failed to analyze game code" });
+    }
+  });
+  
+  // Fix specific issue endpoint
+  app.post("/api/code/fix", async (req, res) => {
+    try {
+      const { code, issueId, issueMessage } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ error: "No code provided for fixing" });
+      }
+      
+      if (!issueId || !issueMessage) {
+        return res.status(400).json({ error: "Issue information is required" });
+      }
+      
+      logApi("Game code fix request received", { issueId, issueMessage });
+      
+      // Import the fix function from openai.ts
+      const { fixGameCodeIssue } = await import('./openai');
+      
+      // Fix the specific issue
+      const fixedCode = await fixGameCodeIssue(code, issueId, issueMessage);
+      
+      logApi("Game code issue fixed", { issueId });
+      res.json({ fixedCode });
+    } catch (error: any) {
+      logApi("Error fixing game code issue", null, { error: error.message });
+      console.error('Error fixing game code issue:', error);
+      res.status(500).json({ error: error.message || "Failed to fix game code issue" });
+    }
+  });
+  
+  // Fix all issues endpoint
+  app.post("/api/code/fix-all", async (req, res) => {
+    try {
+      const { code } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ error: "No code provided for fixing" });
+      }
+      
+      logApi("Game code fix-all request received");
+      
+      // Import the functions from openai.ts
+      const { analyzeGameCode, fixAllGameCodeIssues } = await import('./openai');
+      
+      // Analyze code first to get the issues
+      const issues = await analyzeGameCode(code);
+      
+      // Only fix auto-fixable issues
+      const fixableIssues = issues.filter(issue => issue.autoFixable);
+      
+      if (fixableIssues.length === 0) {
+        logApi("No fixable issues found in game code");
+        return res.json({ fixedCode: code, message: "No fixable issues found" });
+      }
+      
+      // Fix all issues
+      const fixedCode = await fixAllGameCodeIssues(code, fixableIssues);
+      
+      logApi("Game code issues fixed", null, { fixedCount: fixableIssues.length });
+      res.json({ fixedCode });
+    } catch (error: any) {
+      logApi("Error fixing all game code issues", null, { error: error.message });
+      console.error('Error fixing all game code issues:', error);
+      res.status(500).json({ error: error.message || "Failed to fix all game code issues" });
+    }
+  });
 
   app.post("/api/games", async (req, res) => {
     try {

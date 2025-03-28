@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, RefreshCw, Code, Loader2, ExternalLink, Maximize2 } from 'lucide-react';
+import { X, RefreshCw, Code, Loader2, ExternalLink, Maximize2, Bug } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from '@/components/ui/textarea';
+import { GameDebugger } from './game-debugger';
 
 interface GameSandboxProps {
   gameCode: string | null;
@@ -17,6 +18,9 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState(showCode ? "code" : "preview");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  // Code debug state
+  const [showDebugger, setShowDebugger] = useState(false);
   
   // Logging helper
   const addDebugLog = (log: string) => {
@@ -383,6 +387,15 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
   
+  // Handle fixed code from the debugger
+  const handleFixedCode = (fixedCode: string) => {
+    setEditableCode(fixedCode);
+    addDebugLog("Game code updated by debugger");
+    if (activeTab === 'preview') {
+      refreshPreview();
+    }
+  };
+  
   // Handle tab changes
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -452,6 +465,10 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
                   <Code className="h-4 w-4" />
                   Code
                 </TabsTrigger>
+                <TabsTrigger value="debug" className="flex items-center gap-2">
+                  <Bug className="h-4 w-4" />
+                  Debug
+                </TabsTrigger>
               </TabsList>
             </div>
             
@@ -480,6 +497,13 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
                   style={{ minHeight: '100%' }}
                 />
               </TabsContent>
+              
+              <TabsContent value="debug" className="flex-1 h-full m-0 p-4 overflow-auto">
+                <GameDebugger 
+                  code={editableCode || ''} 
+                  onFixedCode={handleFixedCode} 
+                />
+              </TabsContent>
             </div>
           </Tabs>
         ) : (
@@ -496,6 +520,37 @@ export function GameSandbox({ gameCode, onClose, showCode = false }: GameSandbox
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
                 <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
                 <p>Loading game environment...</p>
+              </div>
+            )}
+            
+            {/* Debug button for preview-only mode */}
+            <div className="absolute top-4 right-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowDebugger(!showDebugger)}
+                className="shadow-md"
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                {showDebugger ? "Hide Debugger" : "Debug Game"}
+              </Button>
+            </div>
+            
+            {/* Debug panel for preview-only mode */}
+            {showDebugger && (
+              <div className="absolute bottom-12 left-4 right-4 bg-background border rounded-md shadow-lg p-4 z-10" style={{ maxHeight: '40vh' }}>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold">Game Debugger</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setShowDebugger(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="overflow-auto" style={{ maxHeight: 'calc(40vh - 4rem)' }}>
+                  <GameDebugger 
+                    code={editableCode || ''} 
+                    onFixedCode={handleFixedCode} 
+                  />
+                </div>
               </div>
             )}
           </div>

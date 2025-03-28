@@ -122,4 +122,175 @@ export async function generateGameIdea(): Promise<{
   });
 }
 
+/**
+ * Analyzes game code and returns a list of potential issues
+ */
+export async function analyzeGameCode(code: string): Promise<Array<{
+  id: string;
+  type: 'error' | 'warning' | 'info';
+  message: string;
+  line?: number;
+  column?: number;
+  autoFixable: boolean;
+}>> {
+  const prompt = `
+    Analyze the following HTML5 game code and identify any issues, bugs, or improvements.
+    Focus on the following categories:
+    1. Syntax errors or code bugs
+    2. Performance issues
+    3. Missing error handling
+    4. Browser compatibility issues
+    5. Accessibility concerns
+    6. Best practices violations
+
+    For each issue found, determine if it can be automatically fixed by an AI.
+    Return the results as a JSON array of objects with these properties:
+    - id: A unique string identifier for the issue (use format: issue_type_number, e.g., 'syntax_error_1')
+    - type: Either 'error', 'warning', or 'info'
+    - message: A clear description of the issue
+    - line: The line number where the issue occurs (if applicable)
+    - column: The column number where the issue occurs (if applicable)
+    - autoFixable: Boolean indicating if this issue can be automatically fixed
+
+    Here's the code to analyze:
+    \`\`\`
+    ${code}
+    \`\`\`
+  `;
+  
+  try {
+    const issues = await makeJsonCompletionRequest<Array<{
+      id: string;
+      type: 'error' | 'warning' | 'info';
+      message: string;
+      line?: number;
+      column?: number;
+      autoFixable: boolean;
+    }>>(prompt, {
+      temperature: 0.3,
+      max_tokens: 2048
+    });
+    
+    return issues;
+  } catch (error) {
+    console.error("Error analyzing game code:", error);
+    throw new Error("Failed to analyze game code: " + (error as Error).message);
+  }
+}
+
+/**
+ * Fixes a specific issue in the game code
+ */
+export async function fixGameCodeIssue(
+  code: string, 
+  issueId: string, 
+  issueMessage: string
+): Promise<string> {
+  const prompt = `
+    I have an HTML5 game with the following code:
+    \`\`\`
+    ${code}
+    \`\`\`
+
+    There is an issue with the code that needs fixing:
+    Issue ID: ${issueId}
+    Issue Description: ${issueMessage}
+
+    Please fix ONLY this specific issue while making minimal changes to the code.
+    Respond with the complete fixed code, maintaining the original structure and functionality.
+    Do not add comments explaining the changes. Simply return the corrected code.
+  `;
+  
+  try {
+    const response = await makeCompletionRequest(prompt, {
+      temperature: 0.3,
+      max_tokens: Math.max(2048, code.length * 1.2) // Ensure enough tokens for the response
+    });
+    
+    if (!response) {
+      throw new Error("No response received from OpenAI");
+    }
+    
+    // Extract only the code from the response (in case there's any explanation)
+    const codeRegex = /\`\`\`(?:html|javascript|js)?\s*([\s\S]*?)\`\`\`|<html[\s\S]*?<\/html>/i;
+    const match = response.match(codeRegex);
+    
+    if (match && match[1]) {
+      return match[1].trim();
+    } else if (match && match[0].startsWith('<html')) {
+      return match[0].trim();
+    }
+    
+    // If no code block found, return the entire response
+    // This handles cases where the AI doesn't wrap code in backticks
+    return response.trim();
+  } catch (error) {
+    console.error("Error fixing game code issue:", error);
+    throw new Error("Failed to fix game code issue: " + (error as Error).message);
+  }
+}
+
+/**
+ * Fixes all provided issues in the game code
+ */
+export async function fixAllGameCodeIssues(
+  code: string, 
+  issues: Array<{
+    id: string;
+    type: 'error' | 'warning' | 'info';
+    message: string;
+    line?: number;
+    column?: number;
+    autoFixable: boolean;
+  }>
+): Promise<string> {
+  const issuesText = issues.map(issue => 
+    `- Issue ID: ${issue.id}\n  Type: ${issue.type}\n  Message: ${issue.message}${
+      issue.line ? `\n  Location: Line ${issue.line}${issue.column ? `, Column ${issue.column}` : ''}` : ''
+    }`
+  ).join('\n\n');
+  
+  const prompt = `
+    I have an HTML5 game with the following code:
+    \`\`\`
+    ${code}
+    \`\`\`
+
+    There are multiple issues with the code that need fixing:
+    ${issuesText}
+
+    Please fix ALL these issues while making minimal changes to the code.
+    Respond with the complete fixed code, maintaining the original structure and functionality.
+    Do not add comments explaining the changes. Simply return the corrected code.
+  `;
+  
+  try {
+    const response = await makeCompletionRequest(prompt, {
+      temperature: 0.3,
+      max_tokens: Math.max(2048, code.length * 1.2) // Ensure enough tokens for the response
+    });
+    
+    if (!response) {
+      throw new Error("No response received from OpenAI");
+    }
+    
+    // Extract only the code from the response (in case there's any explanation)
+    const codeRegex = /\`\`\`(?:html|javascript|js)?\s*([\s\S]*?)\`\`\`|<html[\s\S]*?<\/html>/i;
+    const match = response.match(codeRegex);
+    
+    if (match && match[1]) {
+      return match[1].trim();
+    } else if (match && match[0].startsWith('<html')) {
+      return match[0].trim();
+    }
+    
+    // If no code block found, return the entire response
+    // This handles cases where the AI doesn't wrap code in backticks
+    return response.trim();
+  } catch (error) {
+    console.error("Error fixing multiple game code issues:", error);
+    throw new Error("Failed to fix game code issues: " + (error as Error).message);
+  }
+}
+
 export default openai;
