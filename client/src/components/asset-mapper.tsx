@@ -55,7 +55,7 @@ export function AssetMapper({ gameCode, onApplyMappings }: AssetMapperProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // Load assets from localStorage
+  // Load assets from localStorage and automatically analyze game code when component mounts
   useEffect(() => {
     const savedImages = localStorage.getItem('gameImageAssets');
     const savedIcons = localStorage.getItem('gameIconAssets');
@@ -67,7 +67,12 @@ export function AssetMapper({ gameCode, onApplyMappings }: AssetMapperProps) {
     if (savedIcons) {
       setIconAssets(JSON.parse(savedIcons));
     }
-  }, []);
+    
+    // Automatically analyze game code when component mounts
+    if (gameCode && gameCode.trim()) {
+      analyzeGameCode();
+    }
+  }, [gameCode]);
   
   // Analyze game code to find mappable objects
   const analyzeGameCode = async () => {

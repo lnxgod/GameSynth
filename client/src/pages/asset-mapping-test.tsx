@@ -16,6 +16,7 @@ export function AssetMappingTest() {
   const [gameCode, setGameCode] = useState<string>(demoGameCode || '');
   const [activeTab, setActiveTab] = useState('generate');
   const [mappedCode, setMappedCode] = useState<string>('');
+  const [isAnalyzingGameCode, setIsAnalyzingGameCode] = useState(false);
   
   const handleApplyMappings = (_mappings: any[], updatedCode: string) => {
     setMappedCode(updatedCode);
@@ -27,6 +28,17 @@ export function AssetMappingTest() {
     setGameCode(demoGameCode);
     setMappedCode('');
     setActiveTab('generate');
+  };
+  
+  // Handle tab changes
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    
+    // Automatically trigger game code analysis when switching to the mapping tab
+    if (value === 'map' && gameCode && !isAnalyzingGameCode) {
+      setIsAnalyzingGameCode(true);
+      // We'll rely on the AssetMapper component to handle the analysis
+    }
   };
   
   return (
@@ -42,7 +54,7 @@ export function AssetMappingTest() {
         </Button>
       </div>
       
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList className="grid grid-cols-3">
           <TabsTrigger value="generate">1. Generate Assets</TabsTrigger>
           <TabsTrigger value="map">2. Map to Game Objects</TabsTrigger>
@@ -63,7 +75,7 @@ export function AssetMappingTest() {
           </Card>
           
           <div className="flex justify-end">
-            <Button onClick={() => setActiveTab('map')}>
+            <Button onClick={() => handleTabChange('map')}>
               Continue to Mapping
               <Code className="ml-2 h-4 w-4" />
             </Button>
