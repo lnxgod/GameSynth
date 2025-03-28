@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { ChatInterface } from "@/components/chat-interface";
 import { CodeEditor } from "@/components/code-editor";
 import { DebugLogs } from "@/components/debug-logs";
@@ -11,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ThemeSwitcher } from "@/components/ui/theme-switcher";
+import { Button } from "@/components/ui/button";
+import { Palette, Sparkles, ImageIcon, ArrowRight } from "lucide-react";
 
 export default function Home() {
   const [gameCode, setGameCode] = useState(() => {
@@ -143,6 +146,34 @@ export default function Home() {
           <Label htmlFor="non-technical-mode">
             {isNonTechnicalMode ? "👥 Simple Mode" : "🔧 Technical Mode"}
           </Label>
+        </div>
+      </div>
+
+      {/* Asset Mapping Feature Banner */}
+      <div className="mb-8 rounded-lg overflow-hidden shadow-lg border border-primary/20">
+        <div className="bg-gradient-to-r from-primary/10 to-purple-500/10 p-6">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="flex items-center mb-4 md:mb-0">
+              <div className="bg-primary/20 p-3 rounded-full mr-4">
+                <Palette className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold">Enhance Your Game Visuals</h3>
+                <p className="text-muted-foreground max-w-md">
+                  Use AI to automatically generate and map custom assets to your game objects
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Link href="/asset-mapping-test">
+                <Button variant="default" className="gap-2 bg-gradient-to-r from-primary to-purple-600 text-white shadow-md">
+                  <Sparkles className="h-4 w-4" />
+                  <span>Map Assets to Game</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
 

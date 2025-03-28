@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
@@ -8,7 +9,7 @@ import { AssetMapper } from '../components/asset-mapper';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GameSandbox } from '../components/game-sandbox';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Code, Wand, CheckCircle } from 'lucide-react';
+import { RefreshCw, Code, Wand, Play, ArrowRight, CheckCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
 // Fallback demo game in case nothing is loaded
@@ -85,17 +86,45 @@ export function AssetMappingTest() {
     }
   };
   
+  // Function to launch the game in fullscreen mode
+  const [location, navigate] = useLocation();
+  const [isLaunching, setIsLaunching] = useState(false);
+  
+  const launchGame = () => {
+    // Save the current state to session storage for the run page to access
+    sessionStorage.setItem('currentGameCode', mappedCode || gameCode);
+    // Then navigate to the run page
+    setIsLaunching(true);
+    setTimeout(() => {
+      navigate('/run');
+    }, 500);
+  };
+  
   return (
     <div className="container py-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Asset Mapping Test</h1>
-          <p className="text-muted-foreground">Generate and map assets to enhance your game visuals</p>
+          <h1 className="text-3xl font-bold">Game Asset Enhancer</h1>
+          <p className="text-muted-foreground">Generate and map stunning visual assets to improve your game</p>
         </div>
-        <Button variant="outline" onClick={resetDemo}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Reset Demo
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={resetDemo} className="flex-shrink-0">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Reset Demo
+          </Button>
+          {mappedCode && (
+            <Button onClick={launchGame} variant="default" className="bg-gradient-to-r from-primary to-purple-600 text-white shadow-lg" disabled={isLaunching}>
+              {isLaunching ? (
+                <>Loading...</>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Run with Assets
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
@@ -151,42 +180,91 @@ export function AssetMappingTest() {
         </TabsContent>
         
         <TabsContent value="preview" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Enhanced Game Preview</CardTitle>
-                  <CardDescription>
-                    Your game with mapped visual assets
-                  </CardDescription>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <span className="mr-2">Enhanced Game Preview</span>
+                      <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        <CheckCircle className="h-3 w-3 mr-1" /> Assets Applied
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Your game with enhanced visual assets looks much better!
+                    </CardDescription>
+                  </div>
+                  <Button onClick={launchGame} variant="default" className="bg-gradient-to-r from-primary to-purple-600 text-white shadow-lg">
+                    <Play className="mr-2 h-4 w-4" />
+                    Run Fullscreen
+                  </Button>
                 </div>
-                <Badge variant="outline" className="ml-auto">Visual Enhancement Applied</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[500px] border rounded-md">
-                <GameSandbox 
-                  gameCode={mappedCode} 
-                  onClose={() => {}}
-                  fullscreen={false}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Code Changes</CardTitle>
-              <CardDescription>
-                See how the asset mapping modified your game code
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px] rounded-md border p-4">
-                <pre className="text-sm font-mono whitespace-pre-wrap">{mappedCode}</pre>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[500px] border rounded-md shadow-inner">
+                  <GameSandbox 
+                    gameCode={mappedCode} 
+                    onClose={() => {}}
+                    fullscreen={false}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Code Changes</CardTitle>
+                    <CardDescription>
+                      See how the asset mapping modified your game code
+                    </CardDescription>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      // Save the current code and return to home
+                      localStorage.setItem('gameCode', mappedCode);
+                      sessionStorage.setItem('currentGameCode', mappedCode);
+                      navigate('/');
+                    }}
+                  >
+                    <ArrowRight className="mr-2 h-4 w-4" />
+                    Continue to Editor
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px] rounded-md border p-4 shadow-inner bg-stone-50 dark:bg-stone-900">
+                  <pre className="text-sm font-mono whitespace-pre-wrap">{mappedCode}</pre>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+            
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>What's Next?</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-muted-foreground">Your game now has enhanced visuals! You can:</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Button variant="outline" className="flex flex-col h-24 p-4 justify-center" onClick={launchGame}>
+                    <Play className="h-8 w-8 mb-2 text-primary" />
+                    <span>Play Your Game</span>
+                  </Button>
+                  <Button variant="outline" className="flex flex-col h-24 p-4 justify-center" onClick={() => navigate('/')}>
+                    <Code className="h-8 w-8 mb-2 text-primary" />
+                    <span>Edit Game Code</span>
+                  </Button>
+                  <Button variant="outline" className="flex flex-col h-24 p-4 justify-center" onClick={() => setActiveTab('generate')}>
+                    <Wand className="h-8 w-8 mb-2 text-primary" />
+                    <span>Create More Assets</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

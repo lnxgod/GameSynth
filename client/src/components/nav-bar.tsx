@@ -28,7 +28,7 @@ export function NavBar() {
             </Button>
           </Link>
           <Link href="/asset-mapping-test">
-            <Button variant="ghost">
+            <Button variant="outline" className="border-primary/40 hover:bg-primary/10 hover:text-primary">
               <Palette className="mr-2 h-4 w-4" />
               Asset Mapping
             </Button>
